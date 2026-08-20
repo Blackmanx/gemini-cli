@@ -63,6 +63,9 @@ describe('<ModelDialog />', () => {
   const mockGetGemini31FlashLiteLaunchedSync = vi.fn();
   const mockGetProModelNoAccess = vi.fn();
   const mockGetProModelNoAccessSync = vi.fn();
+  const mockHasGemini35FlashGAAccess = vi.fn();
+  const mockHasGemini36FlashGAAccess = vi.fn();
+  const mockHasGemini37FlashGAAccess = vi.fn();
 
   interface MockConfig extends Partial<Config> {
     setModel: (model: string, isTemporary?: boolean) => void;
@@ -82,6 +85,9 @@ describe('<ModelDialog />', () => {
           }>;
         }
       | undefined;
+    hasGemini35FlashGAAccess: () => boolean;
+    hasGemini36FlashGAAccess: () => boolean;
+    hasGemini37FlashGAAccess: () => boolean;
   }
 
   const mockConfig: MockConfig = {
@@ -95,6 +101,9 @@ describe('<ModelDialog />', () => {
     getExperimentalGemma: () => false,
     getLastRetrievedQuota: () => ({ buckets: [] }),
     getSessionId: () => 'test-session-id',
+    hasGemini35FlashGAAccess: mockHasGemini35FlashGAAccess,
+    hasGemini36FlashGAAccess: mockHasGemini36FlashGAAccess,
+    hasGemini37FlashGAAccess: mockHasGemini37FlashGAAccess,
   };
 
   beforeEach(() => {
@@ -104,6 +113,9 @@ describe('<ModelDialog />', () => {
     mockGetGemini31LaunchedSync.mockReturnValue(false);
     mockGetProModelNoAccess.mockResolvedValue(false);
     mockGetProModelNoAccessSync.mockReturnValue(false);
+    mockHasGemini35FlashGAAccess.mockReturnValue(false);
+    mockHasGemini36FlashGAAccess.mockReturnValue(false);
+    mockHasGemini37FlashGAAccess.mockReturnValue(false);
 
     // Default implementation for getDisplayString
     mockGetDisplayString.mockImplementation((val: string) => {
@@ -365,6 +377,9 @@ describe('<ModelDialog />', () => {
   });
 
   it('shows Gemini 3.7 Flash in the manual view and can select it', async () => {
+    mockHasGemini35FlashGAAccess.mockReturnValue(true);
+    mockHasGemini36FlashGAAccess.mockReturnValue(true);
+    mockHasGemini37FlashGAAccess.mockReturnValue(true);
     mockGetModel.mockReturnValue(DEFAULT_GEMINI_3_7_FLASH_MODEL);
     mockGetDisplayString.mockImplementation((val: string) => val);
     const { stdin, lastFrame, waitUntilReady, unmount } =
