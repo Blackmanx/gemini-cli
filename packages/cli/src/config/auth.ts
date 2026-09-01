@@ -45,5 +45,16 @@ export async function validateAuthMethod(
     return null;
   }
 
+  if (authMethod === AuthType.USE_VLLM) {
+    const vllmUrl = process.env['VLLM_BASE_URL'];
+    if (!vllmUrl) {
+      return (
+        'When using vLLM, you must specify the VLLM_BASE_URL environment variable.\n' +
+        'Update your environment and try again (no reload needed if using .env)!'
+      );
+    }
+    return null;
+  }
+
   return 'Invalid auth method selected.';
 }

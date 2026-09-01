@@ -67,6 +67,7 @@ export enum AuthType {
   LEGACY_CLOUD_SHELL = 'cloud-shell',
   COMPUTE_ADC = 'compute-default-credentials',
   GATEWAY = 'gateway',
+  USE_VLLM = 'vllm',
 }
 
 /**
@@ -75,7 +76,9 @@ export enum AuthType {
  * Checks in order:
  * 1. GOOGLE_GENAI_USE_GCA=true -> LOGIN_WITH_GOOGLE
  * 2. GOOGLE_GENAI_USE_VERTEXAI=true -> USE_VERTEX_AI
- * 3. GEMINI_API_KEY -> USE_GEMINI
+ * 3. VLLM_BASE_URL -> USE_VLLM
+ * 4. GOOGLE_GEMINI_BASE_URL -> GATEWAY
+ * 5. GEMINI_API_KEY -> USE_GEMINI
  */
 export function getAuthTypeFromEnv(): AuthType | undefined {
   if (process.env['GOOGLE_GENAI_USE_GCA'] === 'true') {
@@ -83,6 +86,9 @@ export function getAuthTypeFromEnv(): AuthType | undefined {
   }
   if (process.env['GOOGLE_GENAI_USE_VERTEXAI'] === 'true') {
     return AuthType.USE_VERTEX_AI;
+  }
+  if (process.env['VLLM_BASE_URL']) {
+    return AuthType.USE_VLLM;
   }
   if (process.env['GOOGLE_GEMINI_BASE_URL']) {
     return AuthType.GATEWAY;
@@ -204,6 +210,15 @@ export async function createContentGeneratorConfig(
     return contentGeneratorConfig;
   }
 
+  if (authType === AuthType.USE_VLLM) {
+    contentGeneratorConfig.apiKey = apiKey || getEnv('VLLM_API_KEY') || '';
+    contentGeneratorConfig.vertexai = false;
+    contentGeneratorConfig.baseUrl =
+      baseUrl || getEnv('VLLM_BASE_URL') || undefined;
+
+    return contentGeneratorConfig;
+  }
+
   return contentGeneratorConfig;
 }
 
@@ -312,7 +327,8 @@ export async function createContentGenerator(
     if (
       config.authType === AuthType.USE_GEMINI ||
       config.authType === AuthType.USE_VERTEX_AI ||
-      config.authType === AuthType.GATEWAY
+      config.authType === AuthType.GATEWAY ||
+      config.authType === AuthType.USE_VLLM
     ) {
       let headers: Record<string, string> = { ...baseHeaders };
       if (config.customHeaders) {
@@ -341,7 +357,11 @@ export async function createContentGenerator(
           'x-gemini-api-privileged-user-id': `${installationId}`,
         };
       }
-      if (config.authType === AuthType.GATEWAY && config.apiKey === '') {
+      if (
+        (config.authType === AuthType.GATEWAY ||
+          config.authType === AuthType.USE_VLLM) &&
+        config.apiKey === ''
+      ) {
         headers['x-goog-api-key'] = '';
       }
       let baseUrl = config.baseUrl;
@@ -349,7 +369,9 @@ export async function createContentGenerator(
         const envBaseUrl =
           config.authType === AuthType.USE_VERTEX_AI
             ? process.env['GOOGLE_VERTEX_BASE_URL']
-            : process.env['GOOGLE_GEMINI_BASE_URL'];
+            : config.authType === AuthType.USE_VLLM
+              ? process.env['VLLM_BASE_URL']
+              : process.env['GOOGLE_GEMINI_BASE_URL'];
         if (envBaseUrl) {
           validateBaseUrl(envBaseUrl);
           baseUrl = envBaseUrl;
@@ -384,7 +406,8 @@ export async function createContentGenerator(
         config.vertexai ?? config.authType === AuthType.USE_VERTEX_AI;
       const googleGenAI = new GoogleGenAI({
         apiKey:
-          config.authType === AuthType.GATEWAY
+          config.authType === AuthType.GATEWAY ||
+          config.authType === AuthType.USE_VLLM
             ? config.apiKey
             : config.apiKey === ''
               ? undefined

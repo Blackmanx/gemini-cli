@@ -41,6 +41,9 @@ vi.mock('../auth/AuthDialog.js', () => ({
 vi.mock('../auth/ApiAuthDialog.js', () => ({
   ApiAuthDialog: () => <Text>ApiAuthDialog</Text>,
 }));
+vi.mock('../auth/VllmAuthDialog.js', () => ({
+  VllmAuthDialog: () => <Text>VllmAuthDialog</Text>,
+}));
 vi.mock('./EditorSettingsDialog.js', () => ({
   EditorSettingsDialog: () => <Text>EditorSettingsDialog</Text>,
 }));

@@ -76,6 +76,8 @@ export interface UIActions {
   popAllMessages: () => string | undefined;
   handleApiKeySubmit: (apiKey: string) => Promise<void>;
   handleApiKeyCancel: () => void;
+  handleVllmSubmit: (baseUrl: string, apiKey: string) => Promise<void>;
+  handleVllmCancel: () => void;
   setBannerVisible: (visible: boolean) => void;
   setShortcutsHelpVisible: (visible: boolean) => void;
   setCleanUiDetailsVisible: (visible: boolean) => void;

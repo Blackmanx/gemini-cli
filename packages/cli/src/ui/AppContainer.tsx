@@ -880,6 +880,39 @@ Logging in with Google... Restarting Gemini CLI to continue.
     setAuthState(AuthState.Updating);
   }, [setAuthState]);
 
+  const handleVllmSubmit = useCallback(
+    async (baseUrl: string, apiKey: string) => {
+      try {
+        onAuthError(null);
+        if (!baseUrl.trim()) {
+          onAuthError('vLLM Base URL cannot be empty.');
+          return;
+        }
+        // Persist for this session so the auth validator can see them
+        process.env['VLLM_BASE_URL'] = baseUrl.trim();
+        if (apiKey.trim()) {
+          process.env['VLLM_API_KEY'] = apiKey.trim();
+        }
+        await config.refreshAuth(
+          AuthType.USE_VLLM,
+          apiKey.trim(),
+          baseUrl.trim(),
+        );
+        setAuthState(AuthState.Authenticated);
+      } catch (e) {
+        onAuthError(
+          `Failed to connect to vLLM: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    },
+    [setAuthState, onAuthError, config],
+  );
+
+  const handleVllmCancel = useCallback(() => {
+    // Go back to auth method selection
+    setAuthState(AuthState.Updating);
+  }, [setAuthState]);
+
   // Sync user tier from config when authentication changes
   useEffect(() => {
     // Only sync when not currently authenticating
@@ -2205,6 +2238,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
     !!emptyWalletRequest ||
     isSessionBrowserOpen ||
     authState === AuthState.AwaitingApiKeyInput ||
+    authState === AuthState.AwaitingVllmConfig ||
     isAwaitingLoginRestart ||
     !!newAgents;
 
@@ -2439,6 +2473,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
       accountSuspensionInfo,
       isAuthDialogOpen,
       isAwaitingApiKeyInput: authState === AuthState.AwaitingApiKeyInput,
+      isAwaitingVllmConfig: authState === AuthState.AwaitingVllmConfig,
       isAwaitingLoginRestart,
       loginRestartMessage,
       apiKeyDefaultValue,
@@ -2711,6 +2746,8 @@ Logging in with Google... Restarting Gemini CLI to continue.
       popAllMessages,
       handleApiKeySubmit,
       handleApiKeyCancel,
+      handleVllmSubmit,
+      handleVllmCancel,
       setBannerVisible,
       setShortcutsHelpVisible,
       setCleanUiDetailsVisible,
@@ -2812,6 +2849,8 @@ Logging in with Google... Restarting Gemini CLI to continue.
       popAllMessages,
       handleApiKeySubmit,
       handleApiKeyCancel,
+      handleVllmSubmit,
+      handleVllmCancel,
       setBannerVisible,
       setShortcutsHelpVisible,
       setCleanUiDetailsVisible,

@@ -15,6 +15,7 @@ import { AuthInProgress } from '../auth/AuthInProgress.js';
 import { AuthDialog } from '../auth/AuthDialog.js';
 import { BannedAccountDialog } from '../auth/BannedAccountDialog.js';
 import { ApiAuthDialog } from '../auth/ApiAuthDialog.js';
+import { VllmAuthDialog } from '../auth/VllmAuthDialog.js';
 import { EditorSettingsDialog } from './EditorSettingsDialog.js';
 import { PrivacyNotice } from '../privacy/PrivacyNotice.js';
 import { ProQuotaDialog } from './ProQuotaDialog.js';
@@ -303,6 +304,18 @@ export const DialogManager = ({
           onCancel={uiActions.handleApiKeyCancel}
           error={uiState.authError}
           defaultValue={uiState.apiKeyDefaultValue}
+        />
+      </Box>
+    );
+  }
+
+  if (uiState.isAwaitingVllmConfig) {
+    return (
+      <Box flexDirection="column">
+        <VllmAuthDialog
+          onSubmit={uiActions.handleVllmSubmit}
+          onCancel={uiActions.handleVllmCancel}
+          error={uiState.authError}
         />
       </Box>
     );

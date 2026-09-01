@@ -33,6 +33,10 @@ export async function validateAuthMethodWithSettings(
   if (authType === AuthType.USE_GEMINI) {
     return null;
   }
+  // If using vLLM, we don't validate here as we might need to prompt for the URL.
+  if (authType === AuthType.USE_VLLM) {
+    return null;
+  }
   return validateAuthMethod(authType);
 }
 
@@ -107,6 +111,14 @@ export const useAuthCommand = (
         const key = await reloadApiKey(); // Use the unified function
         if (!key) {
           setAuthState(AuthState.AwaitingApiKeyInput);
+          return;
+        }
+      }
+
+      if (authType === AuthType.USE_VLLM) {
+        const vllmUrl = process.env['VLLM_BASE_URL'];
+        if (!vllmUrl) {
+          setAuthState(AuthState.AwaitingVllmConfig);
           return;
         }
       }

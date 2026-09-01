@@ -75,6 +75,11 @@ export function AuthDialog({
       value: AuthType.USE_VERTEX_AI,
       key: AuthType.USE_VERTEX_AI,
     },
+    {
+      label: 'vLLM (self-hosted, e.g. Gemma)',
+      value: AuthType.USE_VLLM,
+      key: AuthType.USE_VLLM,
+    },
   ];
 
   if (settings.merged.security.auth.enforcedType) {
@@ -146,6 +151,11 @@ export function AuthDialog({
           // explicitly enter or confirm their key, regardless of
           // whether GEMINI_API_KEY env var or a stored key exists.
           setAuthState(AuthState.AwaitingApiKeyInput);
+          return;
+        }
+
+        if (authType === AuthType.USE_VLLM) {
+          setAuthState(AuthState.AwaitingVllmConfig);
           return;
         }
       }
