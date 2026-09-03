@@ -422,15 +422,16 @@ export class VllmContentGenerator implements ContentGenerator {
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (
-        payload['tools'] &&
-        response.status === 400 &&
-        (errorText.includes('does not support tools') ||
-          errorText.includes('tools are not supported') ||
-          errorText.includes('tool calls are not supported'))
-      ) {
+      const isToolError =
+        errorText.includes('does not support tools') ||
+        errorText.includes('tools are not supported') ||
+        errorText.includes('tool calls are not supported') ||
+        errorText.includes('tool choice') ||
+        errorText.includes('tool-call-parser') ||
+        errorText.includes('tool_choice');
+      if (payload['tools'] && response.status === 400 && isToolError) {
         debugLogger.warn(
-          'Model does not support tools, retrying without tools',
+          'Model or vLLM configuration does not support tools, retrying without tools',
         );
         delete payload['tools'];
         response = await fetch(url, {
@@ -521,15 +522,16 @@ export class VllmContentGenerator implements ContentGenerator {
 
     if (!response.ok) {
       const errorText = await response.text();
-      if (
-        payload['tools'] &&
-        response.status === 400 &&
-        (errorText.includes('does not support tools') ||
-          errorText.includes('tools are not supported') ||
-          errorText.includes('tool calls are not supported'))
-      ) {
+      const isToolError =
+        errorText.includes('does not support tools') ||
+        errorText.includes('tools are not supported') ||
+        errorText.includes('tool calls are not supported') ||
+        errorText.includes('tool choice') ||
+        errorText.includes('tool-call-parser') ||
+        errorText.includes('tool_choice');
+      if (payload['tools'] && response.status === 400 && isToolError) {
         debugLogger.warn(
-          'Model does not support tools, retrying stream without tools',
+          'Model or vLLM configuration does not support tools, retrying stream without tools',
         );
         delete payload['tools'];
         response = await fetch(url, {

@@ -243,16 +243,21 @@ export async function createContentGenerator(
       return new LoggingContentGenerator(fakeGenerator, gcConfig);
     }
     const version = await getVersion();
-    const model = resolveModel(
-      gcConfig.getModel(),
-      config.authType === AuthType.USE_GEMINI ||
-        config.authType === AuthType.USE_VERTEX_AI ||
-        ((await gcConfig.getGemini31Launched?.()) ?? false),
-      false,
-      gcConfig.getHasAccessToPreviewModel?.() ?? true,
-      gcConfig,
-      gcConfig.hasGemini35FlashGAAccess?.() ?? false,
-    );
+    // For vLLM, use VLLM_MODEL env var or the configured model directly —
+    // skip Gemini resolution since vLLM accepts any model name.
+    const model =
+      config.authType === AuthType.USE_VLLM
+        ? process.env['VLLM_MODEL'] || gcConfig.getModel()
+        : resolveModel(
+            gcConfig.getModel(),
+            config.authType === AuthType.USE_GEMINI ||
+              config.authType === AuthType.USE_VERTEX_AI ||
+              ((await gcConfig.getGemini31Launched?.()) ?? false),
+            false,
+            gcConfig.getHasAccessToPreviewModel?.() ?? true,
+            gcConfig,
+            gcConfig.hasGemini35FlashGAAccess?.() ?? false,
+          );
     const customHeadersEnv =
       process.env['GEMINI_CLI_CUSTOM_HEADERS'] || undefined;
     const clientName = gcConfig.getClientName();

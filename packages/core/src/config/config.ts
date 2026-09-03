@@ -1917,6 +1917,14 @@ export class Config implements McpContext, AgentLoopContext {
   }
 
   getModel(): string {
+    // For vLLM, prefer VLLM_MODEL env var when set so all callers get the
+    // correct model name without needing to know about vLLM specifics.
+    if (
+      this.contentGeneratorConfig?.authType === AuthType.USE_VLLM &&
+      process.env['VLLM_MODEL']
+    ) {
+      return process.env['VLLM_MODEL'];
+    }
     return this.model;
   }
 

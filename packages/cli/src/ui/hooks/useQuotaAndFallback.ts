@@ -79,6 +79,11 @@ export function useQuotaAndFallback({
     ): Promise<FallbackIntent | null> => {
       const contentGeneratorConfig = config.getContentGeneratorConfig();
 
+      // vLLM errors are handled directly by VllmContentGenerator — skip Gemini quota/model dialogs
+      if (contentGeneratorConfig?.authType === AuthType.USE_VLLM) {
+        return null; // Do not show quota dialog for vLLM connections
+      }
+
       let message: string;
       let isTerminalQuotaError = false;
       let isModelNotFoundError = false;
