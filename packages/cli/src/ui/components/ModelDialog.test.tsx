@@ -18,6 +18,7 @@ import {
   DEFAULT_GEMINI_3_5_FLASH_MODEL,
   DEFAULT_GEMINI_3_6_FLASH_MODEL,
   DEFAULT_GEMINI_3_7_FLASH_MODEL,
+  DEFAULT_GEMINI_3_8_FLASH_MODEL,
   PREVIEW_GEMINI_MODEL,
   PREVIEW_GEMINI_3_1_MODEL,
   PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL,
@@ -66,6 +67,7 @@ describe('<ModelDialog />', () => {
   const mockHasGemini35FlashGAAccess = vi.fn();
   const mockHasGemini36FlashGAAccess = vi.fn();
   const mockHasGemini37FlashGAAccess = vi.fn();
+  const mockHasGemini38FlashGAAccess = vi.fn();
 
   interface MockConfig extends Partial<Config> {
     setModel: (model: string, isTemporary?: boolean) => void;
@@ -88,6 +90,7 @@ describe('<ModelDialog />', () => {
     hasGemini35FlashGAAccess: () => boolean;
     hasGemini36FlashGAAccess: () => boolean;
     hasGemini37FlashGAAccess: () => boolean;
+    hasGemini38FlashGAAccess: () => boolean;
   }
 
   const mockConfig: MockConfig = {
@@ -104,6 +107,7 @@ describe('<ModelDialog />', () => {
     hasGemini35FlashGAAccess: mockHasGemini35FlashGAAccess,
     hasGemini36FlashGAAccess: mockHasGemini36FlashGAAccess,
     hasGemini37FlashGAAccess: mockHasGemini37FlashGAAccess,
+    hasGemini38FlashGAAccess: mockHasGemini38FlashGAAccess,
   };
 
   beforeEach(() => {
@@ -116,6 +120,7 @@ describe('<ModelDialog />', () => {
     mockHasGemini35FlashGAAccess.mockReturnValue(false);
     mockHasGemini36FlashGAAccess.mockReturnValue(false);
     mockHasGemini37FlashGAAccess.mockReturnValue(false);
+    mockHasGemini38FlashGAAccess.mockReturnValue(false);
 
     // Default implementation for getDisplayString
     mockGetDisplayString.mockImplementation((val: string) => {
@@ -373,6 +378,36 @@ describe('<ModelDialog />', () => {
     const { lastFrame, unmount } = await renderComponent();
 
     expect(lastFrame()).toContain('Manual (My Custom Model Display)');
+    unmount();
+  });
+
+  it('shows Gemini 3.8 Flash in the manual view and can select it', async () => {
+    mockHasGemini35FlashGAAccess.mockReturnValue(true);
+    mockHasGemini36FlashGAAccess.mockReturnValue(true);
+    mockHasGemini37FlashGAAccess.mockReturnValue(true);
+    mockHasGemini38FlashGAAccess.mockReturnValue(true);
+    mockGetModel.mockReturnValue(DEFAULT_GEMINI_3_8_FLASH_MODEL);
+    mockGetDisplayString.mockImplementation((val: string) => val);
+    const { stdin, lastFrame, waitUntilReady, unmount } =
+      await renderComponent();
+
+    // Verify main view shows Manual (gemini-3.8-flash)
+    expect(lastFrame()).toContain(`Manual (${DEFAULT_GEMINI_3_8_FLASH_MODEL})`);
+
+    // Press enter directly since Manual is selected by default when preferredModel is manual
+    await act(async () => {
+      stdin.write('\r');
+    });
+    await waitUntilReady();
+
+    // Verify manual list contains 3.8 flash
+    await waitFor(() => {
+      expect(lastFrame()).toContain(DEFAULT_GEMINI_3_8_FLASH_MODEL);
+      expect(lastFrame()).toContain(DEFAULT_GEMINI_3_7_FLASH_MODEL);
+      expect(lastFrame()).toContain(DEFAULT_GEMINI_3_6_FLASH_MODEL);
+      expect(lastFrame()).toContain(DEFAULT_GEMINI_3_5_FLASH_MODEL);
+    });
+
     unmount();
   });
 
