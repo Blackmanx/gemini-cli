@@ -20,6 +20,7 @@ import {
   DEFAULT_GEMINI_3_5_FLASH_MODEL,
   DEFAULT_GEMINI_3_6_FLASH_MODEL,
   DEFAULT_GEMINI_3_7_FLASH_MODEL,
+  DEFAULT_GEMINI_3_8_FLASH_MODEL,
   DEFAULT_GEMINI_FLASH_LITE_MODEL,
   supportsMultimodalFunctionResponse,
   GEMINI_MODEL_ALIAS_PRO,
@@ -762,18 +763,104 @@ describe('getAutoModelDescription', () => {
   });
 
   it('should return Gemini 3.7 Flash description when hasAccessToPreview and useGemini3_7Flash are true', () => {
-    const desc = getAutoModelDescription(true, true, false, false, true);
+    const desc = getAutoModelDescription(true, true, false, false, true, false);
     expect(desc).toContain('gemini-3.1-pro-preview');
     expect(desc).toContain(DEFAULT_GEMINI_3_7_FLASH_MODEL);
+  });
+
+  it('should return Gemini 3.8 Flash description when hasAccessToPreview and useGemini3_8Flash are true', () => {
+    const desc = getAutoModelDescription(true, true, false, false, false, true);
+    expect(desc).toContain('gemini-3.1-pro-preview');
+    expect(desc).toContain(DEFAULT_GEMINI_3_8_FLASH_MODEL);
   });
 });
 
 describe('Code Assist model mappings', () => {
   it('maps the new Flash models to Code Assist-compatible IDs', () => {
+    expect(CCPA_AI_MODEL_MAPPINGS['gemini-3.8-flash']).toBe('gemini-3-flash');
     expect(CCPA_AI_MODEL_MAPPINGS['gemini-3.7-flash']).toBe('gemini-3-flash');
     expect(CCPA_AI_MODEL_MAPPINGS['gemini-3.6-flash']).toBe('gemini-3-flash');
     expect(CCPA_AI_MODEL_MAPPINGS['gemini-3.5-flash-lite']).toBe(
       'gemini-3.1-flash-lite',
+    );
+  });
+});
+
+describe('resolveModel Gemini 3.8 Flash', () => {
+  it.each([
+    ['legacy', undefined],
+    ['dynamic', dynamicConfig],
+  ])('resolves the Flash alias when enabled in %s mode', (_mode, config) => {
+    expect(
+      resolveModel(
+        GEMINI_MODEL_ALIAS_FLASH,
+        false,
+        false,
+        true,
+        config,
+        true,
+        false,
+        false,
+        true,
+      ),
+    ).toBe(DEFAULT_GEMINI_3_8_FLASH_MODEL);
+  });
+
+  it.each([
+    ['legacy', undefined],
+    ['dynamic', dynamicConfig],
+  ])(
+    'resolves a classifier-selected Flash model when enabled in %s mode',
+    (_mode, config) => {
+      expect(
+        resolveClassifierModel(
+          GEMINI_MODEL_ALIAS_AUTO,
+          GEMINI_MODEL_ALIAS_FLASH,
+          false,
+          false,
+          true,
+          config,
+          true,
+          false,
+          false,
+          true,
+        ),
+      ).toBe(DEFAULT_GEMINI_3_8_FLASH_MODEL);
+    },
+  );
+});
+
+describe('resolveModel short aliases', () => {
+  it.each([
+    ['legacy', undefined],
+    ['dynamic', dynamicConfig],
+  ])(
+    'resolves 3.6-flash, 3.7-flash, and 3.8-flash in %s mode',
+    (_mode, config) => {
+      expect(resolveModel('3.6-flash', false, false, true, config)).toBe(
+        DEFAULT_GEMINI_3_6_FLASH_MODEL,
+      );
+      expect(resolveModel('3.7-flash', false, false, true, config)).toBe(
+        DEFAULT_GEMINI_3_7_FLASH_MODEL,
+      );
+      expect(resolveModel('3.8-flash', false, false, true, config)).toBe(
+        DEFAULT_GEMINI_3_8_FLASH_MODEL,
+      );
+    },
+  );
+
+  it.each([
+    ['legacy', undefined],
+    ['dynamic', dynamicConfig],
+  ])('resolves full gemini model names in %s mode', (_mode, config) => {
+    expect(resolveModel('gemini-3.6-flash', false, false, true, config)).toBe(
+      DEFAULT_GEMINI_3_6_FLASH_MODEL,
+    );
+    expect(resolveModel('gemini-3.7-flash', false, false, true, config)).toBe(
+      DEFAULT_GEMINI_3_7_FLASH_MODEL,
+    );
+    expect(resolveModel('gemini-3.8-flash', false, false, true, config)).toBe(
+      DEFAULT_GEMINI_3_8_FLASH_MODEL,
     );
   });
 });

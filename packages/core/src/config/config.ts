@@ -2071,6 +2071,7 @@ export class Config implements McpContext, AgentLoopContext {
       this.hasGemini35FlashGAAccess(),
       this.hasGemini36FlashGAAccess(),
       this.hasGemini37FlashGAAccess(),
+      this.hasGemini38FlashGAAccess(),
     );
 
     const isPreview = isPreviewModel(primaryModel, this);
@@ -2113,6 +2114,7 @@ export class Config implements McpContext, AgentLoopContext {
       this.hasGemini35FlashGAAccess(),
       this.hasGemini36FlashGAAccess(),
       this.hasGemini37FlashGAAccess(),
+      this.hasGemini38FlashGAAccess(),
     );
     return this.modelQuotas.get(primaryModel)?.remaining;
   }
@@ -2131,6 +2133,7 @@ export class Config implements McpContext, AgentLoopContext {
       this.hasGemini35FlashGAAccess(),
       this.hasGemini36FlashGAAccess(),
       this.hasGemini37FlashGAAccess(),
+      this.hasGemini38FlashGAAccess(),
     );
     return this.modelQuotas.get(primaryModel)?.limit;
   }
@@ -2149,6 +2152,7 @@ export class Config implements McpContext, AgentLoopContext {
       this.hasGemini35FlashGAAccess(),
       this.hasGemini36FlashGAAccess(),
       this.hasGemini37FlashGAAccess(),
+      this.hasGemini38FlashGAAccess(),
     );
     return this.modelQuotas.get(primaryModel)?.resetTime;
   }
@@ -3635,6 +3639,20 @@ export class Config implements McpContext, AgentLoopContext {
     }
     return (
       this.experiments?.flags[ExperimentFlags.GEMINI_3_7_FLASH_GA_LAUNCHED]
+        ?.boolValue ?? false
+    );
+  }
+
+  /**
+   * Returns whether Gemini 3.8 Flash GA has been launched.
+   */
+  hasGemini38FlashGAAccess(): boolean {
+    const authType = this.contentGeneratorConfig?.authType;
+    if (this.isGemini31LaunchedForAuthType(authType)) {
+      return true;
+    }
+    return (
+      this.experiments?.flags[ExperimentFlags.GEMINI_3_8_FLASH_GA_LAUNCHED]
         ?.boolValue ?? false
     );
   }

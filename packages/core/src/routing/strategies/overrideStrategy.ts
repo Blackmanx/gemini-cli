@@ -44,6 +44,7 @@ export class OverrideStrategy implements RoutingStrategy {
         config.hasGemini35FlashGAAccess?.() ?? false,
         config.hasGemini36FlashGAAccess?.() ?? false,
         config.hasGemini37FlashGAAccess?.() ?? false,
+        config.hasGemini38FlashGAAccess?.() ?? false,
       ),
       metadata: {
         source: this.name,

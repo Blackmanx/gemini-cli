@@ -103,6 +103,7 @@ export interface ResolutionContext {
   useGemini3_5Flash?: boolean;
   useGemini3_6Flash?: boolean;
   useGemini3_7Flash?: boolean;
+  useGemini3_8Flash?: boolean;
   useCustomTools?: boolean;
   hasAccessToPreview?: boolean;
   hasAccessToProModel?: boolean;
@@ -116,6 +117,7 @@ export interface ResolutionCondition {
   useGemini3_5Flash?: boolean;
   useGemini3_6Flash?: boolean;
   useGemini3_7Flash?: boolean;
+  useGemini3_8Flash?: boolean;
   useCustomTools?: boolean;
   hasAccessToPreview?: boolean;
   /** Matches if the current model is in this list. */
@@ -167,6 +169,7 @@ export class ModelConfigService {
     const useGemini3_5Flash = context.useGemini3_5Flash ?? false;
     const useGemini3_6Flash = context.useGemini3_6Flash ?? false;
     const useGemini3_7Flash = context.useGemini3_7Flash ?? false;
+    const useGemini3_8Flash = context.useGemini3_8Flash ?? false;
 
     const mainOptions = Object.entries(definitions)
       .filter(([_, m]) => {
@@ -184,6 +187,7 @@ export class ModelConfigService {
             useGemini3_5Flash,
             useGemini3_6Flash,
             useGemini3_7Flash,
+            useGemini3_8Flash,
           );
         } else if (id === 'auto-gemini-3' && useGemini31) {
           description = description.replace('gemini-3-pro', 'gemini-3.1-pro');
@@ -271,6 +275,8 @@ export class ModelConfigService {
           return value === context.useGemini3_6Flash;
         case 'useGemini3_7Flash':
           return value === context.useGemini3_7Flash;
+        case 'useGemini3_8Flash':
+          return value === context.useGemini3_8Flash;
         case 'useCustomTools':
           return value === context.useCustomTools;
         case 'hasAccessToPreview':
@@ -617,6 +623,7 @@ export class ModelConfigService {
     config: GenerateContentConfig,
   ): GenerateContentConfig {
     if (
+      model !== 'gemini-3.8-flash' &&
       model !== 'gemini-3.7-flash' &&
       model !== 'gemini-3.6-flash' &&
       model !== 'gemini-3.5-flash-lite'

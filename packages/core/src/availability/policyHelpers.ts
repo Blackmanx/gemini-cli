@@ -57,6 +57,7 @@ export function resolvePolicyChain(
   const useGemini3_5Flash = config.hasGemini35FlashGAAccess?.() ?? false;
   const useGemini3_6Flash = config.hasGemini36FlashGAAccess?.() ?? false;
   const useGemini3_7Flash = config.hasGemini37FlashGAAccess?.() ?? false;
+  const useGemini3_8Flash = config.hasGemini38FlashGAAccess?.() ?? false;
 
   // Capture the original family intent before any normalization or early downgrade.
   const isOriginallyGemini3 = isGemini3Model(modelFromConfig, config);
@@ -71,6 +72,7 @@ export function resolvePolicyChain(
       useGemini3_5Flash,
       useGemini3_6Flash,
       useGemini3_7Flash,
+      useGemini3_8Flash,
     ),
   );
   const isAutoPreferred = normalizedPreferredModel
@@ -89,6 +91,9 @@ export function resolvePolicyChain(
       useGemini3_1: useGemini31,
       useCustomTools: useCustomToolModel,
       useGemini3_5Flash,
+      useGemini3_6Flash,
+      useGemini3_7Flash,
+      useGemini3_8Flash,
     };
 
     if (resolvedModel === DEFAULT_GEMINI_FLASH_LITE_MODEL) {
@@ -144,6 +149,9 @@ export function resolvePolicyChain(
           useGemini31,
           useCustomToolModel,
           useGemini3_5Flash,
+          useGemini3_6Flash,
+          useGemini3_7Flash,
+          useGemini3_8Flash,
         });
       } else {
         // User requested Gemini 3 but has no access. Proactively downgrade
@@ -155,6 +163,9 @@ export function resolvePolicyChain(
           useGemini31,
           useCustomToolModel,
           useGemini3_5Flash,
+          useGemini3_6Flash,
+          useGemini3_7Flash,
+          useGemini3_8Flash,
         });
       }
     } else {

@@ -37,6 +37,7 @@ export interface ModelPolicyOptions {
   useGemini3_5Flash?: boolean;
   useGemini3_6Flash?: boolean;
   useGemini3_7Flash?: boolean;
+  useGemini3_8Flash?: boolean;
 }
 
 const DEFAULT_ACTIONS: ModelPolicyActionMap = {
@@ -105,6 +106,7 @@ export function getModelPolicyChain(
     options.useGemini3_5Flash,
     options.useGemini3_6Flash,
     options.useGemini3_7Flash,
+    options.useGemini3_8Flash,
   );
 
   if (options.previewEnabled) {
@@ -117,6 +119,7 @@ export function getModelPolicyChain(
       options.useGemini3_5Flash,
       options.useGemini3_6Flash,
       options.useGemini3_7Flash,
+      options.useGemini3_8Flash,
     );
     return [
       definePolicy({

@@ -131,6 +131,30 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
         model: 'gemini-3.7-flash',
       },
     },
+    'gemini-3.8-flash': {
+      extends: 'chat-base-3',
+      modelConfig: {
+        model: 'gemini-3.8-flash',
+      },
+    },
+    '3.6-flash': {
+      extends: 'chat-base-3',
+      modelConfig: {
+        model: 'gemini-3.6-flash',
+      },
+    },
+    '3.7-flash': {
+      extends: 'chat-base-3',
+      modelConfig: {
+        model: 'gemini-3.7-flash',
+      },
+    },
+    '3.8-flash': {
+      extends: 'chat-base-3',
+      modelConfig: {
+        model: 'gemini-3.8-flash',
+      },
+    },
     'gemini-3.5-flash-lite': {
       extends: 'chat-base-3',
       modelConfig: {
@@ -179,6 +203,12 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
       extends: 'base',
       modelConfig: {
         model: 'gemini-3.7-flash',
+      },
+    },
+    'gemini-3.8-flash-base': {
+      extends: 'base',
+      modelConfig: {
+        model: 'gemini-3.8-flash',
       },
     },
     'gemini-3.5-flash-lite-base': {
@@ -415,6 +445,13 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
       isVisible: true,
       features: { thinking: true, multimodalToolUse: true },
     },
+    'gemini-3.8-flash': {
+      tier: 'flash',
+      family: 'gemini-3',
+      isPreview: false,
+      isVisible: true,
+      features: { thinking: true, multimodalToolUse: true },
+    },
     'gemini-3.5-flash-lite': {
       tier: 'flash-lite',
       family: 'gemini-3',
@@ -555,6 +592,18 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
     'gemini-3.7-flash': {
       default: 'gemini-3.7-flash',
     },
+    'gemini-3.8-flash': {
+      default: 'gemini-3.8-flash',
+    },
+    '3.6-flash': {
+      default: 'gemini-3.6-flash',
+    },
+    '3.7-flash': {
+      default: 'gemini-3.7-flash',
+    },
+    '3.8-flash': {
+      default: 'gemini-3.8-flash',
+    },
     'gemini-3.5-flash-lite': {
       default: 'gemini-3.5-flash-lite',
     },
@@ -612,6 +661,7 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
     flash: {
       default: 'gemini-3-flash-preview',
       contexts: [
+        { condition: { useGemini3_8Flash: true }, target: 'gemini-3.8-flash' },
         { condition: { useGemini3_7Flash: true }, target: 'gemini-3.7-flash' },
         { condition: { useGemini3_6Flash: true }, target: 'gemini-3.6-flash' },
         { condition: { useGemini3_5Flash: true }, target: 'gemini-3.5-flash' },
@@ -646,6 +696,7 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
     flash: {
       default: 'gemini-3-flash-preview',
       contexts: [
+        { condition: { useGemini3_8Flash: true }, target: 'gemini-3.8-flash' },
         { condition: { useGemini3_7Flash: true }, target: 'gemini-3.7-flash' },
         { condition: { useGemini3_6Flash: true }, target: 'gemini-3.6-flash' },
         { condition: { useGemini3_5Flash: true }, target: 'gemini-3.5-flash' },

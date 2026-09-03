@@ -34,6 +34,7 @@ export class FallbackStrategy implements RoutingStrategy {
       config.hasGemini35FlashGAAccess?.() ?? false,
       config.hasGemini36FlashGAAccess?.() ?? false,
       config.hasGemini37FlashGAAccess?.() ?? false,
+      config.hasGemini38FlashGAAccess?.() ?? false,
     );
     const service = config.getModelAvailabilityService();
     const snapshot = service.snapshot(resolvedModel);

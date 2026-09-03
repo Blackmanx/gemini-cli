@@ -108,6 +108,7 @@ export function modelStringToModelConfigAlias(model: string): string {
     case 'gemini-3.5-flash':
     case 'gemini-3.6-flash':
     case 'gemini-3.7-flash':
+    case 'gemini-3.8-flash':
       return 'chat-compression-3-flash';
     case PREVIEW_GEMINI_FLASH_LITE_MODEL:
     // fallthrough
