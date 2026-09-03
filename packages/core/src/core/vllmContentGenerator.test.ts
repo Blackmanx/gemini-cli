@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import type { GenerateContentParameters } from '@google/genai';
+import { Type, type GenerateContentParameters } from '@google/genai';
 import {
   VllmContentGenerator,
   fetchVllmModels,
@@ -165,8 +165,8 @@ describe('vllmContentGenerator', () => {
               name: 'calculator',
               description: 'Performs math',
               parameters: {
-                type: 'object',
-                properties: { expr: { type: 'string' } },
+                type: Type.OBJECT,
+                properties: { expr: { type: Type.STRING } },
               },
             },
           ],
@@ -180,8 +180,8 @@ describe('vllmContentGenerator', () => {
             name: 'calculator',
             description: 'Performs math',
             parameters: {
-              type: 'object',
-              properties: { expr: { type: 'string' } },
+              type: Type.OBJECT,
+              properties: { expr: { type: Type.STRING } },
             },
           },
         },

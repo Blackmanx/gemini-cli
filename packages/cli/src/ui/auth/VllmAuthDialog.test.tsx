@@ -64,6 +64,7 @@ describe('VllmAuthDialog', () => {
           defaultBaseUrl="http://remote-vllm:8000"
         />,
       );
+      await new Promise((resolve) => setTimeout(resolve, 50));
     });
 
     const frame = renderResult!.lastFrame();

@@ -10,7 +10,7 @@ import {
   ExitCodes,
   getAuthTypeFromEnv,
   type Config,
-  type AuthType,
+  AuthType,
 } from '@google/gemini-cli-core';
 import { USER_SETTINGS_PATH, type LoadedSettings } from './config/settings.js';
 import { validateAuthMethod } from './config/auth.js';
@@ -24,7 +24,10 @@ export async function validateNonInteractiveAuth(
   settings: LoadedSettings,
 ) {
   try {
-    const effectiveAuthType = configuredAuthType || getAuthTypeFromEnv();
+    const effectiveAuthType =
+      (process.env['VLLM_BASE_URL'] ? AuthType.USE_VLLM : undefined) ||
+      configuredAuthType ||
+      getAuthTypeFromEnv();
 
     const enforcedType = settings.merged.security.auth.enforcedType;
     if (enforcedType && effectiveAuthType !== enforcedType) {

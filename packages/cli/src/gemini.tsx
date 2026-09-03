@@ -510,23 +510,19 @@ export async function main() {
   let initialAuthFailed = false;
   if (!settings.merged.security.auth.useExternal && !argv.isCommand) {
     try {
-      if (
-        partialConfig.isInteractive() &&
-        settings.merged.security.auth.selectedType
-      ) {
-        const err = await validateAuthMethod(
-          settings.merged.security.auth.selectedType,
-        );
+      const initialAuthType =
+        (process.env['VLLM_BASE_URL'] ? AuthType.USE_VLLM : undefined) ||
+        settings.merged.security.auth.selectedType;
+      if (partialConfig.isInteractive() && initialAuthType) {
+        const err = await validateAuthMethod(initialAuthType);
         if (err) {
           throw new Error(err);
         }
 
-        await partialConfig.refreshAuth(
-          settings.merged.security.auth.selectedType,
-        );
+        await partialConfig.refreshAuth(initialAuthType);
       } else if (!partialConfig.isInteractive()) {
         const authType = await validateNonInteractiveAuth(
-          settings.merged.security.auth.selectedType,
+          initialAuthType,
           settings.merged.security.auth.useExternal,
           partialConfig,
           settings,

@@ -12,10 +12,10 @@ import {
   type EmbedContentParameters,
   type EmbedContentResponse,
   type FunctionCall,
+  type FunctionDeclaration,
   type GenerateContentParameters,
   type GenerateContentResponse,
   type Part,
-  type Tool,
 } from '@google/genai';
 import type { ContentGenerator } from './contentGenerator.js';
 import type { LlmRole } from '../telemetry/llmRole.js';
@@ -236,13 +236,18 @@ export function convertContentsToOpenAiMessages(
  * Maps Gemini tools to OpenAI tools.
  */
 export function convertToolsToOpenAiTools(
-  tools?: Tool[],
+  tools?: GenerateContentParameters['config'] extends { tools?: infer T }
+    ? T
+    : unknown,
 ): OpenAiTool[] | undefined {
   if (!tools || !Array.isArray(tools)) return undefined;
 
   const result: OpenAiTool[] = [];
   for (const tool of tools) {
-    const decls = tool.functionDeclarations;
+    if (typeof tool !== 'object' || tool === null) continue;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+    const t = tool as { functionDeclarations?: FunctionDeclaration[] };
+    const decls = t.functionDeclarations;
     if (!Array.isArray(decls)) continue;
 
     for (const decl of decls) {
@@ -417,9 +422,34 @@ export class VllmContentGenerator implements ContentGenerator {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `vLLM error (${response.status} ${response.statusText}): ${errorText}`,
-      );
+      if (
+        payload['tools'] &&
+        response.status === 400 &&
+        (errorText.includes('does not support tools') ||
+          errorText.includes('tools are not supported') ||
+          errorText.includes('tool calls are not supported'))
+      ) {
+        debugLogger.warn(
+          'Model does not support tools, retrying without tools',
+        );
+        delete payload['tools'];
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: request.config?.abortSignal,
+        });
+        if (!response.ok) {
+          const retryErrorText = await response.text();
+          throw new Error(
+            `vLLM error (${response.status} ${response.statusText}): ${retryErrorText}`,
+          );
+        }
+      } else {
+        throw new Error(
+          `vLLM error (${response.status} ${response.statusText}): ${errorText}`,
+        );
+      }
     }
 
     // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
@@ -491,9 +521,34 @@ export class VllmContentGenerator implements ContentGenerator {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `vLLM streaming error (${response.status} ${response.statusText}): ${errorText}`,
-      );
+      if (
+        payload['tools'] &&
+        response.status === 400 &&
+        (errorText.includes('does not support tools') ||
+          errorText.includes('tools are not supported') ||
+          errorText.includes('tool calls are not supported'))
+      ) {
+        debugLogger.warn(
+          'Model does not support tools, retrying stream without tools',
+        );
+        delete payload['tools'];
+        response = await fetch(url, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: request.config?.abortSignal,
+        });
+        if (!response.ok) {
+          const retryErrorText = await response.text();
+          throw new Error(
+            `vLLM streaming error (${response.status} ${response.statusText}): ${retryErrorText}`,
+          );
+        }
+      } else {
+        throw new Error(
+          `vLLM streaming error (${response.status} ${response.statusText}): ${errorText}`,
+        );
+      }
     }
 
     if (!response.body) {
