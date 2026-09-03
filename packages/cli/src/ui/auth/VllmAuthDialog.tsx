@@ -5,8 +5,9 @@
  */
 
 import type React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import { fetchVllmModels } from '@google/gemini-cli-core';
 import { theme } from '../semantic-colors.js';
 import { TextInput } from '../components/shared/TextInput.js';
 import { useTextBuffer } from '../components/shared/text-buffer.js';
@@ -14,11 +15,12 @@ import { useUIState } from '../contexts/UIStateContext.js';
 import { useKeypress } from '../hooks/useKeypress.js';
 
 interface VllmAuthDialogProps {
-  onSubmit: (baseUrl: string, apiKey: string) => void;
+  onSubmit: (baseUrl: string, apiKey: string, model?: string) => void;
   onCancel: () => void;
   error?: string | null;
   defaultBaseUrl?: string;
   defaultApiKey?: string;
+  defaultModel?: string;
 }
 
 export function VllmAuthDialog({
@@ -27,10 +29,14 @@ export function VllmAuthDialog({
   error,
   defaultBaseUrl = '',
   defaultApiKey = '',
+  defaultModel = '',
 }: VllmAuthDialogProps): React.JSX.Element {
   const { terminalWidth } = useUIState();
   const viewportWidth = terminalWidth - 8;
-  const [activeField, setActiveField] = useState<'url' | 'key'>('url');
+  const [activeField, setActiveField] = useState<'url' | 'key' | 'model'>(
+    'url',
+  );
+  const [discoveredModels, setDiscoveredModels] = useState<string[]>([]);
 
   const urlBuffer = useTextBuffer({
     initialText: defaultBaseUrl,
@@ -47,10 +53,48 @@ export function VllmAuthDialog({
     singleLine: true,
   });
 
+  const modelBuffer = useTextBuffer({
+    initialText: defaultModel,
+    initialCursorOffset: defaultModel.length,
+    viewport: { width: viewportWidth, height: 4 },
+    inputFilter: (text) => text.replace(/[\r\n]/g, ''),
+    singleLine: true,
+  });
+
+  // Attempt to discover models from the vLLM server when URL changes or on mount
+  useEffect(() => {
+    const trimmedUrl = urlBuffer.text.trim();
+    if (!trimmedUrl) {
+      setDiscoveredModels([]);
+      return;
+    }
+
+    let isMounted = true;
+    void fetchVllmModels(trimmedUrl, keyBuffer.text.trim()).then(
+      (models: string[]) => {
+        if (!isMounted) return;
+        if (models && models.length > 0) {
+          setDiscoveredModels(models);
+          if (!modelBuffer.text.trim()) {
+            modelBuffer.setText(models[0]);
+          }
+        }
+      },
+    );
+
+    return () => {
+      isMounted = false;
+    };
+  }, [urlBuffer.text, keyBuffer.text, modelBuffer]);
+
   useKeypress(
     (key) => {
       if (key.name === 'tab') {
-        setActiveField((f) => (f === 'url' ? 'key' : 'url'));
+        setActiveField((f) => {
+          if (f === 'url') return 'key';
+          if (f === 'key') return 'model';
+          return 'url';
+        });
         return true;
       }
       if (key.name === 'return' || key.name === 'enter') {
@@ -58,7 +102,11 @@ export function VllmAuthDialog({
           setActiveField('key');
           return true;
         }
-        onSubmit(urlBuffer.text, keyBuffer.text);
+        if (activeField === 'key') {
+          setActiveField('model');
+          return true;
+        }
+        onSubmit(urlBuffer.text, keyBuffer.text, modelBuffer.text);
         return true;
       }
       return false;
@@ -79,10 +127,11 @@ export function VllmAuthDialog({
       </Text>
       <Box marginTop={1} flexDirection="column">
         <Text color={theme.text.primary}>
-          Connect to a vLLM server hosting Gemma or other compatible models.
+          Connect to a remote or local vLLM server hosting any model.
         </Text>
         <Text color={theme.text.secondary}>
-          vLLM must be started with --enable-gemini-api flag (v0.8.0+)
+          Compatible with any model (e.g. Llama, Qwen, Mistral, Gemma, or local
+          weights) via OpenAI or Gemini protocol.
         </Text>
       </Box>
       <Box marginTop={1} flexDirection="column">
@@ -114,12 +163,41 @@ export function VllmAuthDialog({
         >
           <TextInput
             buffer={keyBuffer}
-            onSubmit={() => onSubmit(urlBuffer.text, keyBuffer.text)}
+            onSubmit={() => setActiveField('model')}
             onCancel={onCancel}
             placeholder="Leave empty if not required"
             focus={activeField === 'key'}
           />
         </Box>
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text color={theme.text.primary}>
+          Model Name (optional / auto-detected):
+        </Text>
+        <Box
+          borderStyle="round"
+          borderColor={
+            activeField === 'model' ? theme.ui.focus : theme.border.default
+          }
+          paddingX={1}
+        >
+          <TextInput
+            buffer={modelBuffer}
+            onSubmit={() =>
+              onSubmit(urlBuffer.text, keyBuffer.text, modelBuffer.text)
+            }
+            onCancel={onCancel}
+            placeholder="e.g. Qwen/Qwen2.5-Coder-32B-Instruct, meta-llama/Llama-3.1-8B-Instruct"
+            focus={activeField === 'model'}
+          />
+        </Box>
+        {discoveredModels.length > 0 && (
+          <Box marginTop={0.5}>
+            <Text color={theme.text.accent}>
+              Available on server: {discoveredModels.join(', ')}
+            </Text>
+          </Box>
+        )}
       </Box>
       {error && (
         <Box marginTop={1}>

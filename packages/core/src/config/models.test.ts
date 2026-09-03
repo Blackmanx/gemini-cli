@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   resolveModel,
   resolveClassifierModel,
@@ -1241,6 +1241,52 @@ describe('resolveModel Gemini 3.5 Flash GA', () => {
           true, // useGemini3_5Flash
         ),
       ).toBe(PREVIEW_GEMINI_MODEL);
+    });
+  });
+
+  describe('vLLM and custom models', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('should resolve auto to VLLM_MODEL when env var is set (static)', () => {
+      vi.stubEnv('VLLM_MODEL', 'Qwen/Qwen2.5-Coder-32B-Instruct');
+      expect(resolveModel(GEMINI_MODEL_ALIAS_AUTO)).toBe(
+        'Qwen/Qwen2.5-Coder-32B-Instruct',
+      );
+    });
+
+    it('should resolve auto to VLLM_MODEL when env var is set (dynamic)', () => {
+      vi.stubEnv('VLLM_MODEL', 'meta-llama/Llama-3.1-8B-Instruct');
+      expect(
+        resolveModel(
+          GEMINI_MODEL_ALIAS_AUTO,
+          false,
+          false,
+          true,
+          dynamicConfig,
+        ),
+      ).toBe('meta-llama/Llama-3.1-8B-Instruct');
+    });
+
+    it('should identify custom models as custom models', () => {
+      expect(isCustomModel('Qwen/Qwen2.5-Coder-32B-Instruct')).toBe(true);
+      expect(isCustomModel('meta-llama/Llama-3.1-8B-Instruct')).toBe(true);
+      expect(isCustomModel('mistralai/Mistral-7B-Instruct-v0.3')).toBe(true);
+      expect(isCustomModel(DEFAULT_GEMINI_MODEL)).toBe(false);
+    });
+
+    it('should not downgrade custom models in flash checks', () => {
+      expect(
+        resolveModel(
+          'my-local-flash-model',
+          false,
+          false,
+          false,
+          undefined,
+          true,
+        ),
+      ).toBe('my-local-flash-model');
     });
   });
 });

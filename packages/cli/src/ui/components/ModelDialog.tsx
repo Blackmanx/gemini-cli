@@ -31,6 +31,8 @@ import {
   PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL,
   isProModel,
   getAutoModelDescription,
+  isCustomModel,
+  fetchVllmModels,
 } from '@google/gemini-cli-core';
 import { useKeypress } from '../hooks/useKeypress.js';
 import { theme } from '../semantic-colors.js';
@@ -66,6 +68,28 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
     void checkAccess();
   }, [config]);
 
+  const [vllmModels, setVllmModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    const isVllm =
+      config?.getContentGeneratorConfig?.()?.authType === AuthType.USE_VLLM ||
+      Boolean(process.env['VLLM_BASE_URL']);
+    if (isVllm) {
+      const baseUrl =
+        config?.getContentGeneratorConfig?.()?.baseUrl ||
+        process.env['VLLM_BASE_URL'] ||
+        'http://localhost:8000';
+      const apiKey =
+        config?.getContentGeneratorConfig?.()?.apiKey ||
+        process.env['VLLM_API_KEY'];
+      void fetchVllmModels(baseUrl, apiKey).then((models: string[]) => {
+        if (models && models.length > 0) {
+          setVllmModels(models);
+        }
+      });
+    }
+  }, [config]);
+
   // Determine the Preferred Model (read once when the dialog opens).
   const preferredModel = config?.getModel() || GEMINI_MODEL_ALIAS_AUTO;
 
@@ -87,8 +111,10 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
       const def = config
         .getModelConfigService()
         .getModelDefinition(preferredModel);
-      // Only treat as manual selection if it's a visible, non-auto model.
-      return def && def.tier !== 'auto' && def.isVisible === true
+      // Only treat as manual selection if it's a visible, non-auto model, or custom model.
+      return def &&
+        def.tier !== 'auto' &&
+        (def.isVisible === true || def.tier === 'custom')
         ? preferredModel
         : '';
     }
@@ -107,11 +133,15 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
       PREVIEW_GEMINI_FLASH_LITE_MODEL,
       PREVIEW_GEMINI_FLASH_MODEL,
     ].filter((m) => m !== 'none');
-    if (manualModels.includes(preferredModel)) {
+    if (
+      manualModels.includes(preferredModel) ||
+      (preferredModel && isCustomModel(preferredModel, config ?? undefined)) ||
+      vllmModels.includes(preferredModel)
+    ) {
       return preferredModel;
     }
     return '';
-  }, [preferredModel, config]);
+  }, [preferredModel, config, vllmModels]);
 
   useKeypress(
     (key) => {
@@ -144,6 +174,7 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
           useGemini3_5Flash,
           useGemini3_6Flash,
           useGemini3_7Flash,
+          useGemini3_8Flash,
           useCustomTools: useCustomToolModel,
           hasAccessToPreview: shouldShowPreviewModels,
           hasAccessToProModel,
@@ -227,13 +258,55 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
           hasAccessToProModel,
         });
 
-      return allOptions
+      const opts = allOptions
         .filter((o) => o.tier !== 'auto')
         .map((o) => ({
           value: o.modelId,
           title: o.name,
           key: o.modelId,
         }));
+
+      for (const m of vllmModels) {
+        if (
+          m &&
+          m !== GEMINI_MODEL_ALIAS_AUTO &&
+          !opts.some((o) => o.value === m)
+        ) {
+          opts.unshift({
+            value: m,
+            title: getDisplayString(m, config ?? undefined),
+            key: m,
+          });
+        }
+      }
+
+      if (
+        process.env['VLLM_MODEL']?.trim() &&
+        process.env['VLLM_MODEL'] !== GEMINI_MODEL_ALIAS_AUTO &&
+        !opts.some((o) => o.value === process.env['VLLM_MODEL'])
+      ) {
+        const vm = process.env['VLLM_MODEL'];
+        opts.unshift({
+          value: vm,
+          title: getDisplayString(vm, config ?? undefined),
+          key: vm,
+        });
+      }
+
+      if (
+        preferredModel &&
+        preferredModel !== GEMINI_MODEL_ALIAS_AUTO &&
+        isCustomModel(preferredModel, config ?? undefined) &&
+        !opts.some((o) => o.value === preferredModel)
+      ) {
+        opts.unshift({
+          value: preferredModel,
+          title: getDisplayString(preferredModel, config ?? undefined),
+          key: preferredModel,
+        });
+      }
+
+      return opts;
     }
 
     // --- LEGACY PATH ---
@@ -338,6 +411,46 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
       options.unshift(...previewOptions);
     }
 
+    for (const m of vllmModels) {
+      if (
+        m &&
+        m !== GEMINI_MODEL_ALIAS_AUTO &&
+        !options.some((o) => o.value === m)
+      ) {
+        options.unshift({
+          value: m,
+          title: getDisplayString(m, config ?? undefined),
+          key: m,
+        });
+      }
+    }
+
+    if (
+      process.env['VLLM_MODEL']?.trim() &&
+      process.env['VLLM_MODEL'] !== GEMINI_MODEL_ALIAS_AUTO &&
+      !options.some((o) => o.value === process.env['VLLM_MODEL'])
+    ) {
+      const vm = process.env['VLLM_MODEL'];
+      options.unshift({
+        value: vm,
+        title: getDisplayString(vm, config ?? undefined),
+        key: vm,
+      });
+    }
+
+    if (
+      preferredModel &&
+      preferredModel !== GEMINI_MODEL_ALIAS_AUTO &&
+      isCustomModel(preferredModel, config ?? undefined) &&
+      !options.some((o) => o.value === preferredModel)
+    ) {
+      options.unshift({
+        value: preferredModel,
+        title: getDisplayString(preferredModel, config ?? undefined),
+        key: preferredModel,
+      });
+    }
+
     if (!hasAccessToProModel) {
       // Filter out all Pro models for free tier
       return options.filter((option) => !isProModel(option.value));
@@ -354,6 +467,8 @@ export function ModelDialog({ onClose }: ModelDialogProps): React.JSX.Element {
     useCustomToolModel,
     hasAccessToProModel,
     config,
+    vllmModels,
+    preferredModel,
   ]);
 
   const options = useMemo(() => {

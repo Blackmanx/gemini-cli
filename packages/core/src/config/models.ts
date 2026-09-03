@@ -201,12 +201,15 @@ export function resolveModel(
       useGemini3_8Flash,
     });
 
+    if (
+      normalizedModel === GEMINI_MODEL_ALIAS_AUTO &&
+      process.env['VLLM_MODEL']?.trim()
+    ) {
+      return process.env['VLLM_MODEL'].trim();
+    }
+
     if (!hasAccessToPreview && isPreviewModel(resolved, config)) {
-      // Fallback for unknown preview models.
-      if (resolved.includes('flash-lite')) {
-        return DEFAULT_GEMINI_FLASH_LITE_MODEL;
-      }
-      if (resolved.includes('flash')) {
+      if (isFlashModel(resolved)) {
         return DEFAULT_GEMINI_FLASH_MODEL;
       }
       return DEFAULT_GEMINI_MODEL;
@@ -217,7 +220,17 @@ export function resolveModel(
 
   let resolved: string;
   switch (normalizedModel) {
-    case GEMINI_MODEL_ALIAS_AUTO:
+    case GEMINI_MODEL_ALIAS_AUTO: {
+      if (process.env['VLLM_MODEL']?.trim()) {
+        resolved = process.env['VLLM_MODEL'].trim();
+        break;
+      }
+      if (!hasAccessToPreview) {
+        resolved = DEFAULT_GEMINI_MODEL;
+        break;
+      }
+      // fallthrough
+    }
     case GEMINI_MODEL_ALIAS_PRO: {
       if (!hasAccessToPreview) {
         resolved = DEFAULT_GEMINI_MODEL;
@@ -284,6 +297,7 @@ export function resolveModel(
     !useGemini3_7Flash &&
     !useGemini3_8Flash &&
     isFlashModel(resolved) &&
+    !isCustomModel(resolved, config) &&
     normalizedModel !== PREVIEW_GEMINI_FLASH_MODEL &&
     normalizedModel !== DEFAULT_GEMINI_3_8_FLASH_MODEL &&
     normalizedModel !== DEFAULT_GEMINI_3_7_FLASH_MODEL &&
@@ -332,8 +346,7 @@ function isFlashModel(model: string): boolean {
     model === 'flash' ||
     model === '3.6-flash' ||
     model === '3.7-flash' ||
-    model === '3.8-flash' ||
-    model.endsWith('flash')
+    (model.startsWith('gemini-') && model.endsWith('flash'))
   );
 }
 

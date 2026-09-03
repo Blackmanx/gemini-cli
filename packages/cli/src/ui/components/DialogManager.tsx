@@ -316,6 +316,9 @@ export const DialogManager = ({
           onSubmit={uiActions.handleVllmSubmit}
           onCancel={uiActions.handleVllmCancel}
           error={uiState.authError}
+          defaultBaseUrl={process.env['VLLM_BASE_URL']}
+          defaultApiKey={process.env['VLLM_API_KEY']}
+          defaultModel={process.env['VLLM_MODEL']}
         />
       </Box>
     );

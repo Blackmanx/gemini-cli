@@ -32,6 +32,7 @@ import { getVersion, resolveModel } from '../../index.js';
 import type { LlmRole } from '../telemetry/llmRole.js';
 import { ModelMappingContentGenerator } from './modelMappingContentGenerator.js';
 import { CCPA_AI_MODEL_MAPPINGS } from '../config/models.js';
+import { VllmContentGenerator } from './vllmContentGenerator.js';
 
 /**
  * Interface abstracting the core functionalities for generating content and counting tokens.
@@ -324,11 +325,51 @@ export async function createContentGenerator(
       );
     }
 
+    if (config.authType === AuthType.USE_VLLM) {
+      let headers: Record<string, string> = { ...baseHeaders };
+      if (config.customHeaders) {
+        headers = { ...headers, ...config.customHeaders };
+      }
+      let baseUrl = config.baseUrl;
+      if (!baseUrl) {
+        const envBaseUrl = process.env['VLLM_BASE_URL'];
+        if (envBaseUrl) {
+          validateBaseUrl(envBaseUrl);
+          baseUrl = envBaseUrl;
+        }
+      } else {
+        validateBaseUrl(baseUrl);
+      }
+
+      let fallbackGenAi: ContentGenerator | undefined;
+      try {
+        const googleGenAI = new GoogleGenAI({
+          apiKey: config.apiKey || '',
+          vertexai: false,
+          httpOptions: {
+            baseUrl: baseUrl || undefined,
+            headers,
+          },
+          ...(apiVersionEnv && { apiVersion: apiVersionEnv }),
+        });
+        fallbackGenAi = googleGenAI.models;
+      } catch {
+        // Fallback is optional
+      }
+
+      const vllmGenerator = new VllmContentGenerator(
+        baseUrl || 'http://localhost:8000',
+        config.apiKey,
+        headers,
+        fallbackGenAi,
+      );
+      return new LoggingContentGenerator(vllmGenerator, gcConfig);
+    }
+
     if (
       config.authType === AuthType.USE_GEMINI ||
       config.authType === AuthType.USE_VERTEX_AI ||
-      config.authType === AuthType.GATEWAY ||
-      config.authType === AuthType.USE_VLLM
+      config.authType === AuthType.GATEWAY
     ) {
       let headers: Record<string, string> = { ...baseHeaders };
       if (config.customHeaders) {
@@ -357,11 +398,7 @@ export async function createContentGenerator(
           'x-gemini-api-privileged-user-id': `${installationId}`,
         };
       }
-      if (
-        (config.authType === AuthType.GATEWAY ||
-          config.authType === AuthType.USE_VLLM) &&
-        config.apiKey === ''
-      ) {
+      if (config.authType === AuthType.GATEWAY && config.apiKey === '') {
         headers['x-goog-api-key'] = '';
       }
       let baseUrl = config.baseUrl;
@@ -369,9 +406,7 @@ export async function createContentGenerator(
         const envBaseUrl =
           config.authType === AuthType.USE_VERTEX_AI
             ? process.env['GOOGLE_VERTEX_BASE_URL']
-            : config.authType === AuthType.USE_VLLM
-              ? process.env['VLLM_BASE_URL']
-              : process.env['GOOGLE_GEMINI_BASE_URL'];
+            : process.env['GOOGLE_GEMINI_BASE_URL'];
         if (envBaseUrl) {
           validateBaseUrl(envBaseUrl);
           baseUrl = envBaseUrl;
@@ -406,8 +441,7 @@ export async function createContentGenerator(
         config.vertexai ?? config.authType === AuthType.USE_VERTEX_AI;
       const googleGenAI = new GoogleGenAI({
         apiKey:
-          config.authType === AuthType.GATEWAY ||
-          config.authType === AuthType.USE_VLLM
+          config.authType === AuthType.GATEWAY
             ? config.apiKey
             : config.apiKey === ''
               ? undefined

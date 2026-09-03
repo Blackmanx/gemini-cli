@@ -76,7 +76,7 @@ export function AuthDialog({
       key: AuthType.USE_VERTEX_AI,
     },
     {
-      label: 'vLLM (self-hosted, e.g. Gemma)',
+      label: 'vLLM (remote / self-hosted models)',
       value: AuthType.USE_VLLM,
       key: AuthType.USE_VLLM,
     },

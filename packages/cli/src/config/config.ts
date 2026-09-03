@@ -841,7 +841,10 @@ export async function loadCliConfig(
 
   const defaultModel = GEMINI_MODEL_ALIAS_AUTO;
   const rawModel =
-    argv.model || process.env['GEMINI_MODEL'] || settings.model?.name;
+    argv.model ||
+    process.env['GEMINI_MODEL'] ||
+    settings.model?.name ||
+    process.env['VLLM_MODEL'];
 
   // Ensure specifiedModel is a string (e.g. if yargs parsed multiple --model as an array)
   const specifiedModel = Array.isArray(rawModel)

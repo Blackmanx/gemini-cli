@@ -881,7 +881,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
   }, [setAuthState]);
 
   const handleVllmSubmit = useCallback(
-    async (baseUrl: string, apiKey: string) => {
+    async (baseUrl: string, apiKey: string, model?: string) => {
       try {
         onAuthError(null);
         if (!baseUrl.trim()) {
@@ -892,6 +892,10 @@ Logging in with Google... Restarting Gemini CLI to continue.
         process.env['VLLM_BASE_URL'] = baseUrl.trim();
         if (apiKey.trim()) {
           process.env['VLLM_API_KEY'] = apiKey.trim();
+        }
+        if (model?.trim()) {
+          process.env['VLLM_MODEL'] = model.trim();
+          config.setModel(model.trim(), true);
         }
         await config.refreshAuth(
           AuthType.USE_VLLM,
