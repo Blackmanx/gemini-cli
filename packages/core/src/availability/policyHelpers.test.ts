@@ -17,6 +17,7 @@ import type { Config } from '../config/config.js';
 import {
   DEFAULT_GEMINI_FLASH_LITE_MODEL,
   DEFAULT_GEMINI_MODEL_AUTO,
+  PREVIOUS_GEMINI_FLASH_LITE_MODEL,
   PREVIEW_GEMINI_3_1_CUSTOM_TOOLS_MODEL,
   PREVIEW_GEMINI_3_1_MODEL,
 } from '../config/models.js';
@@ -113,7 +114,7 @@ describe('policyHelpers', () => {
       });
       const chain = resolvePolicyChain(config, DEFAULT_GEMINI_FLASH_LITE_MODEL);
       expect(chain).toHaveLength(3);
-      expect(chain[0]?.model).toBe('gemini-3.1-flash-lite');
+      expect(chain[0]?.model).toBe('gemini-3.5-flash-lite');
       expect(chain[1]?.model).toBe('gemini-2.5-flash');
       expect(chain[2]?.model).toBe('gemini-2.5-pro');
     });
@@ -124,9 +125,20 @@ describe('policyHelpers', () => {
       });
       const chain = resolvePolicyChain(config);
       expect(chain).toHaveLength(3);
-      expect(chain[0]?.model).toBe('gemini-3.1-flash-lite');
+      expect(chain[0]?.model).toBe('gemini-3.5-flash-lite');
       expect(chain[1]?.model).toBe('gemini-2.5-flash');
       expect(chain[2]?.model).toBe('gemini-2.5-pro');
+    });
+
+    it('returns flash-lite chain when a pinned previous GA flash-lite model is configured', () => {
+      const config = createMockConfig({
+        getModel: () => PREVIOUS_GEMINI_FLASH_LITE_MODEL,
+      });
+      const chain = resolvePolicyChain(config);
+      // Pinned models that are not in the chain keep a single-model policy:
+      // the previous GA model must not be remapped to the current GA model.
+      expect(chain).toHaveLength(1);
+      expect(chain[0]?.model).toBe(PREVIOUS_GEMINI_FLASH_LITE_MODEL);
     });
 
     it('wraps around the chain when wrapsAround is true', () => {

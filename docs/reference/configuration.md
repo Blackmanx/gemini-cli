@@ -678,6 +678,12 @@ their corresponding top-level category object in your `settings.json` file.
           "model": "gemini-3.5-flash"
         }
       },
+      "gemini-3.5-flash-lite": {
+        "extends": "chat-base-3",
+        "modelConfig": {
+          "model": "gemini-3.5-flash-lite"
+        }
+      },
       "gemma-4-31b-it": {
         "extends": "chat-base-3",
         "modelConfig": {
@@ -905,6 +911,16 @@ their corresponding top-level category object in your `settings.json` file.
     ```json
     {
       "gemini-3.1-flash-lite": {
+        "tier": "flash-lite",
+        "family": "gemini-3",
+        "isPreview": false,
+        "isVisible": true,
+        "features": {
+          "thinking": false,
+          "multimodalToolUse": true
+        }
+      },
+      "gemini-3.5-flash-lite": {
         "tier": "flash-lite",
         "family": "gemini-3",
         "isPreview": false,
@@ -1235,6 +1251,9 @@ their corresponding top-level category object in your `settings.json` file.
       "gemini-3.1-flash-lite": {
         "default": "gemini-3.1-flash-lite"
       },
+      "gemini-3.5-flash-lite": {
+        "default": "gemini-3.5-flash-lite"
+      },
       "flash": {
         "default": "gemini-3-flash-preview",
         "contexts": [
@@ -1253,7 +1272,7 @@ their corresponding top-level category object in your `settings.json` file.
         ]
       },
       "flash-lite": {
-        "default": "gemini-3.1-flash-lite"
+        "default": "gemini-3.5-flash-lite"
       },
       "auto-gemini-3": {
         "default": "gemini-3-pro-preview",

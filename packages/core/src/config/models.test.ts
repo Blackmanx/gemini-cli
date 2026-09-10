@@ -19,6 +19,9 @@ import {
   DEFAULT_GEMINI_FLASH_MODEL,
   DEFAULT_GEMINI_3_5_FLASH_MODEL,
   DEFAULT_GEMINI_FLASH_LITE_MODEL,
+  DEFAULT_GEMINI_3_5_FLASH_LITE_MODEL,
+  PREVIOUS_GEMINI_FLASH_LITE_MODEL,
+  isFlashLiteModel,
   supportsMultimodalFunctionResponse,
   GEMINI_MODEL_ALIAS_PRO,
   GEMINI_MODEL_ALIAS_FLASH,
@@ -1062,5 +1065,35 @@ describe('resolveModel Gemini 3.5 Flash GA', () => {
         ),
       ).toBe(PREVIEW_GEMINI_MODEL);
     });
+  });
+});
+
+describe('resolveModel Flash-Lite GA', () => {
+  it('should resolve the flash-lite alias to the GA Flash-Lite model', () => {
+    expect(resolveModel(GEMINI_MODEL_ALIAS_FLASH_LITE)).toBe(
+      DEFAULT_GEMINI_3_5_FLASH_LITE_MODEL,
+    );
+  });
+
+  it.each([
+    DEFAULT_GEMINI_3_5_FLASH_LITE_MODEL,
+    PREVIOUS_GEMINI_FLASH_LITE_MODEL,
+  ])('should preserve the explicit versioned model %s (legacy)', (model) => {
+    expect(resolveModel(model, false, false, true, undefined, true)).toBe(
+      model,
+    );
+  });
+
+  it('should keep the previous GA Flash-Lite model selectable', () => {
+    expect(isActiveModel(PREVIOUS_GEMINI_FLASH_LITE_MODEL, false, false)).toBe(
+      true,
+    );
+  });
+
+  it('should treat GA Gemini 3.x Flash-Lite models as Flash-Lite, but not Gemini 2.5', () => {
+    expect(isFlashLiteModel(DEFAULT_GEMINI_3_5_FLASH_LITE_MODEL)).toBe(true);
+    expect(isFlashLiteModel(PREVIOUS_GEMINI_FLASH_LITE_MODEL)).toBe(true);
+    expect(isFlashLiteModel(GEMINI_MODEL_ALIAS_FLASH_LITE)).toBe(true);
+    expect(isFlashLiteModel('gemini-2.5-flash-lite')).toBe(false);
   });
 });

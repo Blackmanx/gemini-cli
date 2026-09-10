@@ -21,10 +21,10 @@ import {
   SILENT_ACTIONS,
 } from './policyCatalog.js';
 import {
-  DEFAULT_GEMINI_FLASH_LITE_MODEL,
   DEFAULT_GEMINI_MODEL,
   PREVIEW_GEMINI_MODEL_AUTO,
   isAutoModel,
+  isFlashLiteModel,
   isGemini3Model,
   resolveModel,
 } from '../config/models.js';
@@ -87,7 +87,7 @@ export function resolvePolicyChain(
       useGemini3_5Flash,
     };
 
-    if (resolvedModel === DEFAULT_GEMINI_FLASH_LITE_MODEL) {
+    if (isFlashLiteModel(resolvedModel)) {
       chain = config.modelConfigService.resolveChain('lite', context);
     } else if (isOriginallyGemini3 || isAutoPreferred || isAutoConfigured) {
       // 1. Try to find a chain specifically for the current configured alias
@@ -124,7 +124,7 @@ export function resolvePolicyChain(
   } else {
     // --- LEGACY PATH ---
 
-    if (resolvedModel === DEFAULT_GEMINI_FLASH_LITE_MODEL) {
+    if (isFlashLiteModel(resolvedModel)) {
       chain = getFlashLitePolicyChain();
     } else if (isOriginallyGemini3 || isAutoPreferred || isAutoConfigured) {
       const isAutoSelection = isAutoPreferred || isAutoConfigured;

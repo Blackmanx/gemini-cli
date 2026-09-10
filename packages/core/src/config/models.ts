@@ -78,7 +78,14 @@ export function setFlashModels(preview: string, defaultFlash: string) {
   PREVIEW_GEMINI_FLASH_MODEL = preview;
   DEFAULT_GEMINI_FLASH_MODEL = defaultFlash;
 }
-export const DEFAULT_GEMINI_FLASH_LITE_MODEL = 'gemini-3.1-flash-lite';
+export const DEFAULT_GEMINI_3_5_FLASH_LITE_MODEL = 'gemini-3.5-flash-lite';
+// Rollout default for the `flash-lite` alias, mirroring DEFAULT_GEMINI_FLASH_MODEL.
+// Only aliases and backend IDs are remapped to it; explicit versioned Flash-Lite
+// IDs are preserved so callers can pin older or newer Flash-Lite models.
+export const DEFAULT_GEMINI_FLASH_LITE_MODEL =
+  DEFAULT_GEMINI_3_5_FLASH_LITE_MODEL;
+// Previous GA Flash-Lite ID, retained so persisted user settings keep resolving.
+export const PREVIOUS_GEMINI_FLASH_LITE_MODEL = 'gemini-3.1-flash-lite';
 /** @deprecated Gemini 3.1 Flash Lite is now GA. Use DEFAULT_GEMINI_FLASH_LITE_MODEL. */
 export const PREVIEW_GEMINI_FLASH_LITE_MODEL = 'none';
 
@@ -95,7 +102,9 @@ export const VALID_GEMINI_MODELS = new Set([
   DEFAULT_GEMINI_FLASH_MODEL,
   DEFAULT_GEMINI_3_5_FLASH_MODEL,
   SECONDARY_GEMINI_3_5_FLASH_MODEL,
-  DEFAULT_GEMINI_FLASH_LITE_MODEL,
+  DEFAULT_GEMINI_3_5_FLASH_LITE_MODEL,
+  // Retain the previous GA Flash-Lite ID for persisted user settings.
+  PREVIOUS_GEMINI_FLASH_LITE_MODEL,
 
   GEMMA_4_31B_IT_MODEL,
   GEMMA_4_26B_A4B_IT_MODEL,
@@ -268,6 +277,24 @@ function isPromotableFlashModel(model: string): boolean {
     model === DEFAULT_GEMINI_3_5_FLASH_MODEL ||
     model === SECONDARY_GEMINI_3_5_FLASH_MODEL ||
     model === GEMINI_MODEL_ALIAS_FLASH
+  );
+}
+
+/**
+ * Checks whether a model belongs to the GA Gemini 3.x Flash-Lite family.
+ *
+ * Explicit versioned Flash-Lite IDs (such as the previous GA model) stay in the
+ * family so pinned models keep Flash-Lite handling instead of being remapped to
+ * the current GA model.
+ *
+ * @param model The model name to check.
+ * @returns True if the model is a GA Gemini 3.x Flash-Lite model.
+ */
+export function isFlashLiteModel(model: string): boolean {
+  return (
+    model === DEFAULT_GEMINI_FLASH_LITE_MODEL ||
+    model === PREVIOUS_GEMINI_FLASH_LITE_MODEL ||
+    model === GEMINI_MODEL_ALIAS_FLASH_LITE
   );
 }
 
