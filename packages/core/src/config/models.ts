@@ -296,16 +296,8 @@ export function resolveModel(
     !useGemini3_6Flash &&
     !useGemini3_7Flash &&
     !useGemini3_8Flash &&
-    isFlashModel(resolved) &&
-    !isCustomModel(resolved, config) &&
-    normalizedModel !== PREVIEW_GEMINI_FLASH_MODEL &&
-    normalizedModel !== DEFAULT_GEMINI_3_8_FLASH_MODEL &&
-    normalizedModel !== DEFAULT_GEMINI_3_7_FLASH_MODEL &&
-    normalizedModel !== DEFAULT_GEMINI_3_6_FLASH_MODEL &&
-    normalizedModel !== DEFAULT_GEMINI_3_5_FLASH_MODEL &&
-    normalizedModel !== '3.8-flash' &&
-    normalizedModel !== '3.7-flash' &&
-    normalizedModel !== '3.6-flash'
+    isPromotableFlashModel(resolved) &&
+    normalizedModel !== PREVIEW_GEMINI_FLASH_MODEL
   ) {
     return DEFAULT_GEMINI_FLASH_MODEL;
   }
@@ -343,10 +335,22 @@ function isFlashModel(model: string): boolean {
     model === DEFAULT_GEMINI_3_7_FLASH_MODEL ||
     model === DEFAULT_GEMINI_3_8_FLASH_MODEL ||
     model === SECONDARY_GEMINI_3_5_FLASH_MODEL ||
-    model === 'flash' ||
+    model === GEMINI_MODEL_ALIAS_FLASH ||
     model === '3.6-flash' ||
     model === '3.7-flash' ||
     (model.startsWith('gemini-') && model.endsWith('flash'))
+  );
+}
+
+function isPromotableFlashModel(model: string): boolean {
+  // Keep explicit versioned model IDs intact so callers can pin newer or older
+  // Flash models. Rollout remapping only applies to known aliases/backend IDs.
+  return (
+    model === DEFAULT_GEMINI_FLASH_MODEL ||
+    model === PREVIEW_GEMINI_FLASH_MODEL ||
+    model === DEFAULT_GEMINI_3_5_FLASH_MODEL ||
+    model === SECONDARY_GEMINI_3_5_FLASH_MODEL ||
+    model === GEMINI_MODEL_ALIAS_FLASH
   );
 }
 
