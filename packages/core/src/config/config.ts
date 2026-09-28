@@ -57,6 +57,14 @@ import {
   GenerateImageTool,
 } from '../tools/generate-image.js';
 import { DEFAULT_TTS_MODEL, TtsTool } from '../tools/tts.js';
+import {
+  MemoryEditTool,
+  RecallTool,
+  ReflectTool,
+  RetainTool,
+} from '../tools/memory.js';
+import { LocalMemoryBackend } from '../memory/store.js';
+import type { MemoryBackend } from '../memory/types.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
 import {
@@ -809,6 +817,7 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly useGenerateImage: boolean;
   private readonly useTts: boolean;
   private readonly useMemory: boolean;
+  private memoryBackend: MemoryBackend | undefined;
   private readonly mainAgentTools: string[] | undefined;
   /** @deprecated Use Policy Engine instead */
   private readonly allowedTools: string[] | undefined;
@@ -3917,6 +3926,24 @@ export class Config implements McpContext, AgentLoopContext {
     return this.storage.getProjectTempDir();
   }
 
+  /**
+   * The session's memory bank, opened on first use.
+   *
+   * It is opened lazily rather than during `initialize()` so a session that
+   * never asks the model to remember anything never touches the database.
+   */
+  async getMemoryBackend(): Promise<MemoryBackend | undefined> {
+    if (!this.getUseMemory()) return undefined;
+    if (this.memoryBackend !== undefined) return this.memoryBackend;
+    const backend = new LocalMemoryBackend({ dir: this.getMemoryBankDir() });
+    await backend.start({
+      cwd: this.getTargetDir(),
+      sessionId: this.getSessionId(),
+    });
+    this.memoryBackend = backend;
+    return backend;
+  }
+
   getOutputFormat(): OutputFormat {
     return this.outputSettings?.format
       ? this.outputSettings.format
@@ -4210,6 +4237,28 @@ export class Config implements McpContext, AgentLoopContext {
           new TtsTool(this, this.messageBus, DEFAULT_TTS_MODEL),
         ),
       );
+    }
+
+    // The memory tools are only useful once the bank is open, and the bank
+    // only opens when the user asked for it.
+    if (this.getUseMemory()) {
+      const memory = await this.getMemoryBackend();
+      if (memory !== undefined) {
+        maybeRegister(RecallTool, () =>
+          registry.registerTool(new RecallTool(memory, this, this.messageBus)),
+        );
+        maybeRegister(ReflectTool, () =>
+          registry.registerTool(new ReflectTool(memory, this, this.messageBus)),
+        );
+        maybeRegister(RetainTool, () =>
+          registry.registerTool(new RetainTool(memory, this, this.messageBus)),
+        );
+        maybeRegister(MemoryEditTool, () =>
+          registry.registerTool(
+            new MemoryEditTool(memory, this, this.messageBus),
+          ),
+        );
+      }
     }
 
     await registry.discoverAllTools();

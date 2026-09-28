@@ -195,6 +195,10 @@ export const TRACKER_VISUALIZE_TOOL_NAME = 'tracker_visualize';
 export const AGENT_TOOL_NAME = 'invoke_agent';
 
 export const WAIT_TOOL_NAME = 'wait';
+export const RETAIN_TOOL_NAME = 'retain';
+export const RECALL_TOOL_NAME = 'recall';
+export const REFLECT_TOOL_NAME = 'reflect';
+export const MEMORY_EDIT_TOOL_NAME = 'memory_edit';
 export const GENERATE_IMAGE_TOOL_NAME = 'generate_image';
 export const TTS_TOOL_NAME = 'tts';
 export const WAIT_DISPLAY_NAME = 'Wait';
@@ -293,6 +297,10 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   WAIT_TOOL_NAME,
   GENERATE_IMAGE_TOOL_NAME,
   TTS_TOOL_NAME,
+  RETAIN_TOOL_NAME,
+  RECALL_TOOL_NAME,
+  REFLECT_TOOL_NAME,
+  MEMORY_EDIT_TOOL_NAME,
 ] as const;
 
 /**

@@ -131,13 +131,89 @@ export function stem(word: string): string {
   return w;
 }
 
-/** Tokenise into stems, dropping punctuation and very short words. */
+/**
+ * Words that carry no information about which memory is wanted.
+ *
+ * Rarity alone cannot filter these out: in a one-memory bank every term is
+ * "common", so idf ranking degenerates. A stopword list is what makes "where
+ * are the migrations" find the migrations and not the memory that merely
+ * contains "the".
+ */
+const STOP_WORDS: ReadonlySet<string> = new Set([
+  'a',
+  'an',
+  'and',
+  'any',
+  'are',
+  'as',
+  'at',
+  'be',
+  'been',
+  'but',
+  'by',
+  'can',
+  'did',
+  'do',
+  'doe',
+  'for',
+  'from',
+  'get',
+  'had',
+  'has',
+  'have',
+  'how',
+  'i',
+  'if',
+  'in',
+  'into',
+  'is',
+  'it',
+  'its',
+  'me',
+  'my',
+  'no',
+  'not',
+  'of',
+  'on',
+  'or',
+  'our',
+  'so',
+  'that',
+  'the',
+  'their',
+  'them',
+  'then',
+  'there',
+  'these',
+  'they',
+  'this',
+  'to',
+  'up',
+  'us',
+  'was',
+  'we',
+  'were',
+  'what',
+  'when',
+  'where',
+  'which',
+  'who',
+  'why',
+  'will',
+  'with',
+  'would',
+  'you',
+  'your',
+]);
+
+/** Tokenise into stems, dropping punctuation, stopwords and tiny words. */
 export function tokenize(text: string): string[] {
   const out: string[] = [];
   for (const raw of text.toLowerCase().split(/[^a-z0-9_]+/)) {
     if (raw.length < 2) continue;
+    if (STOP_WORDS.has(raw)) continue;
     const stemmed = stem(raw);
-    if (stemmed.length >= 2) out.push(stemmed);
+    if (stemmed.length >= 2 && !STOP_WORDS.has(stemmed)) out.push(stemmed);
   }
   return out;
 }
@@ -307,12 +383,36 @@ export class LocalMemoryBackend implements MemoryBackend {
         .get(term, ...scopes, opts.cwd);
       documentFrequency.set(term, isCountRow(row) ? row.n : 0);
     }
-    const totalDocs = Math.max(1, rows.length);
+    // Rarity is judged against the whole visible bank, not against the
+    // candidates: a term that appears in every candidate row is still a rare
+    // term if the bank holds a hundred other memories.
+    const totalRow = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM memories
+         WHERE invalidated_at IS NULL
+           AND scope IN (${scopes.map(() => '?').join(',')})
+           AND (scope = 'global' OR cwd = ?)`,
+      )
+      .get(...scopes, opts.cwd);
+    const totalDocs = isCountRow(totalRow) ? Math.max(1, totalRow.n) : 1;
     const weightOf = (term: string) => {
       const df = documentFrequency.get(term) ?? 0;
       return Math.log(1 + totalDocs / (1 + df));
     };
     const queryWeight = terms.reduce((sum, term) => sum + weightOf(term), 0);
+
+    // A word that appears in most memories carries no information about which
+    // memory is wanted. When the whole query is made of such words, answering
+    // "here are some memories" is worse than saying the bank has nothing
+    // relevant, so fall through to importance order instead.
+    const selective = terms.filter((term) => {
+      const df = documentFrequency.get(term) ?? 0;
+      return df < totalDocs;
+    });
+    if (selective.length === 0) {
+      return this.#topByImportance(db, scopes, opts.cwd, limit);
+    }
+    const selectiveSet = new Set<string>(selective);
 
     const now = Date.now();
     const hits: MemorySearchHit[] = [];
@@ -322,7 +422,10 @@ export class LocalMemoryBackend implements MemoryBackend {
       const termsHit = tokenize(
         `${candidate.content} ${candidate.context ?? ''}`,
       );
+      // A row qualifies only if it matched a term that is actually selective.
+      // Sharing a word with every memory in the bank is not a match.
       const matched = terms.filter((term) => termsHit.includes(term));
+      if (!matched.some((term) => selectiveSet.has(term))) continue;
       const matchedWeight = matched.reduce(
         (sum, term) => sum + weightOf(term),
         0,

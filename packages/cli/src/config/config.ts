@@ -102,6 +102,9 @@ export interface CliArgs {
   includeDirectories: string[] | undefined;
   screenReader: boolean | undefined;
   useWriteTodos: boolean | undefined;
+  useGenerateImage?: boolean;
+  useTts?: boolean;
+  useMemory?: boolean;
   outputFormat: string | undefined;
   fakeResponses: string | undefined;
   fakeResponsesNonStrict?: string | undefined;
@@ -1088,6 +1091,9 @@ export async function loadCliConfig(
     truncateToolOutputThreshold: settings.tools?.truncateToolOutputThreshold,
     eventEmitter: coreEvents,
     useWriteTodos: argv.useWriteTodos ?? settings.useWriteTodos,
+    useGenerateImage: settings.useGenerateImage,
+    useTts: settings.useTts,
+    useMemory: settings.useMemory,
     output: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       format: (argv.outputFormat ?? settings.output?.format) as OutputFormat,
