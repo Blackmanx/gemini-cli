@@ -24,6 +24,7 @@ import { BROWSER_AGENT_NAME } from './browser/browserAgentDefinition.js';
 import { BrowserAgentInvocation } from './browser/browserAgentInvocation.js';
 import type { AgentEvent } from '../agent/types.js';
 import { formatUserHintsForModel } from '../utils/fastAckHelper.js';
+import { partListUnionToString } from '../core/geminiRequest.js';
 import { isRecord } from '../utils/markdownUtils.js';
 import { runInDevTraceSpan } from '../telemetry/trace.js';
 import {
@@ -46,8 +47,22 @@ import {
  * mapping the general 'prompt' parameter to the agent's specific schema,
  * and delegating execution.
  */
+interface BatchTask {
+  agent_name: string;
+  prompt: string;
+}
+
+export interface AgentToolParams {
+  agent_name?: string;
+  prompt?: string;
+  /** Shared background prepended to every prompt in a `tasks` batch. */
+  context?: string;
+  /** Several subagents to invoke in one parallel fan-out. */
+  tasks?: BatchTask[];
+}
+
 export class AgentTool extends BaseDeclarativeTool<
-  { agent_name: string; prompt: string },
+  AgentToolParams,
   ToolResult
 > {
   static readonly Name = AGENT_TOOL_NAME;
@@ -67,15 +82,33 @@ export class AgentTool extends BaseDeclarativeTool<
         properties: {
           agent_name: {
             type: 'string',
-            description: 'Name of the subagent to invoke',
+            description: 'Name of the subagent to invoke.',
           },
           prompt: {
             type: 'string',
             description:
               'The COMPLETE query to send the subagent. MUST be comprehensive and detailed. Include all context, background, questions, and expected output format. Do NOT send brief or incomplete instructions.',
           },
+          context: {
+            type: 'string',
+            description:
+              'Only with `tasks`. Shared background every subagent in the batch needs; it is prepended to each task prompt so no subagent has to be told what the others already know.',
+          },
+          tasks: {
+            type: 'array',
+            description:
+              'Invoke several subagents in ONE call. Use this when the work is genuinely independent: it saves a round trip and makes the parallelism explicit. Independent work here is safe; work that touches the same files should be delegated one at a time.',
+            items: {
+              type: 'object',
+              properties: {
+                agent_name: { type: 'string' },
+                prompt: { type: 'string' },
+              },
+              required: ['agent_name', 'prompt'],
+            },
+          },
         },
-        required: ['agent_name', 'prompt'],
+        required: [],
       },
       messageBus,
       /* isOutputMarkdown */ true,
@@ -83,28 +116,49 @@ export class AgentTool extends BaseDeclarativeTool<
     );
   }
 
+  protected override validateToolParamValues(
+    params: AgentToolParams,
+  ): string | null {
+    const hasBatch = Array.isArray(params.tasks) && params.tasks.length > 0;
+    const hasSingle =
+      typeof params.agent_name === 'string' &&
+      typeof params.prompt === 'string' &&
+      params.agent_name !== '' &&
+      params.prompt !== '';
+    if (hasBatch === hasSingle) {
+      return 'Provide either agent_name and prompt, or a non-empty tasks array — not both and not neither.';
+    }
+    if (hasBatch) {
+      for (const [index, task] of params.tasks!.entries()) {
+        if (!task.agent_name || !task.prompt) {
+          return `tasks[${index}] needs both agent_name and prompt.`;
+        }
+      }
+    }
+    return null;
+  }
+
   protected createInvocation(
-    params: { agent_name: string; prompt: string },
+    params: AgentToolParams,
     messageBus: MessageBus,
     _toolName?: string,
     _toolDisplayName?: string,
-  ): ToolInvocation<{ agent_name: string; prompt: string }, ToolResult> {
-    const registry = this.context.config.getAgentRegistry();
-    const definition = registry.getDefinition(params.agent_name);
-
-    if (!definition) {
-      throw new Error(`Subagent '${params.agent_name}' not found.`);
+  ): ToolInvocation<AgentToolParams, ToolResult> {
+    if (Array.isArray(params.tasks) && params.tasks.length > 0) {
+      return new BatchDelegateInvocation(
+        params.tasks,
+        params.context,
+        messageBus,
+        this.context,
+        _toolName ?? AGENT_TOOL_NAME,
+        _toolDisplayName ?? 'Invoke Subagents',
+        this.onAgentEvent,
+      );
     }
-
-    // Smart Parameter Mapping
-    const mappedInputs = this.mapParams(
-      params.prompt,
-      definition.inputConfig.inputSchema,
-    );
-
+    const definition = this.requireDefinition(params.agent_name!);
     return new DelegateInvocation(
-      params,
-      mappedInputs,
+      { agent_name: params.agent_name!, prompt: params.prompt! },
+      this.mapParamsFor(definition, params.prompt!),
       messageBus,
       definition,
       this.context,
@@ -112,6 +166,23 @@ export class AgentTool extends BaseDeclarativeTool<
       _toolDisplayName,
       this.onAgentEvent,
     );
+  }
+
+  private requireDefinition(name: string) {
+    const definition = this.context.config
+      .getAgentRegistry()
+      .getDefinition(name);
+    if (!definition) {
+      throw new Error(`Subagent '${name}' not found.`);
+    }
+    return definition;
+  }
+
+  private mapParamsFor(
+    definition: AgentDefinition,
+    prompt: string,
+  ): AgentInputs {
+    return this.mapParams(prompt, definition.inputConfig.inputSchema);
   }
 
   private mapParams(prompt: string, schema: unknown): AgentInputs {
@@ -321,4 +392,136 @@ class DelegateInvocation extends BaseToolInvocation<
 
     return agentArgs;
   }
+}
+
+/**
+ * A fan-out of subagents in one call.
+ *
+ * Ported from omp's `task.batch`. The point is not just saving a round trip:
+ * naming the parallel work in one place makes the parallelism explicit, and a
+ * single result the parent can read per branch is easier to verify than three
+ * separate tool calls it has to correlate.
+ *
+ * One branch failing does not void the others — a partial answer is still
+ * usable, and the failure says which branch it was.
+ */
+class BatchDelegateInvocation extends BaseToolInvocation<
+  AgentToolParams,
+  ToolResult
+> {
+  constructor(
+    private readonly tasks: BatchTask[],
+    private readonly sharedContext: string | undefined,
+    messageBus: MessageBus,
+    private readonly agentContext: AgentLoopContext,
+    toolName?: string,
+    toolDisplayName?: string,
+    private readonly onAgentEvent?: (event: AgentEvent) => void,
+  ) {
+    super({ tasks }, messageBus, toolName, toolDisplayName);
+  }
+
+  override getDescription(): string {
+    return `Delegating to ${this.tasks.length} subagents in parallel`;
+  }
+
+  override async execute(options: ExecuteOptions): Promise<ToolResult> {
+    const registry = this.agentContext.config.getAgentRegistry();
+    const started = this.tasks.map((task) => {
+      const definition = registry.getDefinition(task.agent_name);
+      if (!definition) {
+        return { task, error: `Subagent '${task.agent_name}' not found.` };
+      }
+      const prompt = this.sharedContext
+        ? `${this.sharedContext}\\n\\n---\\n\\n${task.prompt}`
+        : task.prompt;
+      const mapped = mapAgentInputs(prompt, definition.inputConfig.inputSchema);
+      const invocation = new DelegateInvocation(
+        { agent_name: task.agent_name, prompt },
+        mapped,
+        this.messageBus,
+        definition,
+        this.agentContext,
+        undefined,
+        undefined,
+        this.onAgentEvent,
+      );
+      return { task, invocation };
+    });
+
+    // Every branch is dispatched even if an earlier one is broken: the point
+    // of a fan-out is the independent work, and one bad name is not a reason
+    // to skip the other four.
+    const settled = await Promise.allSettled(
+      started.map(async (entry) => {
+        if ('error' in entry) {
+          return { name: entry.task.agent_name, error: entry.error };
+        }
+        const result = await entry.invocation.execute(options);
+        return { name: entry.task.agent_name, result };
+      }),
+    );
+
+    const sections: string[] = [];
+    let failures = 0;
+    for (const [index, outcome] of settled.entries()) {
+      const name = started[index].task.agent_name;
+      if (outcome.status === 'rejected') {
+        failures++;
+        sections.push(`### ${name}\\nFAILED: ${String(outcome.reason)}`);
+        continue;
+      }
+      const settledValue = outcome.value;
+      // A branch can fail in two ways: the dispatch itself rejects, or the
+      // subagent reports failure as a tool error. Only the first is visible
+      // from the settled outcome, so the second is checked on the result —
+      // otherwise a failed branch is counted as a success and the parent
+      // trusts a summary that overstates what the fan-out achieved.
+      if (!('result' in settledValue)) {
+        failures++;
+        sections.push(`### ${name}\\nFAILED: ${String(settledValue.error)}`);
+        continue;
+      }
+      const result = settledValue.result;
+      if (result?.error !== undefined) {
+        failures++;
+        sections.push(`### ${name}\\nFAILED: ${String(result.error.message)}`);
+        continue;
+      }
+      // `llmContent` is a part list, not a string: stringifying it directly
+      // yields "[object Object]", which tells the caller nothing.
+      sections.push(
+        result === undefined
+          ? `### ${name}\\n(no result)`
+          : `### ${name}\\n${partListUnionToString(result.llmContent)}`,
+      );
+    }
+
+    const summary = `Ran ${this.tasks.length} subagents in parallel; ${this.tasks.length - failures} succeeded, ${failures} failed.`;
+    return {
+      llmContent: `${summary}\\n\\n${sections.join('\\n\\n')}`,
+      returnDisplay: summary,
+    };
+  }
+}
+
+/**
+ * Map a prompt onto an agent's single-parameter input schema.
+ *
+ * Shared by the single and batch paths so a fanned-out subagent is given its
+ * arguments exactly the way a directly-invoked one is.
+ */
+function mapAgentInputs(prompt: string, schema: unknown): AgentInputs {
+  const schemaObj: unknown = schema;
+  if (!isRecord(schemaObj)) {
+    return { prompt };
+  }
+  const properties = schemaObj['properties'];
+  if (isRecord(properties)) {
+    const keys = Object.keys(properties);
+    if (keys.length === 1) {
+      return { [keys[0]]: prompt };
+    }
+  }
+  return { prompt };
 }

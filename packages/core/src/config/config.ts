@@ -1526,6 +1526,12 @@ export class Config implements McpContext, AgentLoopContext {
     // storage, which only exists after `storage.initialize()`.
     installInternalUrlRouter(() => ({
       devices: () => this.getDeviceRegistry(),
+      subsidiary: () => ({
+        chatsDir: () => this.storage.getProjectChatsDir(),
+        memory: () => this.memoryBank(),
+        skills: () => this.getSkillManager().getSkills(),
+        artifactDirs: () => [this.storage.getProjectToolOutputsDir()],
+      }),
       scratchDir: this.storage.getProjectTempDir(),
       docsDir: packagedDocsDir(),
       settingsFiles: () => [
@@ -4096,6 +4102,18 @@ export class Config implements McpContext, AgentLoopContext {
    * It is opened lazily rather than during `initialize()` so a session that
    * never asks the model to remember anything never touches the database.
    */
+  /**
+   * The open memory bank, or `undefined` when the feature is off.
+   *
+   * Used by the `memory://` scheme, which must say "not enabled" rather than
+   * return an empty document when the bank is closed.
+   */
+  memoryBank(): LocalMemoryBackend | undefined {
+    return this.memoryBackend instanceof LocalMemoryBackend
+      ? this.memoryBackend
+      : undefined;
+  }
+
   async getMemoryBackend(): Promise<MemoryBackend | undefined> {
     if (!this.getUseMemory()) return undefined;
     if (this.memoryBackend !== undefined) return this.memoryBackend;

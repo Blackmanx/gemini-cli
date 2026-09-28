@@ -419,6 +419,16 @@ export class Storage {
     return path.join(this.getProjectTempDir(), 'tasks');
   }
 
+  /** Directory holding this project's recorded session transcripts. */
+  getProjectChatsDir(): string {
+    return path.join(this.getProjectTempDir(), 'chats');
+  }
+
+  /** Directory spilled tool output is written to, for `artifact://`. */
+  getProjectToolOutputsDir(): string {
+    return path.join(this.getProjectTempDir(), 'tool-outputs');
+  }
+
   async listProjectChatFiles(): Promise<
     Array<{ filePath: string; lastUpdated: string }>
   > {

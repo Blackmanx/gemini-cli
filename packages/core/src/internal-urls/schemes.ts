@@ -11,6 +11,10 @@ import {
   type DeviceRegistry,
   type DeviceResult,
 } from './devices.js';
+import {
+  subsidiarySchemeSpecs,
+  type SubsidiarySchemeHost,
+} from './subsidiarySchemes.js';
 import { getAgent, listAgents } from '../agents/agentRegistry.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { sendPeerMessage } from '../agents/peerBus.js';
@@ -57,6 +61,13 @@ export interface SchemeHost {
    * without inventing a tool for every such flow.
    */
   devices?: () => DeviceRegistry;
+  /**
+   * Accessors for the subsystems behind `history://`, `proc://`, `mcp://`,
+   * `memory://`, `skill://` and `artifact://`. An accessor returning
+   * `undefined` means that subsystem is switched off, and the scheme says so
+   * rather than returning an empty document.
+   */
+  subsidiary?: () => SubsidiarySchemeHost;
 }
 
 /** Node's errno-tagged error shape, narrowed without an unchecked assertion. */
@@ -571,6 +582,7 @@ export function geminiSchemeSpecs(host: () => SchemeHost): SchemeSpec[] {
     docsScheme(host),
     agentScheme(),
     deviceScheme(host),
+    ...subsidiarySchemeSpecs(host().subsidiary?.() ?? {}),
   ];
 }
 
