@@ -3186,6 +3186,27 @@
       "default": true,
       "type": "boolean"
     },
+    "useGenerateImage": {
+      "title": "Use Generate Image",
+      "description": "Enable the generate_image tool. Calls a paid image model, so it is off until asked for.",
+      "markdownDescription": "Enable the generate_image tool. Calls a paid image model, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+      "default": false,
+      "type": "boolean"
+    },
+    "useTts": {
+      "title": "Use Text to Speech",
+      "description": "Enable the tts tool. Calls a paid speech model, so it is off until asked for.",
+      "markdownDescription": "Enable the tts tool. Calls a paid speech model, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+      "default": false,
+      "type": "boolean"
+    },
+    "useMemory": {
+      "title": "Use Memory Bank",
+      "description": "Enable the local memory bank and its retain/recall/reflect/memory_edit tools.",
+      "markdownDescription": "Enable the local memory bank and its retain/recall/reflect/memory_edit tools.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+      "default": false,
+      "type": "boolean"
+    },
     "security": {
       "title": "Security",
       "description": "Security-related settings.",

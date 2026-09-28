@@ -1823,6 +1823,39 @@ const SETTINGS_SCHEMA = {
     description: 'Enable the write_todos tool.',
     showInDialog: false,
   },
+
+  useGenerateImage: {
+    type: 'boolean',
+    label: 'Use Generate Image',
+    category: 'Advanced',
+    requiresRestart: false,
+    default: false,
+    description:
+      'Enable the generate_image tool. Calls a paid image model, so it is off until asked for.',
+    showInDialog: false,
+  },
+
+  useTts: {
+    type: 'boolean',
+    label: 'Use Text to Speech',
+    category: 'Advanced',
+    requiresRestart: false,
+    default: false,
+    description:
+      'Enable the tts tool. Calls a paid speech model, so it is off until asked for.',
+    showInDialog: false,
+  },
+
+  useMemory: {
+    type: 'boolean',
+    label: 'Use Memory Bank',
+    category: 'Advanced',
+    requiresRestart: false,
+    default: false,
+    description:
+      'Enable the local memory bank and its retain/recall/reflect/memory_edit tools.',
+    showInDialog: false,
+  },
   security: {
     type: 'object',
     label: 'Security',

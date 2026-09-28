@@ -51,6 +51,12 @@ import { UpdateTopicTool } from '../tools/topicTool.js';
 import { TopicState } from './topicState.js';
 import { AgentTool } from '../agents/agent-tool.js';
 import { LspEditTool, LspTool } from '../tools/lsp.js';
+import { WaitTool } from '../tools/wait.js';
+import {
+  DEFAULT_GENERATE_IMAGE_MODEL,
+  GenerateImageTool,
+} from '../tools/generate-image.js';
+import { DEFAULT_TTS_MODEL, TtsTool } from '../tools/tts.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
 import {
@@ -689,6 +695,9 @@ export interface ConfigParameters {
   truncateToolOutputThreshold?: number;
   eventEmitter?: EventEmitter;
   useWriteTodos?: boolean;
+  useGenerateImage?: boolean;
+  useTts?: boolean;
+  useMemory?: boolean;
   env?: Record<string, string>;
   workspacePoliciesDir?: string;
   policyEngineConfig?: PolicyEngineConfig;
@@ -797,6 +806,9 @@ export class Config implements McpContext, AgentLoopContext {
   readonly enableConseca: boolean;
 
   private readonly coreTools: string[] | undefined;
+  private readonly useGenerateImage: boolean;
+  private readonly useTts: boolean;
+  private readonly useMemory: boolean;
   private readonly mainAgentTools: string[] | undefined;
   /** @deprecated Use Policy Engine instead */
   private readonly allowedTools: string[] | undefined;
@@ -1307,6 +1319,9 @@ export class Config implements McpContext, AgentLoopContext {
       isGemini2 && !isPreviewModel(this.model, this) && !this.trackerEnabled
         ? (params.useWriteTodos ?? true)
         : false;
+    this.useGenerateImage = params.useGenerateImage ?? false;
+    this.useTts = params.useTts ?? false;
+    this.useMemory = params.useMemory ?? false;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
     this.enableHooks = params.enableHooks ?? true;
@@ -3882,6 +3897,26 @@ export class Config implements McpContext, AgentLoopContext {
     return this.useWriteTodos;
   }
 
+  /** Whether the paid image-generation tool is available this session. */
+  getUseGenerateImage(): boolean {
+    return this.useGenerateImage;
+  }
+
+  /** Whether the paid speech-synthesis tool is available this session. */
+  getUseTts(): boolean {
+    return this.useTts;
+  }
+
+  /** Whether the local memory bank is open for this session. */
+  getUseMemory(): boolean {
+    return this.useMemory;
+  }
+
+  /** Directory the local memory bank lives in. Owned by core, not the caller. */
+  getMemoryBankDir(): string {
+    return this.storage.getProjectTempDir();
+  }
+
   getOutputFormat(): OutputFormat {
     return this.outputSettings?.format
       ? this.outputSettings.format
@@ -4149,6 +4184,33 @@ export class Config implements McpContext, AgentLoopContext {
     maybeRegister(LspEditTool, () =>
       registry.registerTool(new LspEditTool(this, this.messageBus)),
     );
+
+    // The wait barrier is always on: it is how a turn stops busy-waiting on
+    // background work instead of burning turns polling for it.
+    maybeRegister(WaitTool, () =>
+      registry.registerTool(new WaitTool(this, this.messageBus)),
+    );
+
+    // Image generation and speech both call a paid model, so they stay out of
+    // the registry until the user opts in.
+    if (this.getUseGenerateImage()) {
+      maybeRegister(GenerateImageTool, () =>
+        registry.registerTool(
+          new GenerateImageTool(
+            this,
+            this.messageBus,
+            DEFAULT_GENERATE_IMAGE_MODEL,
+          ),
+        ),
+      );
+    }
+    if (this.getUseTts()) {
+      maybeRegister(TtsTool, () =>
+        registry.registerTool(
+          new TtsTool(this, this.messageBus, DEFAULT_TTS_MODEL),
+        ),
+      );
+    }
 
     await registry.discoverAllTools();
     registry.sortTools();

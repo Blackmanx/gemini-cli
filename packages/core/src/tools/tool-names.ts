@@ -194,6 +194,13 @@ export const TRACKER_VISUALIZE_TOOL_NAME = 'tracker_visualize';
 
 export const AGENT_TOOL_NAME = 'invoke_agent';
 
+export const WAIT_TOOL_NAME = 'wait';
+export const GENERATE_IMAGE_TOOL_NAME = 'generate_image';
+export const TTS_TOOL_NAME = 'tts';
+export const WAIT_DISPLAY_NAME = 'Wait';
+export const GENERATE_IMAGE_DISPLAY_NAME = 'Generate Image';
+export const TTS_DISPLAY_NAME = 'Text to Speech';
+
 export const LSP_TOOL_NAME = 'lsp';
 export const LSP_EDIT_TOOL_NAME = 'lsp_edit';
 export const LSP_DISPLAY_NAME = 'LanguageServer';
@@ -283,6 +290,9 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   LIST_MCP_RESOURCES_TOOL_NAME,
   LSP_TOOL_NAME,
   LSP_EDIT_TOOL_NAME,
+  WAIT_TOOL_NAME,
+  GENERATE_IMAGE_TOOL_NAME,
+  TTS_TOOL_NAME,
 ] as const;
 
 /**
