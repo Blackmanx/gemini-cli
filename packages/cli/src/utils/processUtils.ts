@@ -22,10 +22,43 @@ export function _resetRelaunchStateForTesting(): void {
   isRelaunching = false;
 }
 
-export async function relaunchApp(): Promise<void> {
+export async function relaunchApp(options?: {
+  overrideAuthType?: string;
+}): Promise<void> {
   if (isRelaunching) return;
   isRelaunching = true;
+// Upstream waits for the updater to finish before relaunching. This fork
+// ships no updater (see README, "No autoupdates"), so there is nothing to wait
+// for; the auth handshake below is the part of the fix that applies.
+  if (process.send && !process.env['VITEST'] && options?.overrideAuthType) {
+    await new Promise<void>((resolve) => {
+      let resolved = false;
+      const done = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+      const timeout = setTimeout(done, 500);
+      try {
+        process.send!(
+          {
+            type: 'auth-selected-type',
+            authType: options.overrideAuthType,
+          },
+          () => {
+            clearTimeout(timeout);
+            done();
+          },
+        );
+      } catch {
+        clearTimeout(timeout);
+        done();
+      }
+    });
+  }
   await runExitCleanup();
+
   process.exit(RELAUNCH_EXIT_CODE);
 }
 
