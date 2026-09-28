@@ -33,6 +33,8 @@ import { debugLogger } from '../utils/debugLogger.js';
 import { GLOB_DEFINITION } from './definitions/coreTools.js';
 import { parseFindPattern } from '../utils/findPattern.js';
 import { formatGroupedPaths } from '../utils/groupedPaths.js';
+import { looksLikeInternalUrl } from '../internal-urls/parse.js';
+import { internalUrlRouter } from '../internal-urls/router.js';
 
 /** Hard default cap on files returned by one `glob` call. */
 export const DEFAULT_GLOB_LIMIT = 200;
@@ -150,7 +152,82 @@ class GlobToolInvocation extends BaseToolInvocation<
     };
   }
 
+  /**
+   * Glob inside an internal URL's backing directory.
+   *
+   * The router owns what a scheme may expose, so this asks for a real
+   * directory and then matches against it. A scheme with no local backing
+   * (a virtual or remote one) is told to use `grep` over the URL instead,
+   * rather than being reported as an empty result.
+   */
+  private async globInternalUrl(dirPath: string): Promise<ToolResult> {
+    const router = internalUrlRouter();
+    if (router === undefined) {
+      const message = `No internal URL router is installed; ${dirPath} cannot be searched.`;
+      return {
+        llmContent: message,
+        returnDisplay: 'Internal URLs unavailable.',
+        error: {
+          message,
+          type: ToolErrorType.GLOB_EXECUTION_ERROR,
+        },
+      };
+    }
+    let root: string;
+    try {
+      root = router.locate(dirPath, { cwd: this.config.getTargetDir() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        llmContent: message,
+        returnDisplay: 'Internal URL is not searchable with glob.',
+        error: { message, type: ToolErrorType.GLOB_EXECUTION_ERROR },
+      };
+    }
+    if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+      const message = `${dirPath} is not a directory; use read_file on the file itself.`;
+      return {
+        llmContent: message,
+        returnDisplay: 'Not a directory.',
+        error: { message, type: ToolErrorType.SEARCH_PATH_NOT_A_DIRECTORY },
+      };
+    }
+    const parsed = parseFindPattern(this.params.pattern, root);
+    const base = parsed.base === '' ? root : path.resolve(root, parsed.base);
+    const entries = (await glob(parsed.pattern, {
+      cwd: base,
+      withFileTypes: true,
+      nodir: true,
+      stat: true,
+      nocase: !this.params.case_sensitive,
+      dot: true,
+      follow: false,
+    })) as GlobPath[];
+    const limit = Math.max(1, this.params.limit ?? DEFAULT_GLOB_LIMIT);
+    const skip = Math.max(0, this.params.skip ?? 0);
+    const relative = entries
+      .map((entry) => path.relative(root, entry.fullpath()))
+      .sort();
+    const page = relative.slice(skip, skip + limit);
+    if (page.length === 0) {
+      return {
+        llmContent: `No files matching "${this.params.pattern}" under ${dirPath}.`,
+        returnDisplay: 'No files found',
+      };
+    }
+    return {
+      llmContent: `Found ${page.length} file(s) matching "${this.params.pattern}" under ${dirPath}:\n${formatGroupedPaths(page)}`,
+      returnDisplay: `Found ${page.length} matching file(s)`,
+    };
+  }
+
   async execute({ abortSignal: signal }: ExecuteOptions): Promise<ToolResult> {
+    // `glob` over an internal URL (e.g. `local://`) walks that scheme's tree
+    // instead of the workspace, so the scratch space is searchable with the
+    // same tool the model already uses.
+    if (this.params.dir_path && looksLikeInternalUrl(this.params.dir_path)) {
+      return this.globInternalUrl(this.params.dir_path);
+    }
     try {
       const workspaceContext = this.config.getWorkspaceContext();
       const workspaceDirectories = workspaceContext.getDirectories();
@@ -381,6 +458,11 @@ export class GlobTool extends BaseDeclarativeTool<GlobToolParams, ToolResult> {
   protected override validateToolParamValues(
     params: GlobToolParams,
   ): string | null {
+    // An internal URL has no workspace path to validate; the router owns
+    // whether it exists and what it may expose.
+    if (params.dir_path && looksLikeInternalUrl(params.dir_path)) {
+      return this.validatePatternOnly(params);
+    }
     let searchDirAbsolute: string;
     try {
       searchDirAbsolute = resolveToRealPath(
@@ -410,6 +492,14 @@ export class GlobTool extends BaseDeclarativeTool<GlobToolParams, ToolResult> {
       return `Error accessing search path: ${e}`;
     }
 
+    return this.validatePatternOnly(params);
+  }
+
+  /**
+   * The checks that hold for every search root, filesystem or `scheme://`.
+   * Split out because an internal URL has no workspace path to validate.
+   */
+  private validatePatternOnly(params: GlobToolParams): string | null {
     if (
       !params.pattern ||
       typeof params.pattern !== 'string' ||

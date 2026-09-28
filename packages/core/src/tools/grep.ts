@@ -41,6 +41,26 @@ import { debugLogger } from '../utils/debugLogger.js';
 import { GREP_DEFINITION } from './definitions/coreTools.js';
 import { resolveToolDeclaration } from './definitions/resolver.js';
 import { type GrepMatch, formatGrepResults } from './grep-utils.js';
+import picomatch from 'picomatch';
+import { looksLikeInternalUrl } from '../internal-urls/parse.js';
+import { internalUrlRouter } from '../internal-urls/router.js';
+
+/** Directories that never contain searchable source in a scheme root. */
+const INTERNAL_URL_SKIP_DIRS: ReadonlySet<string> = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+]);
+
+/**
+ * Match a basename against a caller-supplied glob such as `*.ts` or `a*`.
+ * A bare `*.ts` must also match `src/deep/a.ts`, which is what a caller
+ * writing `include_pattern: '*.ts'` means.
+ */
+function matchesGlob(name: string, glob: string): boolean {
+  return picomatch.isMatch(name, glob, { dot: true });
+}
 
 // --- Interfaces ---
 
@@ -169,11 +189,125 @@ class GrepToolInvocation extends BaseToolInvocation<
     return null;
   }
 
+  /**
+   * Search an internal URL's backing tree, in process.
+   *
+   * A scheme root usually lives outside the workspace (the scratch space is
+   * under the user's temp dir), and the workspace sandbox correctly refuses
+   * to let a shell reach it. So this walks the tree with `node:fs` and
+   * applies the same regex in process — no fork, no sandbox, same semantics.
+   */
+  private async grepInternalUrl(
+    dirPath: string,
+    signal: AbortSignal,
+  ): Promise<ToolResult> {
+    const router = internalUrlRouter();
+    if (router === undefined) {
+      const message = `No internal URL router is installed; ${dirPath} cannot be searched.`;
+      return {
+        llmContent: message,
+        returnDisplay: 'Error: Internal URLs unavailable.',
+        error: { message, type: ToolErrorType.GREP_EXECUTION_ERROR },
+      };
+    }
+    let root: string;
+    try {
+      root = router.locate(dirPath, { cwd: this.config.getTargetDir() });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        llmContent: message,
+        returnDisplay: `Error: ${message}`,
+        error: { message, type: ToolErrorType.GREP_EXECUTION_ERROR },
+      };
+    }
+
+    let pattern: RegExp;
+    let exclude: RegExp | null = null;
+    try {
+      // The git/system grep backends run with -i, so match case-insensitively.
+      pattern = new RegExp(this.params.pattern, 'i');
+    } catch (err) {
+      const message = `Invalid regular expression: ${getErrorMessage(err)}`;
+      return {
+        llmContent: message,
+        returnDisplay: 'Error: invalid pattern.',
+        error: { message, type: ToolErrorType.GREP_EXECUTION_ERROR },
+      };
+    }
+    if (this.params.exclude_pattern) {
+      try {
+        exclude = new RegExp(this.params.exclude_pattern, 'i');
+      } catch {
+        exclude = null;
+      }
+    }
+
+    const budget = this.params.total_max_matches ?? DEFAULT_TOTAL_MAX_MATCHES;
+    const perFile =
+      this.params.max_matches_per_file ?? Number.POSITIVE_INFINITY;
+    const include = this.params.include_pattern;
+    const matches: GrepMatch[] = [];
+    const walk = async (dir: string): Promise<void> => {
+      if (signal.aborted || matches.length >= budget) return;
+      let entries: fs.Dirent[];
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (signal.aborted || matches.length >= budget) return;
+        if (INTERNAL_URL_SKIP_DIRS.has(entry.name)) continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        if (include && !matchesGlob(path.basename(entry.name), include))
+          continue;
+        const relative = path.relative(root, full);
+        let text: string;
+        try {
+          text = await fs.promises.readFile(full, 'utf8');
+        } catch {
+          continue;
+        }
+        // A binary file decoded as text is noise, not a result.
+        if (text.includes('\0')) continue;
+        let inFile = 0;
+        for (const [index, line] of text.split('\n').entries()) {
+          if (signal.aborted || matches.length >= budget) return;
+          if (inFile >= perFile) break;
+          if (!pattern.test(line)) continue;
+          if (exclude?.test(line)) continue;
+          matches.push({
+            filePath: relative,
+            absolutePath: full,
+            lineNumber: index + 1,
+            line,
+          });
+          inFile++;
+        }
+      }
+    };
+    await walk(root);
+
+    return formatGrepResults(matches, this.params, `under ${dirPath}`, budget);
+  }
+
   async execute({ abortSignal: signal }: ExecuteOptions): Promise<ToolResult> {
     try {
       const workspaceContext = this.config.getWorkspaceContext();
       const pathParam = this.params.dir_path;
 
+      // `grep` over an internal URL searches that scheme's backing tree, so
+      // the scratch space and any other scheme-rooted store are searchable
+      // with the same tool.
+      if (pathParam && looksLikeInternalUrl(pathParam)) {
+        return await this.grepInternalUrl(pathParam, signal);
+      }
       let searchDirAbs: string | null = null;
       if (pathParam) {
         try {
@@ -828,7 +962,9 @@ export class GrepTool extends BaseDeclarativeTool<GrepToolParams, ToolResult> {
     }
 
     // Only validate dir_path if one is provided
-    if (params.dir_path) {
+    // An internal URL has no workspace path to validate; the router owns
+    // whether it exists and what it may expose.
+    if (params.dir_path && !looksLikeInternalUrl(params.dir_path)) {
       let resolvedPath: string;
       try {
         resolvedPath = resolveToRealPath(

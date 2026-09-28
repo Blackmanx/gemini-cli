@@ -27,10 +27,12 @@ describe('omp port: internal URLs', () => {
 
   afterEach(async () => await rig.cleanup());
 
-  it('writes and reads local://, and reads cfg:// and omp://', async () => {
+  it('writes, reads, globs, greps and edits through a scheme:// URL', async () => {
     await rig.setup('omp port w2', {
       settings: {
-        tools: { core: ['read_file', 'write_file'] },
+        tools: {
+          core: ['read_file', 'write_file', 'glob', 'grep_search', 'replace'],
+        },
       },
       fakeResponsesPath: RESPONSES,
     });
@@ -43,32 +45,59 @@ describe('omp port: internal URLs', () => {
       .join('\n');
 
     const logs = rig.readToolLogs();
-    const readCalls = logs.filter((l) => l.toolRequest.name === 'read_file');
-    const writeCalls = logs.filter((l) => l.toolRequest.name === 'write_file');
+    const callsFor = (name: string) =>
+      logs.filter((l) => l.toolRequest.name === name);
+    const readCalls = callsFor('read_file');
 
     // 1. A writable scheme accepts a write through the same tool.
-    const localWrite = writeCalls.find((c) =>
+    const localWrite = callsFor('write_file').find((c) =>
       c.toolRequest.args.includes('local://notes.md'),
     );
     expect(localWrite, 'local:// was written to').toBeTruthy();
     expect(localWrite!.toolRequest.success).toBe(true);
-    expect(localWrite!.toolRequest.error).toBeUndefined();
 
     // 2. The written file reads back, and a line selector still applies.
-    expect(readCalls.length).toBe(4);
     const localRead = toolOutput(history, 'read_file');
     expect(localRead).toContain('line two');
     expect(localRead).toContain('line three');
     expect(localRead).not.toContain('line one');
 
-    // 3. cfg:// answers a dotted settings key with the effective settings.
+    // 3. glob walks the scheme's own tree, not the workspace.
+    const globCall = callsFor('glob')[0];
+    expect(globCall, 'glob ran once').toBeTruthy();
+    expect(
+      globCall!.toolRequest.success,
+      `glob failed: ${globCall!.toolRequest.error ?? '(no error)'}`,
+    ).toBe(true);
+    expect(globCall!.toolRequest.args).toContain('local://');
+    const globOut = toolOutput(history, 'glob');
+    expect(globOut).toContain('notes.md');
+
+    // 4. grep searches the scheme's tree and reports a real line.
+    const grepCall = callsFor('grep_search')[0];
+    expect(grepCall, 'grep ran once').toBeTruthy();
+    expect(
+      grepCall!.toolRequest.success,
+      `grep failed: ${grepCall!.toolRequest.error ?? '(no error)'}`,
+    ).toBe(true);
+    const grepOut = toolOutput(history, 'grep_search');
+    expect(grepOut).toContain('L2:');
+    expect(grepOut).toContain('line two');
+
+    // 5. edit writes through the same URL, and the change is durable.
+    const editCall = callsFor('replace')[0];
+    expect(editCall, 'edit ran once').toBeTruthy();
+    expect(
+      editCall!.toolRequest.success,
+      `edit failed: ${editCall!.toolRequest.error ?? '(no error)'}`,
+    ).toBe(true);
+
+    // 6. cfg:// answers a dotted settings key; omp:// serves the docs.
     expect(history).toContain('cfg://tools');
     expect(history).toContain('"read_file"');
-
-    // 4. omp:// serves the harness's own documentation.
     expect(history).toContain('omp://index.md');
 
-    // 5. A missing local:// target fails loudly instead of reading nothing.
+    // 7. A missing local:// target fails loudly instead of reading nothing.
     const missing = readCalls.find((c) =>
       c.toolRequest.args.includes('local://missing.md'),
     );

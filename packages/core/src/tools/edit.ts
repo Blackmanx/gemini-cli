@@ -27,6 +27,8 @@ import {
 import { buildFilePathArgsPattern } from '../policy/utils.js';
 import type { MessageBus } from '../confirmation-bus/message-bus.js';
 import { ToolErrorType } from './tool-error.js';
+import { looksLikeInternalUrl } from '../internal-urls/parse.js';
+import { internalUrlRouter } from '../internal-urls/router.js';
 import {
   makeRelative,
   shortenPath,
@@ -527,6 +529,24 @@ class EditToolInvocation
         this.resolvedPath = resolveToRealPath(cleanPath);
       } catch {
         this.resolvedPath = cleanPath;
+      }
+    }
+
+    // An internal URL is backed by a real file the router locates; editing it
+    // goes through exactly the same path as editing that file on disk.
+    if (looksLikeInternalUrl(this.params.file_path)) {
+      const router = internalUrlRouter();
+      const located = router?.locate(this.params.file_path, {
+        cwd: this.config.getTargetDir(),
+      });
+      if (located === undefined) {
+        this.resolvedPath = this.params.file_path;
+      } else {
+        try {
+          this.resolvedPath = resolveToRealPath(located);
+        } catch {
+          this.resolvedPath = located;
+        }
       }
     }
   }
