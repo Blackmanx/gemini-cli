@@ -90,6 +90,7 @@ export const WEB_SEARCH_PARAM_QUERY = 'query';
 // -- write_todos --
 export const WRITE_TODOS_TOOL_NAME = 'write_todos';
 export const TODOS_PARAM_TODOS = 'todos';
+export const TODOS_PARAM_PHASES = 'phases';
 export const TODOS_ITEM_PARAM_DESCRIPTION = 'description';
 export const TODOS_ITEM_PARAM_STATUS = 'status';
 

@@ -72,6 +72,7 @@ import {
   READ_MANY_PARAM_RECURSIVE,
   READ_MANY_PARAM_USE_DEFAULT_EXCLUDES,
   TODOS_PARAM_TODOS,
+  TODOS_PARAM_PHASES,
   TODOS_ITEM_PARAM_DESCRIPTION,
   TODOS_ITEM_PARAM_STATUS,
   DOCS_PARAM_PATH,
@@ -651,6 +652,12 @@ DO NOT use this tool for simple tasks that can be completed in less than 2 steps
 6. Mark a subtask as cancelled if the subtask is no longer needed.
 7. You must update the todo list as soon as you start, stop or cancel a subtask. Don't batch or wait to update the todo list.
 
+## Grouping work into phases
+When the work has distinct stages, pass the \`phases\` array instead of \`todos\` so progress reads as a stage rather than a flat list. The two are the same list; the UI renders either identically, so use phases only when the grouping tells the user something.
+
+## One list, resent each time
+This tool holds no state. Every call replaces the whole list, so re-send the items you are not changing rather than only the one that moved.
+
 
 ## Examples of When to Use the Todo List
 
@@ -719,8 +726,46 @@ The agent did not use the todo list because this task could be completed by a ti
             additionalProperties: false,
           },
         },
+        [TODOS_PARAM_PHASES]: {
+          type: 'array',
+          description:
+            'The same list, grouped into named phases in order. Use this when the work has distinct stages, so progress reads as a phase rather than a flat list. Provide `todos` OR `phases`, never both.',
+          items: {
+            type: 'object',
+            description: 'A named phase of the work.',
+            properties: {
+              name: { type: 'string', description: 'The phase name.' },
+              [TODOS_PARAM_TODOS]: {
+                type: 'array',
+                description: 'The todo items in this phase.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    [TODOS_ITEM_PARAM_DESCRIPTION]: { type: 'string' },
+                    [TODOS_ITEM_PARAM_STATUS]: {
+                      type: 'string',
+                      enum: [
+                        'pending',
+                        'in_progress',
+                        'completed',
+                        'cancelled',
+                        'blocked',
+                      ],
+                    },
+                  },
+                  required: [
+                    TODOS_ITEM_PARAM_DESCRIPTION,
+                    TODOS_ITEM_PARAM_STATUS,
+                  ],
+                  additionalProperties: false,
+                },
+              },
+            },
+            required: ['name', TODOS_PARAM_TODOS],
+            additionalProperties: false,
+          },
+        },
       },
-      required: [TODOS_PARAM_TODOS],
       additionalProperties: false,
     },
   },
