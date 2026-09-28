@@ -53,6 +53,9 @@ import { AgentTool } from '../agents/agent-tool.js';
 import { LspEditTool, LspTool } from '../tools/lsp.js';
 import { setWaitPeerMessageSource, WaitTool } from '../tools/wait.js';
 import { AstGrepTool } from '../tools/astGrep.js';
+import { LearnTool } from '../tools/learn.js';
+import { ManageSkillTool } from '../skills/managedSkillsTools.js';
+import { getManagedSkillsDir } from '../skills/managedSkills.js';
 import { GithubTool } from '../tools/github.js';
 import { onPeerMessage } from '../agents/peerBus.js';
 import { listAgents } from '../agents/agentRegistry.js';
@@ -4483,6 +4486,32 @@ export class Config implements McpContext, AgentLoopContext {
         maybeRegister(MemoryEditTool, () =>
           registry.registerTool(
             new MemoryEditTool(memory, this, this.messageBus),
+          ),
+        );
+        maybeRegister(LearnTool, () =>
+          registry.registerTool(
+            new LearnTool(memory, getManagedSkillsDir(), this, this.messageBus),
+          ),
+        );
+        // Managing a skill is available whenever the memory bank is: a skill is
+        // a lesson the agent can act on later, so it belongs to the same
+        // opt-in rather than carrying its own flag.
+        maybeRegister(ManageSkillTool, () =>
+          registry.registerTool(
+            new ManageSkillTool(
+              this,
+              getManagedSkillsDir(),
+              this.messageBus,
+              // A managed skill is only useful once it is discoverable, so
+              // the write is followed by a rediscovery rather than left to
+              // the next session.
+              () =>
+                this.getSkillManager().discoverSkills(
+                  this.storage,
+                  this.getExtensions(),
+                  this.isTrustedFolder(),
+                ),
+            ),
           ),
         );
       }
