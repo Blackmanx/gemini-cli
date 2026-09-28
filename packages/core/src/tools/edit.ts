@@ -27,6 +27,10 @@ import {
 import { buildFilePathArgsPattern } from '../policy/utils.js';
 import type { MessageBus } from '../confirmation-bus/message-bus.js';
 import { ToolErrorType } from './tool-error.js';
+import {
+  collectPostEditDiagnostics,
+  formatPostEditDiagnostics,
+} from '../lsp/postEditDiagnostics.js';
 import { looksLikeInternalUrl } from '../internal-urls/parse.js';
 import { internalUrlRouter } from '../internal-urls/router.js';
 import {
@@ -979,6 +983,16 @@ class EditToolInvocation
         .getFileSystemService()
         .writeTextFile(this.resolvedPath, finalContent);
 
+      // Re-check the file against the language server so the turn closes on a
+      // verified edit rather than an unverified one. Best-effort: a missing
+      // or slow server must not turn a good edit into a failure, so this only
+      // ADDS information to the result.
+      const postEdit = await collectPostEditDiagnostics(
+        this.resolvedPath,
+        this.config.getTargetDir(),
+        signal,
+      );
+
       if (isBuildFile(this.resolvedPath)) {
         recordModifiedBuildFile(this.resolvedPath, this.config);
       }
@@ -1075,6 +1089,11 @@ ${snippet}`);
       let llmContent = llmSuccessMessageParts.join(' ');
       if (jitContext) {
         llmContent = appendJitContext(llmContent, jitContext);
+      }
+      // Appended last, and only when there is something to say: the edit
+      // already succeeded, so this is extra information for the next step.
+      if (postEdit.diagnostics.length > 0) {
+        llmContent += `\n\n${formatPostEditDiagnostics(postEdit)}`;
       }
 
       const resultSummary =
