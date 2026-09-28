@@ -116,5 +116,21 @@ describe('omp port: internal URLs', () => {
     ).toBeTruthy();
     expect(ghostWrite!.toolRequest.success).toBe(false);
     expect(ghostWrite!.toolRequest.error).toContain('no such agent');
+
+    // 9. xd:// lists the mounted devices, and reading one shows its schema —
+    // so the model can look up a parameter set without a tool per flow.
+    expect(history).toContain('mounted tool devices');
+    expect(history).toContain('xd://read_file');
+    expect(history).toContain('file_path');
+
+    const ghostDevice = callsFor('write_file').find((c) =>
+      c.toolRequest.args.includes('xd://nope'),
+    );
+    expect(
+      ghostDevice,
+      'a call to an unmounted device was attempted',
+    ).toBeTruthy();
+    expect(ghostDevice!.toolRequest.success).toBe(false);
+    expect(ghostDevice!.toolRequest.error).toContain('no such device');
   });
 });

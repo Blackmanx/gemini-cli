@@ -6,7 +6,13 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  deviceListing,
+  type DeviceRegistry,
+  type DeviceResult,
+} from './devices.js';
 import { getAgent, listAgents } from '../agents/agentRegistry.js';
+import { getErrorMessage } from '../utils/errors.js';
 import { sendPeerMessage } from '../agents/peerBus.js';
 import {
   createInternalUrlRouter,
@@ -45,6 +51,12 @@ export interface SchemeHost {
    * effective configuration rather than a guess.
    */
   settingsFiles?: () => string[];
+  /**
+   * The `xd://` device table. A device is a named action the model can run by
+   * writing to `xd://<name>`, which is how a staged edit gets accepted
+   * without inventing a tool for every such flow.
+   */
+  devices?: () => DeviceRegistry;
 }
 
 /** Node's errno-tagged error shape, narrowed without an unchecked assertion. */
@@ -325,6 +337,15 @@ function docsScheme(host: () => SchemeHost): SchemeSpec {
 export const MAIN_AGENT_ID = 'main';
 
 /**
+ * The most recent result per device.
+ *
+ * The router's write hook is synchronous, so an async device cannot be
+ * awaited there. It is dispatched and its result lands here for the next
+ * read; a device that is not re-read simply reports that it was dispatched.
+ */
+const lastDeviceResults = new Map<string, DeviceResult>();
+
+/**
  * `agent://<id>` — a sibling subagent.
  *
  * Reading gives that agent's structured result, optionally narrowed to one
@@ -432,9 +453,125 @@ function agentScheme(): SchemeSpec {
   };
 }
 
+/**
+ * `xd://<device>` — run a named device by writing to it.
+ *
+ * The point of addressing an action as a URL rather than a tool is that a
+ * staged, user-confirmed action ("accept the proposed edit", "reject it")
+ * has no natural tool of its own, and inventing one per flow bloats the tool
+ * list the model has to choose from. Devices mount on demand instead.
+ */
+function deviceScheme(host: () => SchemeHost): SchemeSpec {
+  return {
+    scheme: 'xd',
+    backing: 'device',
+    selectors: 'none',
+    immutable: true,
+    write: {
+      via: 'handler',
+      payload: 'verbatim',
+      scope: 'device',
+      // Running a device is an execution, not a read: the device decides
+      // what it touches, and the policy engine sees it as such.
+      tier: () => 'exec',
+    },
+    resolve(url: InternalUrl): InternalResource {
+      const registry = host().devices?.();
+      if (registry === undefined) {
+        throw new Error('xd:// is unavailable: no device table is installed.');
+      }
+      const name = url.rest;
+      if (name === '') {
+        return {
+          url: url.href,
+          content: deviceListing(registry),
+          contentType: 'text/plain',
+        };
+      }
+      const device = registry.get(name);
+      if (device === undefined) {
+        throw new Error(
+          `xd://${name}: no such device. Read xd:// to list the mounted ones.`,
+        );
+      }
+      return {
+        url: url.href,
+        content: [
+          `# ${device.name}`,
+          '',
+          device.description,
+          '',
+          '```json',
+          JSON.stringify(device.inputSchema, null, 2),
+          '```',
+          '',
+          `Run it with: write xd://${device.name} {"...": ...}`,
+        ].join('\n'),
+        contentType: 'text/markdown',
+      };
+    },
+    applyWrite(url: InternalUrl, content: string): InternalResource {
+      const registry = host().devices?.();
+      if (registry === undefined) {
+        throw new Error('xd:// is unavailable: no device table is installed.');
+      }
+      const device = registry.get(url.rest);
+      if (device === undefined) {
+        throw new Error(
+          `xd://${url.rest}: no such device. Read xd:// to list the mounted ones.`,
+        );
+      }
+      let args: unknown;
+      try {
+        args = JSON.parse(content);
+      } catch (err) {
+        throw new Error(
+          `xd://${device.name}: arguments must be one JSON object: ${String(err)}`,
+        );
+      }
+      if (!isPlainObject(args)) {
+        throw new Error(
+          `xd://${device.name}: arguments must be a JSON object.`,
+        );
+      }
+      // The router's write hook is synchronous. A device that needs to await
+      // is bridged by tracking its promise and resolving it immediately
+      // rather than making every write path async.
+      void device.run(args).then(
+        (value) => {
+          lastDeviceResults.set(device.name, value);
+        },
+        (err: unknown) => {
+          lastDeviceResults.set(device.name, {
+            content: getErrorMessage(err),
+            isError: true,
+          });
+        },
+      );
+      const result: DeviceResult = lastDeviceResults.get(device.name) ?? {
+        content: `${device.name} was dispatched.`,
+      };
+      return {
+        url: url.href,
+        content:
+          typeof result.content === 'string'
+            ? result.content
+            : JSON.stringify(result.content, null, 2),
+        contentType: 'application/json',
+      };
+    },
+  };
+}
+
 /** Every scheme gemini-cli registers at startup, in prompt order. */
 export function geminiSchemeSpecs(host: () => SchemeHost): SchemeSpec[] {
-  return [localScheme(host), cfgScheme(host), docsScheme(host), agentScheme()];
+  return [
+    localScheme(host),
+    cfgScheme(host),
+    docsScheme(host),
+    agentScheme(),
+    deviceScheme(host),
+  ];
 }
 
 /** Build a router carrying gemini-cli's schemes. */

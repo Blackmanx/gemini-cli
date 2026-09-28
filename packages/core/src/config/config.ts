@@ -66,6 +66,7 @@ import {
   RetainTool,
 } from '../tools/memory.js';
 import { LocalMemoryBackend } from '../memory/store.js';
+import { DeviceRegistry } from '../internal-urls/devices.js';
 import type { MemoryBackend } from '../memory/types.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
@@ -778,6 +779,10 @@ export interface ConfigParameters {
   logRagSnippets?: boolean;
 }
 
+/** Narrow an untyped JSON-schema fragment to a plain object. */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 export class Config implements McpContext, AgentLoopContext {
   readonly config: Config = this;
   promptId: string;
@@ -820,6 +825,7 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly useTts: boolean;
   private readonly useMemory: boolean;
   private memoryBackend: MemoryBackend | undefined;
+  private deviceRegistry: DeviceRegistry | undefined;
   private readonly mainAgentTools: string[] | undefined;
   /** @deprecated Use Policy Engine instead */
   private readonly allowedTools: string[] | undefined;
@@ -1507,6 +1513,7 @@ export class Config implements McpContext, AgentLoopContext {
     // process-wide router. It is installed here because the scheme host needs
     // storage, which only exists after `storage.initialize()`.
     installInternalUrlRouter(() => ({
+      devices: () => this.getDeviceRegistry(),
       scratchDir: this.storage.getProjectTempDir(),
       docsDir: packagedDocsDir(),
       settingsFiles: () => [
@@ -3943,6 +3950,46 @@ export class Config implements McpContext, AgentLoopContext {
   /** Directory the local memory bank lives in. Owned by core, not the caller. */
   getMemoryBankDir(): string {
     return this.storage.getProjectTempDir();
+  }
+
+  /**
+   * The `xd://` device table.
+   *
+   * Every registered tool is mounted as a device, so the model can read a
+   * tool's parameter schema on demand and invoke it through the address it
+   * already understands, instead of the tool list growing an entry per
+   * flow. The registry is built once and reused.
+   */
+  getDeviceRegistry(): DeviceRegistry {
+    if (this.deviceRegistry !== undefined) return this.deviceRegistry;
+    const registry = new DeviceRegistry();
+    for (const tool of this.toolRegistry.getAllTools()) {
+      if (typeof tool.name !== 'string' || tool.name === '') continue;
+      const schema = tool.getSchema();
+      const parameters: unknown = schema.parametersJsonSchema;
+      registry.register({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: isPlainRecord(parameters) ? parameters : {},
+        run: async (args) => {
+          // `build` validates the arguments, so a device call is checked the
+          // same way a direct tool call is; a rejected payload surfaces as the
+          // tool's own error rather than as a device failure.
+          const invocation = tool.build(
+            args as Parameters<typeof tool.build>[0],
+          );
+          const result = await invocation.execute({
+            abortSignal: new AbortController().signal,
+          });
+          return {
+            content: result.llmContent,
+            isError: result.error !== undefined,
+          };
+        },
+      });
+    }
+    this.deviceRegistry = registry;
+    return registry;
   }
 
   /**
