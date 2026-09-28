@@ -82,6 +82,29 @@ export interface GrepToolParams {
    * Optional: Maximum number of total matches to return. Use this to limit the overall size of the response. Defaults to 100 if omitted.
    */
   total_max_matches?: number;
+
+  /**
+   * Optional: Number of matching FILES to skip before rendering this page.
+   * Search results are paged by file, so a follow-up call with
+   * `skip: <previous skip + files shown>` walks forward one page at a time
+   * instead of truncating a large result set.
+   */
+  skip?: number;
+
+  /**
+   * Optional: Number of context lines to show before and after each match.
+   */
+  context?: number;
+
+  /**
+   * Optional: Number of context lines to show after each match.
+   */
+  after?: number;
+
+  /**
+   * Optional: Number of context lines to show before each match.
+   */
+  before?: number;
 }
 
 class GrepToolInvocation extends BaseToolInvocation<
@@ -111,14 +134,16 @@ class GrepToolInvocation extends BaseToolInvocation<
   private parseGrepLine(line: string, basePath: string): GrepMatch | null {
     if (!line.trim()) return null;
 
-    // Use regex to locate the first occurrence of :<digits>:
-    // This allows filenames to contain colons, as long as they don't look like :<digits>:
-    // Note: This regex assumes filenames do not contain colons, or at least not followed by digits.
-    const match = line.match(/^(.+?):(\d+):(.*)$/);
+    // Use regex to locate the first occurrence of :<digits>: (a match) or
+    // -<digits>- (a context line, produced by -A/-B/-C).
+    // This allows filenames to contain colons, as long as they don't look
+    // like :<digits>: or -<digits>-.
+    const match = line.match(/^(.+?):(\d+)([:-])(.*)$/);
     if (!match) return null;
 
-    const [, filePathRaw, lineNumberStr, lineContent] = match;
+    const [, filePathRaw, lineNumberStr, separator, lineContent] = match;
     const lineNumber = parseInt(lineNumberStr, 10);
+    const isContext = separator === '-';
 
     if (!isNaN(lineNumber)) {
       const absoluteFilePath = path.resolve(basePath, filePathRaw);
@@ -138,6 +163,7 @@ class GrepToolInvocation extends BaseToolInvocation<
         absolutePath: absoluteFilePath,
         lineNumber,
         line: lineContent,
+        isContext,
       };
     }
     return null;
@@ -231,6 +257,12 @@ class GrepToolInvocation extends BaseToolInvocation<
       let allMatches: GrepMatch[] = [];
       const totalMaxMatches =
         this.params.total_max_matches ?? DEFAULT_TOTAL_MAX_MATCHES;
+      // Results are paged by FILE, not by match. When the caller pages forward
+      // we must collect more than one page worth of matches, otherwise we
+      // cannot tell whether further pages exist.
+      const skip = this.params.skip ?? 0;
+      const collectionLimit =
+        skip > 0 ? totalMaxMatches * (skip + 1) : totalMaxMatches;
 
       // Create a timeout controller to prevent indefinitely hanging searches
       const timeoutController = new AbortController();
@@ -256,7 +288,7 @@ class GrepToolInvocation extends BaseToolInvocation<
 
       try {
         for (const searchDir of searchDirectories) {
-          const remainingLimit = totalMaxMatches - allMatches.length;
+          const remainingLimit = collectionLimit - allMatches.length;
           if (remainingLimit <= 0) break;
 
           const matches = await this.performGrepSearch({
@@ -266,6 +298,9 @@ class GrepToolInvocation extends BaseToolInvocation<
             exclude_pattern: this.params.exclude_pattern,
             maxMatches: remainingLimit,
             max_matches_per_file: this.params.max_matches_per_file,
+            context: this.params.context,
+            before: this.params.before,
+            after: this.params.after,
             signal: timeoutController.signal,
           });
 
@@ -417,6 +452,9 @@ class GrepToolInvocation extends BaseToolInvocation<
     exclude_pattern?: string;
     maxMatches: number;
     max_matches_per_file?: number;
+    context?: number;
+    after?: number;
+    before?: number;
     signal: AbortSignal;
   }): Promise<GrepMatch[]> {
     const {
@@ -426,6 +464,9 @@ class GrepToolInvocation extends BaseToolInvocation<
       exclude_pattern,
       maxMatches,
       max_matches_per_file,
+      context,
+      after,
+      before,
     } = options;
     let strategyUsed = 'none';
 
@@ -449,6 +490,16 @@ class GrepToolInvocation extends BaseToolInvocation<
           '--ignore-case',
           pattern,
         ];
+        if (context !== undefined && context > 0) {
+          gitArgs.push(`-C${context}`);
+        } else {
+          if (after !== undefined && after > 0) {
+            gitArgs.push(`-A${after}`);
+          }
+          if (before !== undefined && before > 0) {
+            gitArgs.push(`-B${before}`);
+          }
+        }
         if (max_matches_per_file) {
           gitArgs.push('--max-count', max_matches_per_file.toString());
         }
@@ -466,14 +517,20 @@ class GrepToolInvocation extends BaseToolInvocation<
           });
 
           const results: GrepMatch[] = [];
+          let matchCount = 0;
           for await (const line of generator) {
             const match = this.parseGrepLine(line, absolutePath);
             if (match) {
-              if (excludeRegex && excludeRegex.test(match.line)) {
-                continue;
+              // Context lines never count against the budget and are never
+              // dropped by exclude_pattern: they belong to their match.
+              if (!match.isContext) {
+                if (excludeRegex && excludeRegex.test(match.line)) {
+                  continue;
+                }
+                matchCount++;
               }
               results.push(match);
-              if (results.length >= maxMatches) {
+              if (matchCount >= maxMatches) {
                 break;
               }
             }
@@ -522,6 +579,16 @@ class GrepToolInvocation extends BaseToolInvocation<
         if (max_matches_per_file) {
           grepArgs.push('--max-count', max_matches_per_file.toString());
         }
+        if (context !== undefined && context > 0) {
+          grepArgs.push(`-C${context}`);
+        } else {
+          if (after !== undefined && after > 0) {
+            grepArgs.push(`-A${after}`);
+          }
+          if (before !== undefined && before > 0) {
+            grepArgs.push(`-B${before}`);
+          }
+        }
         if (include_pattern) {
           grepArgs.push(`--include=${include_pattern}`);
         }
@@ -537,14 +604,18 @@ class GrepToolInvocation extends BaseToolInvocation<
             sandboxManager: this.config.sandboxManager,
           });
 
+          let matchCount = 0;
           for await (const line of generator) {
             const match = this.parseGrepLine(line, absolutePath);
             if (match) {
-              if (excludeRegex && excludeRegex.test(match.line)) {
-                continue;
+              if (!match.isContext) {
+                if (excludeRegex && excludeRegex.test(match.line)) {
+                  continue;
+                }
+                matchCount++;
               }
               results.push(match);
-              if (results.length >= maxMatches) {
+              if (matchCount >= maxMatches) {
                 break;
               }
             }
@@ -737,6 +808,23 @@ export class GrepTool extends BaseDeclarativeTool<GrepToolParams, ToolResult> {
       params.total_max_matches < 1
     ) {
       return 'total_max_matches must be at least 1.';
+    }
+
+    if (
+      params.skip !== undefined &&
+      (!Number.isInteger(params.skip) || params.skip < 0)
+    ) {
+      return 'skip must be an integer greater than or equal to 0.';
+    }
+
+    for (const [name, value] of [
+      ['context', params.context],
+      ['after', params.after],
+      ['before', params.before],
+    ] as const) {
+      if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+        return `${name} must be an integer greater than or equal to 0.`;
+      }
     }
 
     // Only validate dir_path if one is provided

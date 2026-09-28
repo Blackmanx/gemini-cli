@@ -23,7 +23,20 @@ import {
 // Re-export names for compatibility
 export {
   GLOB_TOOL_NAME,
+  GLOB_PARAM_LIMIT,
+  GLOB_PARAM_SKIP,
   GREP_TOOL_NAME,
+  LSP_TOOL_NAME,
+  LSP_DISPLAY_NAME,
+  LSP_PARAM_ACTION,
+  LSP_PARAM_FILE,
+  LSP_PARAM_LINE,
+  LSP_PARAM_SYMBOL,
+  LSP_PARAM_QUERY,
+  LSP_PARAM_NEW_NAME,
+  LSP_PARAM_APPLY,
+  LSP_PARAM_TIMEOUT,
+  LSP_PARAM_PAYLOAD,
   LS_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   SHELL_TOOL_NAME,
@@ -56,6 +69,7 @@ export {
   // Tool-specific parameter names
   READ_FILE_PARAM_START_LINE,
   READ_FILE_PARAM_END_LINE,
+  READ_FILE_PARAM_RAW,
   WRITE_FILE_PARAM_CONTENT,
   GREP_PARAM_INCLUDE_PATTERN,
   GREP_PARAM_EXCLUDE_PATTERN,
@@ -66,6 +80,7 @@ export {
   GREP_PARAM_CONTEXT,
   GREP_PARAM_AFTER,
   GREP_PARAM_BEFORE,
+  GREP_PARAM_SKIP,
   GREP_PARAM_NO_IGNORE,
   EDIT_PARAM_INSTRUCTION,
   EDIT_PARAM_OLD_STRING,
@@ -164,6 +179,13 @@ export const EDIT_DEFINITION: ToolDefinition = {
     return DEFAULT_LEGACY_SET.replace;
   },
   overrides: (modelId) => getToolSet(modelId).replace,
+};
+
+export const LSP_DEFINITION: ToolDefinition = {
+  get base() {
+    return DEFAULT_LEGACY_SET.lsp;
+  },
+  overrides: (modelId) => getToolSet(modelId).lsp,
 };
 
 export const GLOB_DEFINITION: ToolDefinition = {

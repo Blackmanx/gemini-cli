@@ -49,6 +49,9 @@ export enum ToolErrorType {
   // Grep-specific Errors
   GREP_EXECUTION_ERROR = 'grep_execution_error',
 
+  // Language-server Errors
+  LSP_REQUEST_FAILED = 'lsp_request_failed',
+
   // Ls-specific Errors
   LS_EXECUTION_ERROR = 'ls_execution_error',
   PATH_IS_NOT_A_DIRECTORY = 'path_is_not_a_directory',

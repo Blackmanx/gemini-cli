@@ -1,0 +1,454 @@
+{
+  "rust-analyzer": {
+    "command": "rust-analyzer",
+    "args": [],
+    "fileTypes": [".rs"],
+    "rootMarkers": ["Cargo.toml", "rust-analyzer.toml"],
+    "initOptions": {},
+    "settings": { "rust-analyzer": { "checkOnSave": false } },
+    "capabilities": {
+      "flycheck": true,
+      "ssr": true,
+      "expandMacro": true,
+      "runnables": true,
+      "relatedTests": true
+    }
+  },
+  "gopls": {
+    "command": "gopls",
+    "args": ["serve"],
+    "fileTypes": [".go", ".mod", ".sum"],
+    "rootMarkers": ["go.mod", "go.work", "go.sum"],
+    "settings": {
+      "gopls": {
+        "analyses": { "unusedparams": true, "shadow": true },
+        "staticcheck": true,
+        "gofumpt": true
+      }
+    }
+  },
+  "typescript-language-server": {
+    "command": "typescript-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+    "rootMarkers": ["package.json", "tsconfig.json", "jsconfig.json"],
+    "initOptions": {
+      "hostInfo": "gemini-cli",
+      "preferences": {
+        "includeInlayParameterNameHints": "all",
+        "includeInlayVariableTypeHints": true,
+        "includeInlayFunctionParameterTypeHints": true
+      }
+    }
+  },
+  "pyright": {
+    "command": "pyright-langserver",
+    "args": ["--stdio"],
+    "fileTypes": [".py", ".pyi"],
+    "rootMarkers": [
+      "pyproject.toml",
+      "pyrightconfig.json",
+      "setup.py",
+      "setup.cfg",
+      "requirements.txt",
+      "Pipfile"
+    ],
+    "settings": {
+      "python": {
+        "analysis": {
+          "autoSearchPaths": true,
+          "diagnosticMode": "openFilesOnly",
+          "useLibraryCodeForTypes": true
+        }
+      }
+    }
+  },
+  "pylsp": {
+    "command": "pylsp",
+    "args": [],
+    "fileTypes": [".py", ".pyi"],
+    "rootMarkers": [
+      "pyproject.toml",
+      "setup.py",
+      "setup.cfg",
+      "requirements.txt",
+      "Pipfile"
+    ]
+  },
+  "clangd": {
+    "command": "clangd",
+    "args": ["--background-index", "--clang-tidy", "--header-insertion=iwyu"],
+    "fileTypes": [
+      ".c",
+      ".cpp",
+      ".cc",
+      ".cxx",
+      ".h",
+      ".hpp",
+      ".hxx",
+      ".cu",
+      ".cuh",
+      ".m",
+      ".mm"
+    ],
+    "rootMarkers": [
+      "compile_commands.json",
+      "CMakeLists.txt",
+      ".clangd",
+      ".clang-format",
+      "Makefile"
+    ]
+  },
+  "biome": {
+    "command": "biome",
+    "args": ["lsp-proxy"],
+    "fileTypes": [
+      ".ts",
+      ".tsx",
+      ".js",
+      ".jsx",
+      ".mjs",
+      ".cjs",
+      ".json",
+      ".jsonc",
+      ".css"
+    ],
+    "rootMarkers": ["biome.json", "biome.jsonc"],
+    "isLinter": true
+  },
+  "eslint": {
+    "command": "vscode-eslint-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [
+      ".ts",
+      ".tsx",
+      ".js",
+      ".jsx",
+      ".mjs",
+      ".cjs",
+      ".vue",
+      ".svelte"
+    ],
+    "rootMarkers": [
+      ".eslintrc",
+      ".eslintrc.js",
+      ".eslintrc.json",
+      ".eslintrc.yml",
+      "eslint.config.js",
+      "eslint.config.mjs"
+    ],
+    "isLinter": true,
+    "settings": { "validate": "on", "run": "onType" }
+  },
+  "oxlint": {
+    "command": "oxc-language-server",
+    "args": [],
+    "fileTypes": [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"],
+    "rootMarkers": [".oxlintrc.json", "package.json"],
+    "isLinter": true
+  },
+  "vue-language-server": {
+    "command": "vue-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".vue"],
+    "rootMarkers": [
+      "vue.config.js",
+      "nuxt.config.js",
+      "nuxt.config.ts",
+      "package.json"
+    ]
+  },
+  "svelte-language-server": {
+    "command": "svelteserver",
+    "args": ["--stdio"],
+    "fileTypes": [".svelte"],
+    "rootMarkers": ["svelte.config.js", "svelte.config.mjs", "package.json"]
+  },
+  "ruby-lsp": {
+    "command": "ruby-lsp",
+    "args": [],
+    "fileTypes": [".rb", ".rake", ".gemspec", ".erb"],
+    "rootMarkers": ["Gemfile", ".ruby-version", ".ruby-gemset"],
+    "initOptions": { "formatter": "auto" }
+  },
+  "solargraph": {
+    "command": "solargraph",
+    "args": ["stdio"],
+    "fileTypes": [".rb", ".rake", ".gemspec"],
+    "rootMarkers": ["Gemfile", ".solargraph.yml", "Rakefile"],
+    "initOptions": { "formatting": true },
+    "settings": {
+      "solargraph": {
+        "diagnostics": true,
+        "completion": true,
+        "hover": true,
+        "formatting": true,
+        "references": true,
+        "rename": true,
+        "symbols": true
+      }
+    }
+  },
+  "lua-language-server": {
+    "command": "lua-language-server",
+    "args": [],
+    "fileTypes": [".lua"],
+    "rootMarkers": [
+      ".luarc.json",
+      ".luarc.jsonc",
+      ".luacheckrc",
+      ".stylua.toml",
+      "stylua.toml"
+    ],
+    "settings": {
+      "Lua": {
+        "runtime": { "version": "LuaJIT" },
+        "diagnostics": { "globals": ["vim"] },
+        "workspace": { "checkThirdParty": false },
+        "telemetry": { "enable": false }
+      }
+    }
+  },
+  "jdtls": {
+    "command": "jdtls",
+    "args": [],
+    "fileTypes": [".java"],
+    "rootMarkers": [
+      "pom.xml",
+      "build.gradle",
+      "build.gradle.kts",
+      "settings.gradle",
+      ".project"
+    ]
+  },
+  "kotlin-language-server": {
+    "command": "kotlin-language-server",
+    "args": [],
+    "fileTypes": [".kt", ".kts"],
+    "rootMarkers": [
+      "build.gradle",
+      "build.gradle.kts",
+      "pom.xml",
+      "settings.gradle",
+      "settings.gradle.kts"
+    ]
+  },
+  "omnisharp-roslyn": {
+    "command": "omnisharp",
+    "args": [
+      "-z",
+      "--hostPID",
+      "$PID",
+      "--encoding",
+      "utf-8",
+      "--languageserver"
+    ],
+    "fileTypes": [".cs", ".csx"],
+    "rootMarkers": ["*.sln", "*.csproj", "omnisharp.json", ".git"],
+    "settings": {
+      "FormattingOptions": { "EnableEditorConfigSupport": true },
+      "RoslynExtensionsOptions": { "EnableAnalyzersSupport": true }
+    }
+  },
+  "csharp-ls": {
+    "command": "csharp-ls",
+    "args": [],
+    "fileTypes": [".cs", ".csx"],
+    "rootMarkers": ["*.sln", "*.csproj", ".git"]
+  },
+  "cmake-language-server": {
+    "command": "cmake-language-server",
+    "args": ["--stdio"],
+    "fileTypes": ["CMakeLists.txt", ".cmake"],
+    "rootMarkers": ["CMakeLists.txt", ".cmake-format.yaml", ".git"]
+  },
+  "docker-language-server": {
+    "command": "docker-language-server",
+    "args": ["--stdio"],
+    "fileTypes": ["Dockerfile", ".dockerfile", ".containerfile"],
+    "rootMarkers": [
+      "Dockerfile",
+      "docker-compose.yml",
+      "docker-compose.yaml",
+      ".dockerignore"
+    ]
+  },
+  "gitlab-duo": {
+    "command": "gitlab-duo-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rb", ".java"],
+    "rootMarkers": [".gitlab", ".git"]
+  },
+  "sourcekit-lsp": {
+    "command": "sourcekit-lsp",
+    "args": [],
+    "fileTypes": [".swift"],
+    "rootMarkers": [
+      "Package.swift",
+      "*.xcodeproj",
+      "*.xcworkspace",
+      "project.yml",
+      ".swiftpm"
+    ]
+  },
+  "haskell-language-server": {
+    "command": "haskell-language-server-wrapper",
+    "args": ["--lsp"],
+    "fileTypes": [".hs", ".lhs"],
+    "rootMarkers": [
+      "stack.yaml",
+      "cabal.project",
+      "hie.yaml",
+      "package.yaml",
+      "*.cabal"
+    ],
+    "settings": {
+      "haskell": { "formattingProvider": "ormolu", "checkProject": true }
+    }
+  },
+  "elm-language-server": {
+    "command": "elm-language-server",
+    "args": [],
+    "fileTypes": [".elm"],
+    "rootMarkers": ["elm.json"]
+  },
+  "zig-language-server": {
+    "command": "zls",
+    "args": [],
+    "fileTypes": [".zig"],
+    "rootMarkers": ["build.zig", "build.zig.zon", "zls.json"]
+  },
+  "bash-language-server": {
+    "command": "bash-language-server",
+    "args": ["start"],
+    "fileTypes": [".sh", ".bash", ".zsh", ".bats"],
+    "rootMarkers": [".git", ".bash-language-server"],
+    "settings": { "bashIde": { "globPattern": "*@(.sh|.inc|.bash|.command)" } }
+  },
+  "yaml-language-server": {
+    "command": "yaml-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".yaml", ".yml"],
+    "rootMarkers": [".git", ".yamllint", "package.json"],
+    "settings": {
+      "yaml": {
+        "validate": true,
+        "format": { "enable": true },
+        "hover": true,
+        "completion": true
+      },
+      "redhat": { "telemetry": { "enabled": false } }
+    }
+  },
+  "terraform-ls": {
+    "command": "terraform-ls",
+    "args": ["serve"],
+    "fileTypes": [".tf", ".tfvars", ".hcl"],
+    "rootMarkers": [".terraform", "terraform.tfstate", "*.tf"]
+  },
+  "vscode-html-language-server": {
+    "command": "vscode-html-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".html", ".htm"],
+    "rootMarkers": ["package.json", ".git"],
+    "initOptions": { "provideFormatter": true }
+  },
+  "vscode-css-language-server": {
+    "command": "vscode-css-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".css", ".scss", ".sass", ".less"],
+    "rootMarkers": ["package.json", ".git"],
+    "initOptions": { "provideFormatter": true }
+  },
+  "vscode-json-language-server": {
+    "command": "vscode-json-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".json", ".jsonc"],
+    "rootMarkers": ["package.json", ".git"],
+    "initOptions": { "provideFormatter": true }
+  },
+  "denols": {
+    "command": "deno",
+    "args": ["lsp"],
+    "fileTypes": [".ts", ".tsx", ".js", ".jsx"],
+    "rootMarkers": ["deno.json", "deno.jsonc", "deno.lock"],
+    "initOptions": { "enable": true, "lint": true, "unstable": true }
+  },
+  "metals": {
+    "command": "metals",
+    "args": [],
+    "fileTypes": [".scala", ".sbt", ".sc"],
+    "rootMarkers": ["build.sbt", "build.sc", "build.gradle", "pom.xml"],
+    "initOptions": {
+      "statusBarProvider": "show-message",
+      "isHttpEnabled": true
+    }
+  },
+  "ocamllsp": {
+    "command": "ocamllsp",
+    "args": [],
+    "fileTypes": [".ml", ".mli", ".mll", ".mly"],
+    "rootMarkers": ["dune-project", "dune-workspace", "*.opam", ".ocamlformat"]
+  },
+  "elixir-ls": {
+    "command": "elixir-ls",
+    "args": [],
+    "fileTypes": [".ex", ".exs", ".heex", ".eex"],
+    "rootMarkers": ["mix.exs", "mix.lock"],
+    "settings": { "elixirLS": { "dialyzerEnabled": true, "fetchDeps": false } }
+  },
+  "gleam": {
+    "command": "gleam",
+    "args": ["lsp"],
+    "fileTypes": [".gleam"],
+    "rootMarkers": ["gleam.toml"]
+  },
+  "intelephense": {
+    "command": "intelephense",
+    "args": ["--stdio"],
+    "fileTypes": [".php", ".phtml"],
+    "rootMarkers": ["composer.json", "composer.lock", ".git"]
+  },
+  "nixd": {
+    "command": "nixd",
+    "args": [],
+    "fileTypes": [".nix"],
+    "rootMarkers": ["flake.nix", "default.nix", "shell.nix"]
+  },
+  "dartls": {
+    "command": "dart",
+    "args": ["language-server", "--protocol=lsp"],
+    "fileTypes": [".dart"],
+    "rootMarkers": ["pubspec.yaml", "pubspec.lock"],
+    "initOptions": {
+      "closingLabels": true,
+      "flutterOutline": true,
+      "outline": true
+    }
+  },
+  "marksman": {
+    "command": "marksman",
+    "args": ["server"],
+    "fileTypes": [".md", ".markdown"],
+    "rootMarkers": [".marksman.toml", ".git"],
+    "warmupTimeoutMs": 2000
+  },
+  "graphql": {
+    "command": "graphql-lsp",
+    "args": ["server", "-m", "stream"],
+    "fileTypes": [".graphql", ".gql"],
+    "rootMarkers": [
+      ".graphqlrc",
+      ".graphqlrc.json",
+      ".graphqlrc.yml",
+      ".graphqlrc.yaml",
+      "graphql.config.js"
+    ]
+  },
+  "prisma-language-server": {
+    "command": "prisma-language-server",
+    "args": ["--stdio"],
+    "fileTypes": [".prisma"],
+    "rootMarkers": ["schema.prisma", "prisma/schema.prisma"]
+  }
+}

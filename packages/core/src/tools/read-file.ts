@@ -6,6 +6,7 @@
 
 import type { MessageBus } from '../confirmation-bus/message-bus.js';
 import path from 'node:path';
+import fs from 'node:fs';
 import {
   makeRelative,
   shortenPath,
@@ -45,6 +46,22 @@ import {
   appendJitContext,
   appendJitContextToParts,
 } from './jit-context.js';
+import {
+  splitPathAndSelector,
+  resolveTailSelector,
+  sliceLinesForSelector,
+  selToOffsetLimit,
+  type ParsedSelector,
+  type ResolvedSelector,
+} from '../utils/readSelectors.js';
+import { buildDirectoryTree } from '../utils/directoryTree.js';
+import { looksLikeInternalUrl } from '../internal-urls/parse.js';
+import { internalUrlRouter } from '../internal-urls/router.js';
+import {
+  looksLikeSqlitePath,
+  parseSqliteSelector,
+  readSqlite,
+} from '../utils/sqliteReader.js';
 
 /**
  * Parameters for the ReadFile tool
@@ -64,6 +81,31 @@ export interface ReadFileToolParams {
    * The line number to end reading at (optional, 1-based, inclusive)
    */
   end_line?: number;
+
+  /**
+   * Return the file exactly as stored: no truncation notice, no auto-context.
+   * `raw` also wins over any line selector in `file_path`.
+   */
+  raw?: boolean;
+}
+
+/**
+ * Apply a line selector to already-resolved content.
+ *
+ * `:-N` needs the line count, which the router already has in memory, so the
+ * tail is pinned without a second read.
+ */
+function applySelectorToResource(
+  content: string,
+  selector: ParsedSelector,
+): string {
+  if (selector.kind !== 'lines' && selector.kind !== 'tail') return content;
+  const totalLines = content.length === 0 ? 0 : content.split('\n').length;
+  const resolved =
+    selector.kind === 'tail'
+      ? resolveTailSelector(selector, totalLines)
+      : selector;
+  return sliceLinesForSelector(content, resolved);
 }
 
 class ReadFileToolInvocation extends BaseToolInvocation<
@@ -71,6 +113,9 @@ class ReadFileToolInvocation extends BaseToolInvocation<
   ToolResult
 > {
   private readonly resolvedPath: string;
+  /** Path with any trailing line selector peeled off. */
+  private readonly barePath: string;
+  private readonly selector: ParsedSelector;
   constructor(
     private config: Config,
     params: ReadFileToolParams,
@@ -79,8 +124,11 @@ class ReadFileToolInvocation extends BaseToolInvocation<
     _toolDisplayName?: string,
   ) {
     super(params, messageBus, _toolName, _toolDisplayName);
+    const split = splitPathAndSelector(this.params.file_path);
+    this.barePath = split.path;
+    this.selector = params.raw ? { kind: 'raw' } : split.selector;
     const sanitizedPath = resolveDefensiveToolPath(
-      this.params.file_path,
+      this.barePath,
       this.config.getTargetDir(),
     );
     try {
@@ -120,12 +168,67 @@ class ReadFileToolInvocation extends BaseToolInvocation<
     };
   }
 
+  /**
+   * Serve an internal `scheme://` URL through the router.
+   *
+   * A discrete value (a JSON-path extraction) is returned verbatim; a document
+   * honours line selectors so `read local://notes.md:10-20` behaves exactly
+   * like the filesystem path form.
+   */
+  private async readInternalUrl(href: string): Promise<ToolResult> {
+    const router = internalUrlRouter();
+    if (router === undefined) {
+      const message = `No internal URL router is installed; ${href} cannot be read.`;
+      return {
+        llmContent: message,
+        returnDisplay: 'Internal URLs unavailable.',
+        error: { message, type: ToolErrorType.INVALID_TOOL_PARAMS },
+      };
+    }
+    try {
+      const resource = router.resolve(href, {
+        cwd: this.config.getTargetDir(),
+      });
+      const text =
+        resource.shape === 'value'
+          ? resource.content
+          : this.selector.kind === 'lines' || this.selector.kind === 'tail'
+            ? applySelectorToResource(resource.content, this.selector)
+            : resource.content;
+      const header = [
+        `URL: ${resource.url}`,
+        resource.contentType ? `Content-Type: ${resource.contentType}` : '',
+        resource.notes?.length ? `Notes: ${resource.notes.join('; ')}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      return {
+        llmContent: `${header}\n\n${text}`,
+        returnDisplay: text,
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        llmContent: message,
+        returnDisplay: 'Internal URL read failed.',
+        error: { message, type: ToolErrorType.INVALID_TOOL_PARAMS },
+      };
+    }
+  }
+
   async execute(_options: ExecuteOptions): Promise<ToolResult> {
     const sanitizedPath = resolveDefensiveToolPath(
-      this.params.file_path,
+      this.barePath,
       this.config.getTargetDir(),
     );
     let targetPathToRead = this.resolvedPath;
+
+    // An internal URL (local://, cfg://, omp://, …) is served by the router,
+    // not the filesystem. It is dispatched before path validation because a
+    // URL target has no workspace-relative path to validate.
+    if (looksLikeInternalUrl(this.params.file_path)) {
+      return this.readInternalUrl(this.params.file_path);
+    }
     try {
       targetPathToRead = resolveToRealPath(
         path.resolve(this.config.getTargetDir(), sanitizedPath),
@@ -152,12 +255,98 @@ class ReadFileToolInvocation extends BaseToolInvocation<
       };
     }
 
+    // A directory is readable through the same tool: render a shallow,
+    // recency-sorted tree instead of erroring out and forcing a second tool.
+    if (fs.existsSync(targetPathToRead)) {
+      let isDirectory = false;
+      try {
+        isDirectory = (await fs.promises.stat(targetPathToRead)).isDirectory();
+      } catch {
+        isDirectory = false;
+      }
+      if (isDirectory) {
+        const tree = await buildDirectoryTree(targetPathToRead);
+        return {
+          llmContent: `Directory listing for ${makeRelative(targetPathToRead, this.config.getTargetDir()) || '.'}:\n\n${tree}`,
+          returnDisplay: tree,
+        };
+      }
+    }
+
+    // A `.sqlite` / `.db` path may carry a table, row or query selector, so
+    // it is dispatched before the generic text path.
+    if (
+      this.selector.kind === 'none' &&
+      looksLikeSqlitePath(this.params.file_path)
+    ) {
+      const sqliteTarget = parseSqliteSelector(this.params.file_path);
+      if (sqliteTarget) {
+        const absoluteDb = path.resolve(
+          this.config.getTargetDir(),
+          sqliteTarget.filePath,
+        );
+        const sqliteValidation = this.config.validatePathAccess(
+          absoluteDb,
+          'read',
+        );
+        if (sqliteValidation) {
+          return {
+            llmContent: sqliteValidation,
+            returnDisplay: 'Path not in workspace.',
+            error: {
+              message: sqliteValidation,
+              type: ToolErrorType.PATH_NOT_IN_WORKSPACE,
+            },
+          };
+        }
+        try {
+          const rendered = readSqlite(absoluteDb, sqliteTarget.selector);
+          return { llmContent: rendered, returnDisplay: rendered };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            llmContent: message,
+            returnDisplay: 'SQLite read failed.',
+            error: { message, type: ToolErrorType.INVALID_TOOL_PARAMS },
+          };
+        }
+      }
+    }
+
+    // A path-embedded selector (`:50-120`, `:-60`, `:raw:5-9`) takes
+    // precedence over the explicit start_line/end_line params.
+    let startLine = this.params.start_line;
+    let endLine = this.params.end_line;
+    if (this.selector.kind === 'tail' || this.selector.kind === 'lines') {
+      let resolved: ResolvedSelector =
+        this.selector.kind === 'lines' ? this.selector : { kind: 'none' };
+      if (this.selector.kind === 'tail') {
+        // `:-N` needs the file's length before it can be pinned to absolute
+        // lines, so the text is read once here and then re-read for the slice.
+        let totalLines = Number.NaN;
+        try {
+          const text = await fs.promises.readFile(targetPathToRead, 'utf8');
+          totalLines = text.length === 0 ? 0 : text.split('\n').length;
+        } catch {
+          totalLines = Number.NaN;
+        }
+        if (!Number.isNaN(totalLines)) {
+          resolved = resolveTailSelector(this.selector, totalLines);
+        }
+      }
+      if (resolved.kind === 'lines') {
+        const { offset, limit } = selToOffsetLimit(resolved);
+        startLine = offset;
+        endLine = limit === undefined ? undefined : (offset ?? 1) + limit - 1;
+      }
+    }
+
     const result = await processSingleFileContent(
       targetPathToRead,
       this.config.getTargetDir(),
       this.config.getFileSystemService(),
-      this.params.start_line,
-      this.params.end_line,
+      startLine,
+      endLine,
     );
 
     if (result.error) {

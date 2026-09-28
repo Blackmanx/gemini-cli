@@ -12,7 +12,17 @@
 import type { CoreToolSet } from '../types.js';
 import {
   GLOB_TOOL_NAME,
+  GLOB_PARAM_LIMIT,
+  GLOB_PARAM_SKIP,
   GREP_TOOL_NAME,
+  LSP_TOOL_NAME,
+  LSP_PARAM_ACTION,
+  LSP_PARAM_FILE,
+  LSP_PARAM_LINE,
+  LSP_PARAM_SYMBOL,
+  LSP_PARAM_QUERY,
+  LSP_PARAM_TIMEOUT,
+  LSP_PARAM_PAYLOAD,
   LS_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
@@ -37,6 +47,7 @@ import {
   // Tool-specific parameter names
   READ_FILE_PARAM_START_LINE,
   READ_FILE_PARAM_END_LINE,
+  READ_FILE_PARAM_RAW,
   WRITE_FILE_PARAM_CONTENT,
   GREP_PARAM_INCLUDE_PATTERN,
   GREP_PARAM_EXCLUDE_PATTERN,
@@ -47,6 +58,7 @@ import {
   GREP_PARAM_CONTEXT,
   GREP_PARAM_AFTER,
   GREP_PARAM_BEFORE,
+  GREP_PARAM_SKIP,
   GREP_PARAM_NO_IGNORE,
   EDIT_PARAM_INSTRUCTION,
   EDIT_PARAM_OLD_STRING,
@@ -102,6 +114,11 @@ export const DEFAULT_LEGACY_SET: CoreToolSet = {
             'Optional: The 1-based line number to end reading at (inclusive).',
           type: 'integer',
           minimum: 1,
+        },
+        [READ_FILE_PARAM_RAW]: {
+          description:
+            "Optional: Return the file exactly as stored, with no truncation notice and no auto-context. Also accepts inline path selectors: append ':N', ':N-M', ':N-', ':-N' (last N lines), ':N+K', a comma-separated range list such as ':5-16,40-80', or combine with ':raw' (e.g. 'src/a.ts:raw:1-40'). A path ending in ':table', ':table:key' or '?q=' is read as a SQLite database, and a directory renders as a shallow tree.",
+          type: 'boolean',
         },
       },
       required: [PARAM_FILE_PATH],
@@ -171,6 +188,31 @@ export const DEFAULT_LEGACY_SET: CoreToolSet = {
             'Optional: Maximum number of total matches to return. Use this to limit the overall size of the response. Defaults to 100 if omitted.',
           type: 'integer',
           minimum: 1,
+        },
+
+        [GREP_PARAM_SKIP]: {
+          description:
+            'Optional: Number of files with matches to skip before this page. Results are paged by file, so re-run with a larger skip to walk a large result set instead of losing it to truncation.',
+          type: 'integer',
+          minimum: 0,
+        },
+        [GREP_PARAM_CONTEXT]: {
+          description:
+            'Optional: Show this many lines of context around each match (equivalent to grep -C). Defaults to 0 if omitted.',
+          type: 'integer',
+          minimum: 0,
+        },
+        [GREP_PARAM_AFTER]: {
+          description:
+            'Optional: Show this many lines after each match (equivalent to grep -A). Defaults to 0 if omitted.',
+          type: 'integer',
+          minimum: 0,
+        },
+        [GREP_PARAM_BEFORE]: {
+          description:
+            'Optional: Show this many lines before each match (equivalent to grep -B). Defaults to 0 if omitted.',
+          type: 'integer',
+          minimum: 0,
         },
       },
       required: [PARAM_PATTERN],
@@ -253,8 +295,61 @@ export const DEFAULT_LEGACY_SET: CoreToolSet = {
           type: 'integer',
           minimum: 1,
         },
+
+        [GREP_PARAM_SKIP]: {
+          description:
+            'Optional: Number of files with matches to skip before this page. Results are paged by file, so re-run with a larger skip to walk a large result set instead of losing it to truncation.',
+          type: 'integer',
+          minimum: 0,
+        },
       },
       required: [PARAM_PATTERN],
+    },
+  },
+
+  lsp: {
+    name: LSP_TOOL_NAME,
+    description: `Asks the project's language server what it knows: diagnostics, definitions, references, hover, symbols, code actions. Servers are auto-detected from the project (rust-analyzer, gopls, typescript-language-server, pyright, clangd, …) and can be configured in lsp.json. Requires no language server for whole-project type checking: pass file: "*" to run the project's own compiler (cargo check, tsc --noEmit, go build, pyright) and get its errors back.`,
+    parametersJsonSchema: {
+      type: 'object',
+      properties: {
+        [LSP_PARAM_ACTION]: {
+          description:
+            "One of: 'diagnostics', 'definition', 'type_definition', 'implementation', 'references', 'hover', 'symbols', 'status', 'reload', 'capabilities', 'request'.",
+          type: 'string',
+        },
+        [LSP_PARAM_FILE]: {
+          description:
+            "The file the action applies to. Use '*' with 'diagnostics' for a whole-project type check, or with 'symbols' for a workspace symbol search.",
+          type: 'string',
+        },
+        [LSP_PARAM_LINE]: {
+          description:
+            'The 1-based line the action applies to. Required by definition, references, hover, type_definition and implementation.',
+          type: 'integer',
+          minimum: 1,
+        },
+        [LSP_PARAM_SYMBOL]: {
+          description:
+            'Optional: the symbol at that line, which project-aware servers need to disambiguate.',
+          type: 'string',
+        },
+        [LSP_PARAM_QUERY]: {
+          description:
+            "For 'symbols': the search text. For 'request': the LSP method to call.",
+          type: 'string',
+        },
+        [LSP_PARAM_TIMEOUT]: {
+          description: 'Seconds to wait for the server. Defaults to 20.',
+          type: 'integer',
+          minimum: 5,
+        },
+        [LSP_PARAM_PAYLOAD]: {
+          description:
+            "For 'request': the JSON parameters to send. Overrides the derived textDocument/position body.",
+        },
+      },
+      required: [LSP_PARAM_ACTION],
     },
   },
 
@@ -289,6 +384,18 @@ export const DEFAULT_LEGACY_SET: CoreToolSet = {
           description:
             'Optional: Whether to respect .geminiignore patterns when finding files. Defaults to true.',
           type: 'boolean',
+        },
+        [GLOB_PARAM_LIMIT]: {
+          description:
+            'Optional: Maximum number of files to return. Defaults to 200. Narrow the pattern rather than raising this on a large repository.',
+          type: 'integer',
+          minimum: 1,
+        },
+        [GLOB_PARAM_SKIP]: {
+          description:
+            'Optional: Number of files to skip before this page. Results are sorted by modification time (newest first), so paging is stable. Use it to walk a result set that a previous call truncated.',
+          type: 'integer',
+          minimum: 0,
         },
       },
       required: [PARAM_PATTERN],

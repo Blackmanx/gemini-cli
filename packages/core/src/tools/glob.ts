@@ -31,6 +31,11 @@ import { buildPatternArgsPattern } from '../policy/utils.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import { GLOB_DEFINITION } from './definitions/coreTools.js';
+import { parseFindPattern } from '../utils/findPattern.js';
+import { formatGroupedPaths } from '../utils/groupedPaths.js';
+
+/** Hard default cap on files returned by one `glob` call. */
+export const DEFAULT_GLOB_LIMIT = 200;
 import { resolveToolDeclaration } from './definitions/resolver.js';
 
 // Subset of 'Path' interface provided by 'glob' that we can implement for testing
@@ -97,6 +102,17 @@ export interface GlobToolParams {
    * Whether to respect .geminiignore patterns (optional, defaults to true)
    */
   respect_gemini_ignore?: boolean;
+
+  /**
+   * Maximum number of files to return (optional, defaults to 200). Results are
+   * paged by file, so a narrow pattern or a larger limit walks the rest.
+   */
+  limit?: number;
+
+  /**
+   * Number of files to skip before this page (optional, defaults to 0).
+   */
+  skip?: number;
 }
 
 class GlobToolInvocation extends BaseToolInvocation<
@@ -184,14 +200,20 @@ class GlobToolInvocation extends BaseToolInvocation<
       // Collect entries from all search directories
       const allEntries: GlobPath[] = [];
       for (const searchDir of searchDirectories) {
-        let pattern = this.params.pattern;
-        const fullPath = path.join(searchDir, pattern);
+        // omp's find-pattern rules: a pattern with no glob characters, or
+        // with the glob in its first segment, still searches recursively.
+        // Without this, `*.ts` silently only matches the top level.
+        const parsed = parseFindPattern(this.params.pattern, searchDir);
+        const base =
+          parsed.base === '' ? searchDir : path.resolve(searchDir, parsed.base);
+        let pattern = parsed.pattern;
+        const fullPath = path.join(base, pattern);
         if (fs.existsSync(fullPath)) {
           pattern = escape(pattern);
         }
 
         const entries = (await glob(pattern, {
-          cwd: searchDir,
+          cwd: base,
           withFileTypes: true,
           nodir: true,
           stat: true,
@@ -269,11 +291,27 @@ class GlobToolInvocation extends BaseToolInvocation<
         oneDayInMs,
       );
 
-      const sortedAbsolutePaths = sortedEntries.map((entry) =>
-        entry.fullpath(),
-      );
-      const fileListDescription = sortedAbsolutePaths.join('\n');
-      const fileCount = sortedAbsolutePaths.length;
+      // Page by file: `skip` walks past an already-shown page and `limit`
+      // caps it, so a huge match set is never silently truncated.
+      const limit = Math.max(1, this.params.limit ?? DEFAULT_GLOB_LIMIT);
+      const skip = Math.max(0, this.params.skip ?? 0);
+      const sortedRelativePaths = sortedEntries.map((entry) => {
+        let realFullPath = entry.fullpath();
+        try {
+          realFullPath = resolveToRealPath(realFullPath);
+        } catch {
+          // Ignore and use raw fullpath
+        }
+        return path.relative(realTargetDir, realFullPath);
+      });
+      const totalFileCount = sortedRelativePaths.length;
+      const pagePaths = sortedRelativePaths.slice(skip, skip + limit);
+      const hasMore = pagePaths.length < totalFileCount - skip;
+
+      // A prefix-folded tree costs far fewer tokens than a flat list of deep
+      // paths and reads more like the directory the model asked about.
+      const fileListDescription = formatGroupedPaths(pagePaths);
+      const fileCount = pagePaths.length;
 
       let resultMessage = `Found ${fileCount} file(s) matching "${this.params.pattern}"`;
       if (searchDirectories.length === 1) {
@@ -281,10 +319,20 @@ class GlobToolInvocation extends BaseToolInvocation<
       } else {
         resultMessage += ` across ${searchDirectories.length} workspace directories`;
       }
+      if (skip > 0) {
+        resultMessage += ` (showing ${fileCount} of ${totalFileCount} after skipping the first ${skip})`;
+      } else if (totalFileCount > fileCount) {
+        resultMessage += ` (showing ${fileCount} of ${totalFileCount})`;
+      }
       if (ignoredCount > 0) {
         resultMessage += ` (${ignoredCount} additional files were ignored)`;
       }
       resultMessage += `, sorted by modification time (newest first):\n${fileListDescription}`;
+      if (hasMore) {
+        resultMessage += `\n\nMore files match. Call glob again with skip=${
+          skip + fileCount
+        } to continue, or narrow the pattern.`;
+      }
 
       return {
         llmContent: resultMessage,
@@ -368,6 +416,20 @@ export class GlobTool extends BaseDeclarativeTool<GlobToolParams, ToolResult> {
       params.pattern.trim() === ''
     ) {
       return "The 'pattern' parameter cannot be empty.";
+    }
+
+    if (
+      params.limit !== undefined &&
+      (!Number.isInteger(params.limit) || params.limit < 1)
+    ) {
+      return 'limit must be an integer greater than or equal to 1.';
+    }
+
+    if (
+      params.skip !== undefined &&
+      (!Number.isInteger(params.skip) || params.skip < 0)
+    ) {
+      return 'skip must be an integer greater than or equal to 0.';
     }
 
     return null;

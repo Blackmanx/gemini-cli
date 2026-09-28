@@ -33,6 +33,7 @@ import {
   // Tool-specific parameter names
   READ_FILE_PARAM_START_LINE,
   READ_FILE_PARAM_END_LINE,
+  READ_FILE_PARAM_RAW,
   WRITE_FILE_PARAM_CONTENT,
   GREP_PARAM_INCLUDE_PATTERN,
   GREP_PARAM_EXCLUDE_PATTERN,
@@ -43,6 +44,7 @@ import {
   GREP_PARAM_CONTEXT,
   GREP_PARAM_AFTER,
   GREP_PARAM_BEFORE,
+  GREP_PARAM_SKIP,
   GREP_PARAM_NO_IGNORE,
   EDIT_PARAM_INSTRUCTION,
   EDIT_PARAM_OLD_STRING,
@@ -119,6 +121,7 @@ export {
   // Tool-specific parameter names
   READ_FILE_PARAM_START_LINE,
   READ_FILE_PARAM_END_LINE,
+  READ_FILE_PARAM_RAW,
   WRITE_FILE_PARAM_CONTENT,
   GREP_PARAM_INCLUDE_PATTERN,
   GREP_PARAM_EXCLUDE_PATTERN,
@@ -129,6 +132,7 @@ export {
   GREP_PARAM_CONTEXT,
   GREP_PARAM_AFTER,
   GREP_PARAM_BEFORE,
+  GREP_PARAM_SKIP,
   GREP_PARAM_NO_IGNORE,
   EDIT_PARAM_INSTRUCTION,
   EDIT_PARAM_OLD_STRING,
@@ -189,6 +193,10 @@ export const TRACKER_ADD_DEPENDENCY_TOOL_NAME = 'tracker_add_dependency';
 export const TRACKER_VISUALIZE_TOOL_NAME = 'tracker_visualize';
 
 export const AGENT_TOOL_NAME = 'invoke_agent';
+
+export const LSP_TOOL_NAME = 'lsp';
+export const LSP_EDIT_TOOL_NAME = 'lsp_edit';
+export const LSP_DISPLAY_NAME = 'LanguageServer';
 
 // Tool Display Names
 export const WRITE_FILE_DISPLAY_NAME = 'WriteFile';
@@ -273,6 +281,8 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   AGENT_TOOL_NAME,
   READ_MCP_RESOURCE_TOOL_NAME,
   LIST_MCP_RESOURCES_TOOL_NAME,
+  LSP_TOOL_NAME,
+  LSP_EDIT_TOOL_NAME,
 ] as const;
 
 /**
@@ -285,6 +295,9 @@ export const PLAN_MODE_TOOLS = [
   GREP_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   LS_TOOL_NAME,
+  // Reading type information never mutates the workspace, so the agent can
+  // check its assumptions before it proposes a plan.
+  LSP_TOOL_NAME,
   WEB_SEARCH_TOOL_NAME,
   ASK_USER_TOOL_NAME,
   ACTIVATE_SKILL_TOOL_NAME,

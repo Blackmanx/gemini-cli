@@ -162,6 +162,12 @@ export interface RipGrepToolParams {
    * Optional: Maximum number of total matches to return. Use this to limit the overall size of the response. Defaults to 100 if omitted.
    */
   total_max_matches?: number;
+
+  /**
+   * Number of files with matches to skip before this page. Results are paged
+   * by file, so a large result set is walked one page at a time.
+   */
+  skip?: number;
 }
 
 class GrepToolInvocation extends BaseToolInvocation<
@@ -285,7 +291,10 @@ class GrepToolInvocation extends BaseToolInvocation<
           after: this.params.after,
           before: this.params.before,
           no_ignore: this.params.no_ignore,
-          maxMatches: totalMaxMatches,
+          maxMatches:
+            (this.params.skip ?? 0) > 0
+              ? totalMaxMatches * ((this.params.skip ?? 0) + 1)
+              : totalMaxMatches,
           max_matches_per_file: this.params.max_matches_per_file,
           signal: timeoutController.signal,
         });
@@ -687,6 +696,13 @@ export class RipGrepTool extends BaseDeclarativeTool<
       params.total_max_matches < 1
     ) {
       return 'total_max_matches must be at least 1.';
+    }
+
+    if (
+      params.skip !== undefined &&
+      (!Number.isInteger(params.skip) || params.skip < 0)
+    ) {
+      return 'skip must be an integer greater than or equal to 0.';
     }
 
     // Only validate path if one is provided

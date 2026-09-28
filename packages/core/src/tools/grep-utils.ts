@@ -134,6 +134,13 @@ export async function enrichWithAutoContext(
 }
 
 /**
+ * Number of matching FILES rendered per `skip` page. Matches omp's grep page
+ * size, so a large result set is walked one page at a time instead of being
+ * silently truncated.
+ */
+export const GREP_SKIP_PAGE_FILES = 20;
+
+/**
  * Formats the grep results for the LLM, including optional context.
  */
 export async function formatGrepResults(
@@ -146,6 +153,8 @@ export async function formatGrepResults(
     context?: number;
     before?: number;
     after?: number;
+    // Number of matching FILES already shown by the caller.
+    skip?: number;
   },
   searchLocationDescription: string,
   totalMaxMatches: number,
@@ -163,11 +172,41 @@ export async function formatGrepResults(
     };
   }
 
-  const matchesByFile = groupMatchesByFile(allMatches);
+  const grouped = groupMatchesByFile(allMatches);
+  // A file can appear with context lines only when every one of its real
+  // matches was dropped by exclude_pattern. Such files have nothing to show.
+  for (const filePath of Object.keys(grouped)) {
+    if (!grouped[filePath].some((m) => !m.isContext)) {
+      delete grouped[filePath];
+    }
+  }
+  // Page by FILE so a large result set can be walked with `skip` instead of
+  // being cut off. Files are ordered deterministically so paging is stable.
+  const allFilePaths = Object.keys(grouped).sort();
+  const skip = Math.max(0, params.skip ?? 0);
+  const pageFilePaths = skip > 0 ? allFilePaths.slice(skip) : allFilePaths;
+  const shownFilePaths =
+    skip > 0 ? pageFilePaths.slice(0, GREP_SKIP_PAGE_FILES) : pageFilePaths;
+  const hasMoreFiles = shownFilePaths.length < pageFilePaths.length;
+  const matchesByFile: Record<string, GrepMatch[]> = {};
+  for (const filePath of shownFilePaths) {
+    matchesByFile[filePath] = grouped[filePath];
+  }
 
-  const matchesOnly = allMatches.filter((m) => !m.isContext);
+  const pageMatches = shownFilePaths.flatMap((p) => grouped[p]);
+  const matchesOnly = pageMatches.filter((m) => !m.isContext);
   const matchCount = matchesOnly.length; // Count actual matches, not context lines
   const matchTerm = matchCount === 1 ? 'match' : 'matches';
+  const totalFileCount = allFilePaths.length;
+  const pageNote =
+    skip > 0
+      ? ` (showing ${shownFilePaths.length} of ${totalFileCount} files with matches, after skipping the first ${skip})`
+      : '';
+  const nextPageHint = hasMoreFiles
+    ? `\nMore files with matches remain: call grep again with skip=${
+        skip + shownFilePaths.length
+      } to continue.`
+    : '';
 
   // If the result count is low and Gemini didn't request before/after lines of context
   // add a small amount anyways to enable the agent to avoid one or more extra turns
@@ -177,17 +216,17 @@ export async function formatGrepResults(
   const wasTruncated = matchCount >= totalMaxMatches;
 
   if (names_only) {
-    const filePaths = Object.keys(matchesByFile).sort();
+    const filePaths = shownFilePaths;
     let llmContent = `Found ${filePaths.length} files with matches for pattern "${pattern}" ${searchLocationDescription}${
       include_pattern ? ` (filter: "${include_pattern}")` : ''
     }${
       wasTruncated
         ? ` (results limited to ${totalMaxMatches} matches for performance)`
         : ''
-    }:\n`;
+    }${pageNote}:\n`;
     llmContent += filePaths.join('\n');
     return {
-      llmContent: llmContent.trim(),
+      llmContent: (llmContent.trim() + nextPageHint).trim(),
       returnDisplay: {
         summary: `Found ${filePaths.length} files${wasTruncated ? ' (limited)' : ''}`,
         matches: [],
@@ -199,6 +238,14 @@ export async function formatGrepResults(
 
   if (wasTruncated) {
     llmContent += ` (results limited to ${totalMaxMatches} matches for performance)`;
+  }
+  if (skip > 0) {
+    llmContent += pageNote;
+  }
+  if (hasMoreFiles) {
+    llmContent += ` (more files remain; call grep again with skip=${
+      skip + shownFilePaths.length
+    } to continue)`;
   }
 
   llmContent += `:\n---\n`;
@@ -222,10 +269,10 @@ export async function formatGrepResults(
   }
 
   return {
-    llmContent: llmContent.trim(),
+    llmContent: (llmContent.trim() + nextPageHint).trim(),
     returnDisplay: {
       summary: `Found ${matchCount} ${matchTerm}${wasTruncated ? ' (limited)' : ''}`,
-      matches: allMatches
+      matches: pageMatches
         .filter((m) => !m.isContext)
         .map((m) => ({
           filePath: m.filePath,

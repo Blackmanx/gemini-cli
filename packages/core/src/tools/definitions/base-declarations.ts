@@ -28,9 +28,22 @@ export const PARAM_DESCRIPTION = 'description';
 
 // -- glob --
 export const GLOB_TOOL_NAME = 'glob';
+export const GLOB_PARAM_LIMIT = 'limit';
+export const GLOB_PARAM_SKIP = 'skip';
 
 // -- grep_search --
 export const GREP_TOOL_NAME = 'grep_search';
+export const LSP_TOOL_NAME = 'lsp';
+export const LSP_DISPLAY_NAME = 'LanguageServer';
+export const LSP_PARAM_ACTION = 'action';
+export const LSP_PARAM_FILE = 'file';
+export const LSP_PARAM_LINE = 'line';
+export const LSP_PARAM_SYMBOL = 'symbol';
+export const LSP_PARAM_QUERY = 'query';
+export const LSP_PARAM_NEW_NAME = 'new_name';
+export const LSP_PARAM_APPLY = 'apply';
+export const LSP_PARAM_TIMEOUT = 'timeout';
+export const LSP_PARAM_PAYLOAD = 'payload';
 export const GREP_PARAM_INCLUDE_PATTERN = 'include_pattern';
 export const GREP_PARAM_EXCLUDE_PATTERN = 'exclude_pattern';
 export const GREP_PARAM_NAMES_ONLY = 'names_only';
@@ -41,6 +54,7 @@ export const GREP_PARAM_FIXED_STRINGS = 'fixed_strings';
 export const GREP_PARAM_CONTEXT = 'context';
 export const GREP_PARAM_AFTER = 'after';
 export const GREP_PARAM_BEFORE = 'before';
+export const GREP_PARAM_SKIP = 'skip';
 export const GREP_PARAM_NO_IGNORE = 'no_ignore';
 
 // -- list_directory --
@@ -51,6 +65,7 @@ export const LS_PARAM_IGNORE = 'ignore';
 export const READ_FILE_TOOL_NAME = 'read_file';
 export const READ_FILE_PARAM_START_LINE = 'start_line';
 export const READ_FILE_PARAM_END_LINE = 'end_line';
+export const READ_FILE_PARAM_RAW = 'raw';
 
 // -- run_shell_command --
 export const SHELL_TOOL_NAME = 'run_shell_command';

@@ -31,6 +31,7 @@ export interface CoreToolSet {
   read_file: FunctionDeclaration;
   write_file: FunctionDeclaration;
   grep_search: FunctionDeclaration;
+  lsp: FunctionDeclaration;
   grep_search_ripgrep: FunctionDeclaration;
   glob: FunctionDeclaration;
   list_directory: FunctionDeclaration;

@@ -361,6 +361,15 @@ export class Storage {
     return path.join(this.getGeminiDir(), 'agents');
   }
 
+  /**
+   * Directory backing the `omp://` documentation scheme: the harness's own
+   * docs, copied next to the project temp so the agent can read a tool
+   * reference without a network round trip.
+   */
+  getProjectTempDocsDir(): string {
+    return path.join(this.getProjectTempDir(), 'docs');
+  }
+
   getProjectTempCheckpointsDir(): string {
     return path.join(this.getProjectTempDir(), 'checkpoints');
   }

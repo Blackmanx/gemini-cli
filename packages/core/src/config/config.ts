@@ -50,6 +50,7 @@ import { AskUserTool } from '../tools/ask-user.js';
 import { UpdateTopicTool } from '../tools/topicTool.js';
 import { TopicState } from './topicState.js';
 import { AgentTool } from '../agents/agent-tool.js';
+import { LspEditTool, LspTool } from '../tools/lsp.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
 import {
@@ -149,6 +150,10 @@ import {
   hasScopedMemoryInboxAccess,
 } from './scoped-config.js';
 import { Storage } from './storage.js';
+import {
+  installInternalUrlRouter,
+  packagedDocsDir,
+} from '../internal-urls/schemes.js';
 import type { ShellExecutionConfig } from '../services/shellExecutionService.js';
 import { FileExclusions } from '../utils/ignorePatterns.js';
 import { MessageBus } from '../confirmation-bus/message-bus.js';
@@ -1454,6 +1459,18 @@ export class Config implements McpContext, AgentLoopContext {
   private async _initialize(): Promise<void> {
     await this.storage.initialize();
     ragLogger.initialize(this.storage.getProjectTempLogsDir());
+
+    // Internal `scheme://` URLs (local://, cfg://, omp://) are served by a
+    // process-wide router. It is installed here because the scheme host needs
+    // storage, which only exists after `storage.initialize()`.
+    installInternalUrlRouter(() => ({
+      scratchDir: this.storage.getProjectTempDir(),
+      docsDir: packagedDocsDir(),
+      settingsFiles: () => [
+        Storage.getGlobalSettingsPath(),
+        this.storage.getWorkspaceSettingsPath(),
+      ],
+    }));
 
     // Add pending directories to workspace context
     for (const dir of this.pendingIncludeDirectories) {
@@ -4121,6 +4138,16 @@ export class Config implements McpContext, AgentLoopContext {
     // Register Subagent Tool
     maybeRegister(AgentTool, () =>
       registry.registerTool(new AgentTool(this, this.messageBus)),
+    );
+
+    // Language-server tools. The read half is a search-kind tool so it can run
+    // in parallel and in plan mode; the write half is edit-kind so it is
+    // confirmed like any other file mutation.
+    maybeRegister(LspTool, () =>
+      registry.registerTool(new LspTool(this, this.messageBus)),
+    );
+    maybeRegister(LspEditTool, () =>
+      registry.registerTool(new LspEditTool(this, this.messageBus)),
     );
 
     await registry.discoverAllTools();
