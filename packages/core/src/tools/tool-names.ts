@@ -196,6 +196,8 @@ export const AGENT_TOOL_NAME = 'invoke_agent';
 
 export const WAIT_TOOL_NAME = 'wait';
 export const HASHLINE_EDIT_TOOL_NAME = 'hashline_edit';
+export const CHECKPOINT_TOOL_NAME = 'checkpoint';
+export const REWIND_CONTEXT_TOOL_NAME = 'rewind_context';
 export const RETAIN_TOOL_NAME = 'retain';
 export const RECALL_TOOL_NAME = 'recall';
 export const REFLECT_TOOL_NAME = 'reflect';
@@ -305,6 +307,8 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   LSP_EDIT_TOOL_NAME,
   WAIT_TOOL_NAME,
   HASHLINE_EDIT_TOOL_NAME,
+  CHECKPOINT_TOOL_NAME,
+  REWIND_CONTEXT_TOOL_NAME,
   AST_GREP_TOOL_NAME,
   GITHUB_TOOL_NAME,
   GENERATE_IMAGE_TOOL_NAME,

@@ -54,6 +54,7 @@ import { LspEditTool, LspTool } from '../tools/lsp.js';
 import { setWaitPeerMessageSource, WaitTool } from '../tools/wait.js';
 import { AstGrepTool } from '../tools/astGrep.js';
 import { HashlineEditTool } from '../tools/hashlineEdit.js';
+import { CheckpointTool, RewindTool } from '../tools/checkpoint.js';
 import { LearnTool } from '../tools/learn.js';
 import { ManageSkillTool } from '../skills/managedSkillsTools.js';
 import { getManagedSkillsDir } from '../skills/managedSkills.js';
@@ -4453,6 +4454,13 @@ export class Config implements McpContext, AgentLoopContext {
     // be able to choose per call.
     maybeRegister(HashlineEditTool, () =>
       registry.registerTool(new HashlineEditTool(this, this.messageBus)),
+    );
+
+    maybeRegister(CheckpointTool, () =>
+      registry.registerTool(new CheckpointTool(this.messageBus)),
+    );
+    maybeRegister(RewindTool, () =>
+      registry.registerTool(new RewindTool(this.messageBus)),
     );
 
     // The GitHub tool reaches the network and can publish, so it is opt-in
