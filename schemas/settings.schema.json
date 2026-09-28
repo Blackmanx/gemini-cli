@@ -3186,6 +3186,51 @@
       "default": true,
       "type": "boolean"
     },
+    "magicKeywords": {
+      "title": "Magic Keywords",
+      "description": "Standalone words in a prompt that add a hidden instruction for that turn.",
+      "markdownDescription": "Standalone words in a prompt that add a hidden instruction for that turn.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `{}`",
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "title": "Enable Magic Keywords",
+          "description": "Master switch for every magic keyword.",
+          "markdownDescription": "Master switch for every magic keyword.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
+          "type": "boolean"
+        },
+        "ultrathink": {
+          "title": "Ultrathink",
+          "description": "A standalone \"ultrathink\" asks for careful multi-step reasoning on that turn.",
+          "markdownDescription": "A standalone \"ultrathink\" asks for careful multi-step reasoning on that turn.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
+          "type": "boolean"
+        },
+        "orchestrate": {
+          "title": "Orchestrate",
+          "description": "A standalone \"orchestrate\" asks for parallel delegation and verification.",
+          "markdownDescription": "A standalone \"orchestrate\" asks for parallel delegation and verification.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
+          "type": "boolean"
+        },
+        "workflowz": {
+          "title": "Workflowz",
+          "description": "A standalone \"workflowz\" asks for a deterministic multi-subagent workflow.",
+          "markdownDescription": "A standalone \"workflowz\" asks for a deterministic multi-subagent workflow.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
+          "type": "boolean"
+        },
+        "jevify": {
+          "title": "Jevify",
+          "description": "A standalone \"jevify\" asks for bulk classification against a frozen rule.",
+          "markdownDescription": "A standalone \"jevify\" asks for bulk classification against a frozen rule.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
     "useGenerateImage": {
       "title": "Use Generate Image",
       "description": "Enable the generate_image tool. Calls a paid image model, so it is off until asked for.",

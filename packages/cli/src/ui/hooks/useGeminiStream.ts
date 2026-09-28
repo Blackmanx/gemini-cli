@@ -52,6 +52,7 @@ import {
   RECITATION_BLOCKED_MESSAGE,
   OTHER_BLOCKED_MESSAGE,
   TRUE_EMPTY_RESPONSE_MESSAGE,
+  applyMagicKeywordNotices,
 } from '@google/gemini-cli-core';
 import type {
   Config,
@@ -221,6 +222,26 @@ function calculateStreamingState(
  * Manages the Gemini stream, including user input, command processing,
  * API interaction, and tool call lifecycle.
  */
+/**
+ * The hidden notices a prompt's magic keywords add, appended to the request.
+ *
+ * The visible message is rendered from the editor buffer, so a notice riding
+ * along here never reaches the user's view.
+ */
+function withMagicKeywordNotices(
+  request: PartListUnion,
+  config: Config,
+): PartListUnion {
+  return applyMagicKeywordNotices(
+    request,
+    config
+      .getToolRegistry()
+      .getAllTools()
+      .map((tool) => tool.name),
+    config.getMagicKeywordsSettings(),
+  );
+}
+
 export const useGeminiStream = (
   geminiClient: GeminiClient,
   history: HistoryItem[],
@@ -1771,7 +1792,7 @@ export const useGeminiStream = (
 
             try {
               const stream = geminiClient.sendMessageStream(
-                queryToSend,
+                withMagicKeywordNotices(queryToSend, config),
                 abortSignal,
                 prompt_id!,
                 undefined,

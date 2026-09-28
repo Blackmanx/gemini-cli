@@ -319,3 +319,16 @@ export * from './voice/whisperTranscriptionProvider.js';
 export * from './voice/transcriptionFactory.js';
 export * from './voice/whisperModelManager.js';
 export { isBinaryAvailable } from './utils/binaryCheck.js';
+
+// Magic keywords: standalone prose words that add a hidden notice for one turn.
+export {
+  applyMagicKeywordNotices,
+  MAGIC_KEYWORDS,
+  isMagicKeywordEnabled,
+  magicKeywordIds,
+  magicKeywordNotices,
+  type MagicKeyword,
+  type MagicKeywordContext,
+  type MagicKeywordSettings,
+} from './modes/magicKeywords.js';
+export { partListUnionToString } from './core/geminiRequest.js';

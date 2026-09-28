@@ -36,6 +36,7 @@ import {
   RECITATION_BLOCKED_MESSAGE,
   OTHER_BLOCKED_MESSAGE,
   TRUE_EMPTY_RESPONSE_MESSAGE,
+  applyMagicKeywordNotices,
 } from '@google/gemini-cli-core';
 
 import type { Content, Part } from '@google/genai';
@@ -324,7 +325,14 @@ export async function runNonInteractive(
         const toolCallRequests: ToolCallRequestInfo[] = [];
 
         const responseStream = geminiClient.sendMessageStream(
-          currentMessages[0]?.parts || [],
+          applyMagicKeywordNotices(
+            currentMessages[0]?.parts || [],
+            config
+              .getToolRegistry()
+              .getAllTools()
+              .map((tool) => tool.name),
+            config.getMagicKeywordsSettings(),
+          ),
           abortController.signal,
           prompt_id,
           undefined,

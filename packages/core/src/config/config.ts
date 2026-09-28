@@ -68,6 +68,7 @@ import {
 import { LocalMemoryBackend } from '../memory/store.js';
 import { DeviceRegistry } from '../internal-urls/devices.js';
 import type { MemoryBackend } from '../memory/types.js';
+import type { MagicKeywordSettings } from '../modes/magicKeywords.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
 import {
@@ -709,6 +710,7 @@ export interface ConfigParameters {
   useGenerateImage?: boolean;
   useTts?: boolean;
   useMemory?: boolean;
+  magicKeywords?: MagicKeywordSettings;
   env?: Record<string, string>;
   workspacePoliciesDir?: string;
   policyEngineConfig?: PolicyEngineConfig;
@@ -826,6 +828,7 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly useMemory: boolean;
   private memoryBackend: MemoryBackend | undefined;
   private deviceRegistry: DeviceRegistry | undefined;
+  private magicKeywords: MagicKeywordSettings | undefined;
   private readonly mainAgentTools: string[] | undefined;
   /** @deprecated Use Policy Engine instead */
   private readonly allowedTools: string[] | undefined;
@@ -1339,6 +1342,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.useGenerateImage = params.useGenerateImage ?? false;
     this.useTts = params.useTts ?? false;
     this.useMemory = params.useMemory ?? false;
+    this.magicKeywords = params.magicKeywords;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
     this.enableHooks = params.enableHooks ?? true;
@@ -3940,6 +3944,14 @@ export class Config implements McpContext, AgentLoopContext {
   /** Whether the paid speech-synthesis tool is available this session. */
   getUseTts(): boolean {
     return this.useTts;
+  }
+
+  /**
+   * Magic-keyword switches, or `undefined` when the user has set none — in
+   * which case every keyword is on.
+   */
+  getMagicKeywordsSettings(): MagicKeywordSettings | undefined {
+    return this.magicKeywords;
   }
 
   /** Whether the local memory bank is open for this session. */

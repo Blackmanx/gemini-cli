@@ -1824,6 +1824,68 @@ const SETTINGS_SCHEMA = {
     showInDialog: false,
   },
 
+  magicKeywords: {
+    type: 'object',
+    label: 'Magic Keywords',
+    category: 'Interaction',
+    requiresRestart: false,
+    default: {},
+    description:
+      'Standalone words in a prompt that add a hidden instruction for that turn.',
+    showInDialog: true,
+    properties: {
+      enabled: {
+        type: 'boolean',
+        label: 'Enable Magic Keywords',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: true,
+        description: 'Master switch for every magic keyword.',
+        showInDialog: true,
+      },
+      ultrathink: {
+        type: 'boolean',
+        label: 'Ultrathink',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: true,
+        description:
+          'A standalone "ultrathink" asks for careful multi-step reasoning on that turn.',
+        showInDialog: true,
+      },
+      orchestrate: {
+        type: 'boolean',
+        label: 'Orchestrate',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: true,
+        description:
+          'A standalone "orchestrate" asks for parallel delegation and verification.',
+        showInDialog: true,
+      },
+      workflowz: {
+        type: 'boolean',
+        label: 'Workflowz',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: true,
+        description:
+          'A standalone "workflowz" asks for a deterministic multi-subagent workflow.',
+        showInDialog: true,
+      },
+      jevify: {
+        type: 'boolean',
+        label: 'Jevify',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: true,
+        description:
+          'A standalone "jevify" asks for bulk classification against a frozen rule.',
+        showInDialog: true,
+      },
+    },
+  },
+
   useGenerateImage: {
     type: 'boolean',
     label: 'Use Generate Image',

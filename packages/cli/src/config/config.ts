@@ -46,6 +46,7 @@ import {
   type HookDefinition,
   type HookEventName,
   type OutputFormat,
+  type MagicKeywordSettings,
   detectIdeFromEnv,
 } from '@google/gemini-cli-core';
 import {
@@ -105,6 +106,7 @@ export interface CliArgs {
   useGenerateImage?: boolean;
   useTts?: boolean;
   useMemory?: boolean;
+  magicKeywords?: MagicKeywordSettings;
   outputFormat: string | undefined;
   fakeResponses: string | undefined;
   fakeResponsesNonStrict?: string | undefined;
@@ -1094,6 +1096,7 @@ export async function loadCliConfig(
     useGenerateImage: settings.useGenerateImage,
     useTts: settings.useTts,
     useMemory: settings.useMemory,
+    magicKeywords: settings.magicKeywords,
     output: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       format: (argv.outputFormat ?? settings.output?.format) as OutputFormat,
