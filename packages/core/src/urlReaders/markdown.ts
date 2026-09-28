@@ -764,3 +764,23 @@ export function isLowQualityOutput(text: string): boolean {
   }
   return false;
 }
+
+/**
+ * Whether a converted page is unusable — as opposed to merely short.
+ *
+ * `isLowQualityOutput` is a banner detector: it treats "under N characters"
+ * as suspicious, which is the right call when deciding whether a page is worth
+ * trusting. It is the WRONG call when choosing between two renderings of the
+ * same page: a short, clean page converted to markdown is strictly better than
+ * the same page flattened to text with its links stripped, so a length rule
+ * must not send it down that path.
+ *
+ * Only a genuinely broken conversion should fall back.
+ */
+export function isUnusableConversion(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return true;
+  const lower = trimmed.toLowerCase();
+  // A JS gate means the fetch succeeded but the content never arrived.
+  return BANNER_PHRASES.some((phrase) => lower.includes(phrase));
+}

@@ -23,6 +23,11 @@ import { fetchWithTimeout, isPrivateIp } from '../utils/fetch.js';
 import { truncateString, wrapUntrusted } from '../utils/textUtils.js';
 import { convert } from 'html-to-text';
 import {
+  findHandler,
+  htmlToMarkdown,
+  isUnusableConversion,
+} from '../urlReaders/index.js';
+import {
   logWebFetchFallbackAttempt,
   WebFetchFallbackAttemptEvent,
   logNetworkRetryAttempt,
@@ -298,6 +303,20 @@ class WebFetchToolInvocation extends BaseToolInvocation<
       );
     }
 
+    // A site we know how to read properly (a security database, a package
+    // registry, arXiv) beats a generic scrape of the same URL: it returns
+    // structure and links instead of a wall of chrome.
+    const handler = findHandler(new URL(url));
+    if (handler !== undefined) {
+      const page = await handler.handle(new URL(url), signal);
+      if (page !== null) {
+        const notes = page.notes?.length
+          ? `\n\nNotes: ${page.notes.join('; ')}`
+          : '';
+        return `${page.content}${notes}`;
+      }
+    }
+
     const response = await retryWithBackoff(
       async () => {
         const res = await fetchWithTimeout(url, URL_FETCH_TIMEOUT_MS, {
@@ -331,15 +350,20 @@ class WebFetchToolInvocation extends BaseToolInvocation<
     const contentType = response.headers.get('content-type') || '';
     let textContent: string;
 
-    // Only use html-to-text if content type is HTML, or if no content type is provided (assume HTML)
     if (contentType.toLowerCase().includes('text/html') || contentType === '') {
-      textContent = convert(rawContent, {
-        wordwrap: false,
-        selectors: [
-          { selector: 'a', options: { ignoreHref: true } },
-          { selector: 'img', format: 'skip' },
-        ],
-      });
+      // Markdown, not plain text: an agent that reads a stripped page cannot
+      // follow a link or see what a heading was attached to. `html-to-text`
+      // is kept as the fallback if our own conversion looks unusable.
+      const markdown = htmlToMarkdown(rawContent, url);
+      textContent = isUnusableConversion(markdown)
+        ? convert(rawContent, {
+            wordwrap: false,
+            selectors: [
+              { selector: 'a', options: { ignoreHref: true } },
+              { selector: 'img', format: 'skip' },
+            ],
+          })
+        : markdown;
     } else {
       // For other content types (text/plain, application/json, etc.), use raw text
       textContent = rawContent;
