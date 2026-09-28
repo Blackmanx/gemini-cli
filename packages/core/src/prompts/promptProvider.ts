@@ -272,6 +272,14 @@ export class PromptProvider {
     // Sanitize erratic newlines from composition
     let sanitizedPrompt = finalPrompt.replace(/\n{3,}/g, '\n\n');
 
+    // Conventions this repo already carries for other agents. Appended as a
+    // distinct block, after the user's own memory, so a rule the agent did
+    // not write stays attributable rather than blending into the prompt.
+    const importedRules = context.config.getImportedRulesBlock();
+    if (importedRules) {
+      sanitizedPrompt += `\n\n${importedRules}`;
+    }
+
     // Context Reinjection (Active Topic)
     if (isTopicUpdateNarrationEnabled) {
       const activeTopic = context.config.topicState.getTopic();

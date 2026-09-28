@@ -18,13 +18,13 @@
  * importer itself, whose `load` signature carries no note channel.)
  */
 
-import { debugLogger } from '../utils/debugLogger.js';
-import {
+import { unparsedFiles ,
   loadClaudeRules,
   loadClineRules,
   loadCursorRules,
   loadGitHubRules,
 } from './rules.js';
+import { debugLogger } from '../utils/debugLogger.js';
 import type {
   DiscoveredRule,
   DiscoveryProvider,
@@ -71,6 +71,12 @@ export async function discoverRules(
   const notes: string[] = [];
   const rules: DiscoveredRule[] = [];
   const claimedNames = new Set<string>();
+  // A rule file the importer could not parse is a note, not a silence: the
+  // user wrote it and will otherwise never learn it is being ignored.
+  for (const file of unparsedFiles) {
+    notes.push(`skipped ${file}: its frontmatter block is unusable`);
+  }
+  unparsedFiles.length = 0;
 
   for (const [index, provider] of providers.entries()) {
     const outcome = settled[index];

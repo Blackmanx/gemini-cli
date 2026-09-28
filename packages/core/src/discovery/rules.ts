@@ -103,6 +103,14 @@ function parseBooleanField(value: unknown): boolean | undefined {
 }
 
 /**
+ * Files skipped because their frontmatter block was unusable.
+ *
+ * Surfaced so the prompt can tell the user their file was ignored, rather
+ * than leaving them to wonder why a convention they wrote is not applying.
+ */
+export const unparsedFiles: string[] = [];
+
+/**
  * Split a rule file into its frontmatter mapping and its body. A file with no
  * frontmatter block is all body. A block that is not a YAML mapping throws
  * {@link MalformedFrontmatterError} so the caller can skip just this file.
@@ -143,6 +151,17 @@ async function readRuleFile(
 ): Promise<DiscoveredRule | undefined> {
   const content = await readTextFileIfPresent(spec.filePath);
   if (content === undefined) {
+    return undefined;
+  }
+
+  // A file that opens a frontmatter block and never closes it is a broken
+  // rule, not a rule whose body happens to start with `---`. Loading it
+  // silently would hide a typo behind a rule that quietly never applies.
+  if (/^---\r?\n/.test(content) && !/\r?\n---(\r?\n|$)/.test(content)) {
+    debugLogger.warn(
+      `[discovery] ${spec.filePath}: frontmatter block is never closed; the rule was skipped`,
+    );
+    unparsedFiles.push(spec.filePath);
     return undefined;
   }
 

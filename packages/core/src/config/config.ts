@@ -69,6 +69,8 @@ import { LocalMemoryBackend } from '../memory/store.js';
 import { DeviceRegistry } from '../internal-urls/devices.js';
 import type { MemoryBackend } from '../memory/types.js';
 import type { MagicKeywordSettings } from '../modes/magicKeywords.js';
+import { discoverRules } from '../discovery/registry.js';
+import type { DiscoveryResult } from '../discovery/types.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
 import {
@@ -829,6 +831,7 @@ export class Config implements McpContext, AgentLoopContext {
   private memoryBackend: MemoryBackend | undefined;
   private deviceRegistry: DeviceRegistry | undefined;
   private magicKeywords: MagicKeywordSettings | undefined;
+  private importedRules: DiscoveryResult | undefined;
   private readonly mainAgentTools: string[] | undefined;
   /** @deprecated Use Policy Engine instead */
   private readonly allowedTools: string[] | undefined;
@@ -1512,6 +1515,11 @@ export class Config implements McpContext, AgentLoopContext {
       hasLivePeers: () =>
         listAgents().filter((agent) => agent.status === 'running').length > 1,
     });
+
+    // Rules this repo already carries for other agents (.cursor/rules,
+    // .clinerules, .github/instructions). Loaded here because prompt assembly
+    // is synchronous, so discovery cannot happen inline later.
+    await this.loadImportedRules();
 
     // Internal `scheme://` URLs (local://, cfg://, omp://) are served by a
     // process-wide router. It is installed here because the scheme host needs
@@ -2666,6 +2674,84 @@ export class Config implements McpContext, AgentLoopContext {
    * User project memory is in Tier 1 so mid-session saves are reflected via
    * system instruction updates.
    */
+  /**
+   * Rules imported from other agents' configuration.
+   *
+   * A repo that already carries `.cursor/rules`, `.clinerules` or
+   * `.github/instructions` says things in those files; reading them is the
+   * difference between honouring the project's conventions and ignoring
+   * them. They are additive to GEMINI.md, which is untouched.
+   */
+  getImportedRules(): DiscoveryResult {
+    return this.importedRules ?? { rules: [], notes: [] };
+  }
+
+  /**
+   * Load the imported rules once, at startup.
+   *
+   * System-prompt assembly is synchronous, so discovery cannot happen inline;
+   * it runs during initialize and the result is cached.
+   */
+  async loadImportedRules(): Promise<void> {
+    try {
+      this.importedRules = await discoverRules(this.getTargetDir());
+    } catch (err) {
+      // A malformed foreign config must never stop the session.
+      debugLogger.warn('Rule discovery failed; continuing without it.', err);
+      this.importedRules = { rules: [], notes: [] };
+    }
+  }
+
+  /**
+   * The always-apply imported rules, rendered as a `<imported-rules>` block.
+   *
+   * A SEPARATE block, not a merge into the main prompt: a rule the agent did
+   * not write must be attributable, and a user who wants to see where a
+   * constraint came from has to be able to.
+   */
+  getImportedRulesBlock(): string {
+    const { rules, notes } = this.getImportedRules();
+    if (rules.length === 0) return '';
+    // Only unconditional rules are inlined. A glob-scoped rule inlined here
+    // would apply to files it was never written for, which is worse than not
+    // applying it at all.
+    const always = rules.filter((rule) => rule.alwaysApply);
+    const scoped = rules.filter((rule) => !rule.alwaysApply);
+    if (always.length === 0 && scoped.length === 0) return '';
+
+    const parts: string[] = [];
+    if (always.length > 0) {
+      parts.push(
+        '<imported-rules>\n' +
+          "The following conventions come from this repository's configuration for other coding agents. Treat them as instructions.\n\n" +
+          always
+            .map(
+              (rule) =>
+                `<rule source="${rule.source}" path="${rule.path}">\n${rule.content}\n</rule>`,
+            )
+            .join('\n'),
+      );
+    }
+    if (scoped.length > 0) {
+      // A rulebook entry, not an instruction: the model applies it when it is
+      // working on a matching file, and reads the file when it needs the text.
+      parts.push(
+        '<rulebook>\n' +
+          'These conventions apply only to matching files. Read the file when it is relevant; do not apply one to a file outside its glob.\n\n' +
+          scoped
+            .map(
+              (rule) =>
+                `- [${rule.source}] ${rule.path}${rule.globs.length > 0 ? ` (globs: ${rule.globs.join(', ')})` : ''}`,
+            )
+            .join('\n'),
+      );
+    }
+    if (notes.length > 0) {
+      parts.push(`<!-- discovery notes: ${notes.join('; ')} -->`);
+    }
+    return `${parts.join('\n\n')}</imported-rules>`;
+  }
+
   getSystemInstructionMemory(): string | HierarchicalMemory {
     if (this.memoryContextManager) {
       const global = this.memoryContextManager.getGlobalMemory();

@@ -157,14 +157,14 @@ async function fetchJson(
   url: string,
   signal: AbortSignal | undefined,
   accept: string = 'application/json',
-): Promise<Record<string, unknown> | undefined> {
+): Promise<unknown> {
   const text = await fetchText(url, accept, signal);
   if (text === undefined) {
     return undefined;
   }
   try {
     const parsed: unknown = JSON.parse(text);
-    return jsonObject(parsed);
+    return parsed;
   } catch {
     return undefined;
   }
@@ -220,8 +220,11 @@ function nvdCvssSection(metrics: Record<string, unknown> | undefined): string {
         parts.push(`exploitability ${exploitability}`);
       }
       if (parts.length > 0) {
+        const source = jsonString(metric?.['source']);
+        const label =
+          jsonString(data?.['version']) ?? key.replace('cvssMetricV', '');
         lines.push(
-          `- **${key.replace('cvssMetric', '')}:** ${parts.join(', ')}`,
+          `- **CVSS ${label}**${source === undefined ? '' : ` (${source})`}: ${parts.join(', ')}`,
         );
       }
     }
@@ -259,9 +262,11 @@ const nvdHandler: SiteHandler = {
       return null;
     }
     const cveId = match[0].toUpperCase();
-    const data = await fetchJson(
-      `https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=${cveId}`,
-      signal,
+    const data = jsonObject(
+      await fetchJson(
+        `https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=${cveId}`,
+        signal,
+      ),
     );
     const cve = jsonObject(
       jsonObject(jsonArray(data?.['vulnerabilities'])[0])?.['cve'],
@@ -307,6 +312,7 @@ const nvdHandler: SiteHandler = {
     }
 
     const cpes = nvdCpeList(cve['configurations']);
+    const cvss = nvdCvssSection(jsonObject(cve['metrics']));
     const content = sections([
       `# ${jsonString(cve['id']) ?? cveId}`,
       metaBlock([
@@ -318,9 +324,7 @@ const nvdHandler: SiteHandler = {
       description === undefined
         ? undefined
         : `## Description\n\n${description}`,
-      nvdCvssSection(jsonObject(cve['metrics'])) === ''
-        ? undefined
-        : `## CVSS\n\n${nvdCvssSection(jsonObject(cve['metrics']))}`,
+      cvss.length === 0 ? undefined : `## CVSS\n\n${cvss}`,
       weaknesses.length > 0
         ? `## Weaknesses\n\n${bullet(weaknesses, MAX_ITEMS)}`
         : undefined,
@@ -355,9 +359,8 @@ const osvHandler: SiteHandler = {
     if (vulnId === undefined) {
       return null;
     }
-    const vuln = await fetchJson(
-      `https://api.osv.dev/v1/vulns/${vulnId}`,
-      signal,
+    const vuln = jsonObject(
+      await fetchJson(`https://api.osv.dev/v1/vulns/${vulnId}`, signal),
     );
     if (vuln === undefined || jsonString(vuln['id']) === undefined) {
       return null;
@@ -483,10 +486,13 @@ const cisaKevHandler: SiteHandler = {
   kind: 'CISA Known Exploited Vulnerabilities catalog',
   async handle(url, signal) {
     const path = url.pathname.toLowerCase();
-    if (!path.includes('known-exploited') && !path.endsWith('.json')) {
+    if (
+      !path.includes('known-exploited') &&
+      !path.includes('known_exploited')
+    ) {
       return null;
     }
-    const catalog = await fetchJson(KEV_FEED_URL, signal);
+    const catalog = jsonObject(await fetchJson(KEV_FEED_URL, signal));
     if (catalog === undefined) {
       return null;
     }
@@ -590,9 +596,11 @@ const npmHandler: SiteHandler = {
       name = `${decodeURIComponent(head)}/${decodeURIComponent(tail)}`;
     }
 
-    const doc = await fetchJson(
-      `https://registry.npmjs.org/${encodeURIComponent(name)}/latest`,
-      signal,
+    const doc = jsonObject(
+      await fetchJson(
+        `https://registry.npmjs.org/${encodeURIComponent(name)}/latest`,
+        signal,
+      ),
     );
     const version = jsonString(doc?.['version']);
     if (doc === undefined || version === undefined) {
@@ -619,11 +627,9 @@ const npmHandler: SiteHandler = {
         ['License', jsonString(doc['license'])],
         ['Homepage', jsonString(doc['homepage'])],
         ['Repository', repository?.replace(/^git\+/, '').replace(/\.git$/, '')],
-        ['Published', undefined],
         ['Node engine', jsonString(jsonObject(doc['engines'])?.['node'])],
+        ['Tarball size', jsonNumber(jsonObject(doc['dist'])?.['unpackedSize'])],
       ]),
-      jsonString(doc['description']) === undefined ? undefined : undefined,
-      metaBlock([['Downloads (last week)', undefined]]),
       jsonStringList(doc['keywords']).length > 0
         ? `**Keywords:** ${jsonStringList(doc['keywords']).join(', ')}`
         : undefined,
@@ -650,9 +656,11 @@ const pypiHandler: SiteHandler = {
       return null;
     }
     const name = decodeURIComponent(match[1]);
-    const data = await fetchJson(
-      `https://pypi.org/pypi/${encodeURIComponent(name)}/json`,
-      signal,
+    const data = jsonObject(
+      await fetchJson(
+        `https://pypi.org/pypi/${encodeURIComponent(name)}/json`,
+        signal,
+      ),
     );
     const info = jsonObject(data?.['info']);
     const version = jsonString(info?.['version']);
@@ -730,9 +738,11 @@ const cratesIoHandler: SiteHandler = {
     }
     crateName = decodeURIComponent(crateName);
 
-    const data = await fetchJson(
-      `https://crates.io/api/v1/crates/${encodeURIComponent(crateName)}`,
-      signal,
+    const data = jsonObject(
+      await fetchJson(
+        `https://crates.io/api/v1/crates/${encodeURIComponent(crateName)}`,
+        signal,
+      ),
     );
     const record = jsonObject(data?.['crate']);
     const maxVersion = jsonString(record?.['max_version']);
@@ -779,12 +789,22 @@ const cratesIoHandler: SiteHandler = {
   },
 };
 
+/**
+ * Digs the newest catalog entry out of a registration document. The index
+ * lists pages; a page either inlines its items or has to be fetched by its
+ * `@id` — the caller walks that hop.
+ */
 function nugetCatalogEntry(
-  page: Record<string, unknown>,
+  document: Record<string, unknown>,
 ): Record<string, unknown> | undefined {
-  const items = jsonArray(page['items']);
-  const last = jsonObject(items[items.length - 1]);
-  return jsonObject(last?.['catalogEntry']);
+  const direct = jsonObject(document['catalogEntry']);
+  if (direct !== undefined) {
+    return direct;
+  }
+  const items = jsonArray(
+    jsonObject(jsonArray(document['items']).at(-1))?.['items'],
+  );
+  return jsonObject(jsonObject(items.at(-1))?.['catalogEntry']);
 }
 
 const nugetHandler: SiteHandler = {
@@ -797,35 +817,48 @@ const nugetHandler: SiteHandler = {
     }
     const packageId = decodeURIComponent(match[1]);
     const requestedVersion = match[2];
-    const base = `https://api.nuget.org/v3/registration5-semver2/${encodeURIComponent(
+    const base = `https://api.nuget.org/v3/registration5-gz-semver2/${encodeURIComponent(
       packageId.toLowerCase(),
     )}`;
 
     let entry: Record<string, unknown> | undefined;
     let source = `${base}/index.json`;
     if (requestedVersion === undefined) {
-      // Two hops: the index lists pages, and the last page holds the newest
-      // version's catalog entry.
-      for (let hop = 0; hop < 2 && entry === undefined; hop++) {
-        const page = await fetchJson(source, signal);
+      // Index → last page → newest item, following the last page's `@id` when
+      // a page is not inlined.
+      for (let hop = 0; hop < 3 && entry === undefined; hop++) {
+        const page = jsonObject(await fetchJson(source, signal));
         if (page === undefined) {
           return null;
         }
         entry = nugetCatalogEntry(page);
         if (entry === undefined) {
-          source = jsonString(page['@id']);
-          if (source === undefined) {
-            break;
+          const pages = jsonArray(page['items']);
+          const nextPage = jsonString(
+            jsonObject(pages[pages.length - 1])?.['@id'],
+          );
+          if (nextPage === undefined) {
+            return null;
           }
+          source = nextPage;
         }
       }
     } else {
-      entry = jsonObject(
+      // A version leaf carries a `catalogEntry` *link*, not the entry itself.
+      const leaf = jsonObject(
         await fetchJson(
           `${base}/${encodeURIComponent(requestedVersion)}.json`,
           signal,
         ),
       );
+      if (leaf === undefined) {
+        return null;
+      }
+      const catalogLink = jsonString(leaf['catalogEntry']);
+      entry =
+        catalogLink === undefined
+          ? leaf
+          : jsonObject(await fetchJson(catalogLink, signal));
     }
     const version = jsonString(entry?.['version']);
     if (entry === undefined || version === undefined) {
@@ -896,13 +929,18 @@ const mavenHandler: SiteHandler = {
     const artifactId = decodeURIComponent(match[2]);
     const requestedVersion =
       match[3] === undefined ? undefined : decodeURIComponent(match[3]);
+    // `core=gav` is a query parameter, not a `core:` clause: putting it in `q`
+    // makes Solr answer 400.
     const query =
       requestedVersion === undefined
-        ? `g:"${groupId}" AND a:"${artifactId}" AND core:gav`
+        ? `g:"${groupId}" AND a:"${artifactId}"`
         : `g:"${groupId}" AND a:"${artifactId}" AND v:"${requestedVersion}"`;
-    const data = await fetchJson(
-      `https://search.maven.org/solrsearch/select?q=${encodeURIComponent(query)}&wt=json&rows=20&core=gav`,
-      signal,
+    const core = requestedVersion === undefined ? '&core=gav' : '';
+    const data = jsonObject(
+      await fetchJson(
+        `https://search.maven.org/solrsearch/select?q=${encodeURIComponent(query)}&wt=json&rows=20${core}`,
+        signal,
+      ),
     );
     const docs = jsonArray(jsonObject(data?.['response'])?.['docs'])
       .map((doc) => jsonObject(doc))
@@ -919,13 +957,12 @@ const mavenHandler: SiteHandler = {
       jsonString(first['latestVersion']) ??
       jsonString(first['v']) ??
       'unknown';
-    const versionLines =
-      requestedVersion === undefined
-        ? docs.map(
-            (doc) =>
-              `- \`${jsonString(doc['v']) ?? '?'}\` — published ${isoDate(doc['timestamp']) ?? 'unknown'}`,
-          )
-        : [];
+    const versionLines = docs
+      .map(
+        (doc) =>
+          `- \`${jsonString(doc['v']) ?? '?'}\` — published ${isoDate(doc['timestamp']) ?? 'unknown'}`,
+      )
+      .slice(0, MAX_ITEMS);
 
     const content = sections([
       `# ${groupId}:${artifactId}:${version}`,
@@ -942,9 +979,10 @@ const mavenHandler: SiteHandler = {
     ]);
     return markdownPage(content, [
       'Fetched via the public search.maven.org Solr API (no auth token).',
+      'Maven Central exposes coordinates and release dates here, not descriptions or dependencies.',
       ...(requestedVersion === undefined
         ? [
-            'Maven Central metadata has no long description here; only coordinates and versions are shown.',
+            `Only the ${versionLines.length} most recent versions are listed; this API has no total-count field for a version list.`,
           ]
         : []),
     ]);
@@ -964,22 +1002,11 @@ const goPkgHandler: SiteHandler = {
     if (path.length === 0 || path.startsWith('static/')) {
       return null;
     }
-    const segments = path.split('/').filter((part) => part.length > 0);
-    let modulePath: string | undefined;
-    let requestedVersion: string | undefined;
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i];
-      if (segment === undefined) {
-        continue;
-      }
-      const at = segment.indexOf('@');
-      if (at > 0) {
-        modulePath = segments.slice(0, i).join('/');
-        requestedVersion = segment.slice(at + 1);
-        break;
-      }
-    }
-    modulePath ??= segments.join('/');
+    // pkg.go.dev puts the version on the last path segment:
+    // /github.com/gin-gonic/gin@v1.9.1
+    const at = path.indexOf('@');
+    const modulePath = at > 0 ? path.slice(0, at) : path;
+    const requestedVersion = at > 0 ? path.slice(at + 1) : undefined;
     if (!modulePath.includes('.')) {
       // Module paths always start with a domain; without one this is not a
       // module page.
@@ -989,10 +1016,17 @@ const goPkgHandler: SiteHandler = {
     const escaped = escapeGoPath(modulePath);
     const info =
       requestedVersion === undefined
-        ? await fetchJson(`https://proxy.golang.org/${escaped}/@latest`, signal)
-        : await fetchJson(
-            `https://proxy.golang.org/${escaped}/@v/${escapeGoPath(requestedVersion)}.info`,
-            signal,
+        ? jsonObject(
+            await fetchJson(
+              `https://proxy.golang.org/${escaped}/@latest`,
+              signal,
+            ),
+          )
+        : jsonObject(
+            await fetchJson(
+              `https://proxy.golang.org/${escaped}/@v/${escapeGoPath(requestedVersion)}.info`,
+              signal,
+            ),
           );
     const version = jsonString(info?.['Version']);
     if (version === undefined) {
@@ -1039,7 +1073,7 @@ const rubyGemsHandler: SiteHandler = {
       requestedVersion === undefined
         ? `https://rubygems.org/api/v1/gems/${encodeURIComponent(gemName)}.json`
         : `https://rubygems.org/api/v2/rubygems/${encodeURIComponent(gemName)}/versions/${encodeURIComponent(decodeURIComponent(requestedVersion))}.json`;
-    const data = await fetchJson(apiUrl, signal);
+    const data = jsonObject(await fetchJson(apiUrl, signal));
     const version = jsonString(data?.['version']);
     if (data === undefined || version === undefined) {
       return null;
@@ -1115,16 +1149,20 @@ const dockerHubHandler: SiteHandler = {
     }
     repository = decodeURIComponent(repository);
 
-    const data = await fetchJson(
-      `https://hub.docker.com/v2/repositories/${encodeURIComponent(namespace)}/${encodeURIComponent(repository)}`,
-      signal,
+    const data = jsonObject(
+      await fetchJson(
+        `https://hub.docker.com/v2/repositories/${encodeURIComponent(namespace)}/${encodeURIComponent(repository)}`,
+        signal,
+      ),
     );
     if (data === undefined) {
       return null;
     }
-    const tagData = await fetchJson(
-      `https://hub.docker.com/v2/repositories/${encodeURIComponent(namespace)}/${encodeURIComponent(repository)}/tags?page_size=${MAX_ITEMS}`,
-      signal,
+    const tagData = jsonObject(
+      await fetchJson(
+        `https://hub.docker.com/v2/repositories/${encodeURIComponent(namespace)}/${encodeURIComponent(repository)}/tags?page_size=${MAX_ITEMS}`,
+        signal,
+      ),
     );
     const tags = jsonArray(tagData?.['results'])
       .map((tag) => jsonObject(tag))
@@ -1182,9 +1220,11 @@ const terraformHandler: SiteHandler = {
       ) {
         return null;
       }
-      const data = await fetchJson(
-        `https://registry.terraform.io/v1/modules/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/${encodeURIComponent(provider)}`,
-        signal,
+      const data = jsonObject(
+        await fetchJson(
+          `https://registry.terraform.io/v1/modules/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/${encodeURIComponent(provider)}`,
+          signal,
+        ),
       );
       const version = jsonString(data?.['version']);
       if (data === undefined || version === undefined) {
@@ -1239,18 +1279,22 @@ const terraformHandler: SiteHandler = {
     }
     // The registry's provider endpoints are gated behind service discovery; if
     // the token dance does not work we fall through instead of guessing.
-    const discovery = await fetchJson(
-      'https://registry.terraform.io/.well-known/terraform.json',
-      signal,
+    const discovery = jsonObject(
+      await fetchJson(
+        'https://registry.terraform.io/.well-known/terraform.json',
+        signal,
+      ),
     );
     const service = discovery?.['providers.v1'];
     const base =
       jsonString(service) ??
       jsonString(jsonObject(service)?.['url']) ??
       '/v1/providers/';
-    const versions = await fetchJson(
-      `https://registry.terraform.io${base.replace(/\/$/, '')}/${encodeURIComponent(providerNamespace)}/${encodeURIComponent(providerType)}/versions`,
-      signal,
+    const versions = jsonObject(
+      await fetchJson(
+        `https://registry.terraform.io${base.replace(/\/$/, '')}/${encodeURIComponent(providerNamespace)}/${encodeURIComponent(providerType)}/versions`,
+        signal,
+      ),
     );
     const versionList = jsonArray(versions?.['versions'])
       .map((entry) => jsonObject(entry))
@@ -1287,9 +1331,11 @@ const homebrewHandler: SiteHandler = {
     }
     const kind = match[1] === 'cask' ? 'cask' : 'formula';
     const name = decodeURIComponent(match[2]);
-    const data = await fetchJson(
-      `https://formulae.brew.sh/api/${kind}/${encodeURIComponent(name)}.json`,
-      signal,
+    const data = jsonObject(
+      await fetchJson(
+        `https://formulae.brew.sh/api/${kind}/${encodeURIComponent(name)}.json`,
+        signal,
+      ),
     );
     if (data === undefined) {
       return null;
@@ -1490,8 +1536,9 @@ async function githubFilePage(
   rawUrl: string,
   displayPath: string,
   notes: string[],
+  signal: AbortSignal | undefined,
 ): Promise<InternalPage | null> {
-  const body = await fetchText(rawUrl, 'text/plain', '*/*');
+  const body = await fetchText(rawUrl, 'text/plain', signal);
   if (body === undefined) {
     return null;
   }
@@ -1513,7 +1560,7 @@ const githubHandler: SiteHandler = {
   async handle(url, signal) {
     if (url.hostname === 'raw.githubusercontent.com') {
       const notes = ['Raw file fetched from raw.githubusercontent.com.'];
-      return githubFilePage(url.href, url.pathname, notes);
+      return githubFilePage(url.href, url.pathname, notes, signal);
     }
 
     const segments = url.pathname.split('/').filter((part) => part.length > 0);
@@ -1541,6 +1588,7 @@ const githubHandler: SiteHandler = {
           .join('/')}`,
         path,
         notes,
+        signal,
       );
     }
 
@@ -1548,11 +1596,11 @@ const githubHandler: SiteHandler = {
       const ref = segments[3];
       const path = segments.slice(4).join('/');
       const listing = await fetchJson(
-        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${ref}/${path
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path
           .split('/')
           .filter((part) => part.length > 0)
           .map((part) => encodeURIComponent(part))
-          .join('/')}`,
+          .join('/')}?ref=${encodeURIComponent(ref)}`,
         signal,
       );
       const entries = jsonArray(listing)
@@ -1571,7 +1619,7 @@ const githubHandler: SiteHandler = {
         bullet(
           entries.map((entry) => {
             const type = jsonString(entry['type']);
-            return `- \`${jsonString(entry['name']) ?? '?'}\`${type === 'dir' ? '/' : ''}${
+            return `\`${jsonString(entry['name']) ?? '?'}\`${type === 'dir' ? '/' : ''}${
               jsonString(entry['size']) === undefined
                 ? ''
                 : ` — ${jsonString(entry['size'])} bytes`
@@ -1587,23 +1635,29 @@ const githubHandler: SiteHandler = {
       return null;
     }
 
-    const repoData = await fetchJson(
-      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-      signal,
+    const repoData = jsonObject(
+      await fetchJson(
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+        signal,
+      ),
     );
     if (repoData === undefined) {
       return null;
     }
     const defaultBranch = jsonString(repoData['default_branch']) ?? 'main';
     const topics = jsonStringList(repoData['topics']);
-    const release = await fetchJson(
-      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases/latest`,
-      signal,
+    const release = jsonObject(
+      await fetchJson(
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/releases/latest`,
+        signal,
+      ),
     );
     const readme = jsonObject(
-      await fetchJson(
-        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`,
-        signal,
+      jsonObject(
+        await fetchJson(
+          `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`,
+          signal,
+        ),
       ),
     );
     const readmeUrl = jsonString(readme?.['download_url']);
