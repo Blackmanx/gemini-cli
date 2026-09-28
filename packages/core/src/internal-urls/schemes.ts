@@ -6,6 +6,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { getAgent, listAgents } from '../agents/agentRegistry.js';
+import { sendPeerMessage } from '../agents/peerBus.js';
 import {
   createInternalUrlRouter,
   internalUrlRouter,
@@ -23,10 +25,10 @@ import type {
 /**
  * The URL schemes gemini-cli exposes to the model.
  *
- * Ported from omp's `internal-urls/*` handlers, but each scheme is backed by a
- * subsystem that already exists here rather than an omp-only one: there is no
- * agent registry, memory bank or GitHub cache to read from, so those schemes
- * are registered later, when the subsystem they wrap actually exists.
+ * Ported from omp's `internal-urls/*` handlers, each backed by a subsystem
+ * that exists here rather than an omp-only one. A scheme is registered only
+ * once the thing it wraps exists; an unimplemented one would be a URL that
+ * fails at the moment the model trusts it.
  */
 
 /** Roots the `local://` scheme may touch, and their backing directories. */
@@ -312,9 +314,127 @@ function docsScheme(host: () => SchemeHost): SchemeSpec {
   };
 }
 
+/**
+ * The id the main session speaks from when it addresses a subagent.
+ *
+ * The main loop is not itself on the roster — it is the parent of every
+ * registered agent — so it needs a stable identity for the sender side of a
+ * message. A subagent messaging the main session is routed through the same
+ * value, so `agent://all` from either side means "everyone else".
+ */
+export const MAIN_AGENT_ID = 'main';
+
+/**
+ * `agent://<id>` — a sibling subagent.
+ *
+ * Reading gives that agent's structured result, optionally narrowed to one
+ * field by a JSON path, so a caller can pull `findings.0.file` instead of
+ * re-parsing prose. Writing sends it a message; `agent://all` broadcasts.
+ *
+ * This is what turns a fan-out into coordination: without it, parallel agents
+ * can only work independently or collide on the same files.
+ */
+function agentScheme(): SchemeSpec {
+  return {
+    scheme: 'agent',
+    backing: 'virtual',
+    selectors: 'opaque',
+    immutable: true,
+    write: {
+      via: 'handler',
+      payload: 'verbatim',
+      scope: 'coordination',
+      // Messaging a sibling does not touch the user's files, so it does not
+      // need write approval; plan mode may still use it.
+      tier: () => 'read',
+    },
+    resolve(url: InternalUrl): InternalResource {
+      const id = url.rest.split('/')[0] ?? '';
+      const jsonPath = url.rest.slice(id.length + 1);
+      if (id === '') {
+        const running = listAgents();
+        return {
+          url: url.href,
+          content:
+            running.length === 0
+              ? 'No agents are running.'
+              : `Running agents:\n${running
+                  .map(
+                    (agent) =>
+                      `${agent.id} (${agent.name}, ${agent.status}) ${agent.task}`,
+                  )
+                  .join('\n')}`,
+          contentType: 'text/plain',
+        };
+      }
+      const handle = getAgent(id);
+      if (handle === undefined) {
+        const known = listAgents()
+          .map((agent) => agent.id)
+          .join(', ');
+        throw new Error(
+          `agent://${id}: no such agent.` +
+            (known ? ` Running agents: ${known}.` : ' No agents are running.'),
+        );
+      }
+      const result = handle.result;
+      if (result === undefined) {
+        return {
+          url: url.href,
+          content: `Agent ${id} (${handle.name}) is ${handle.status} and has reported no result yet.`,
+          contentType: 'text/plain',
+        };
+      }
+      const render = (value: unknown): string =>
+        typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+      // `agent://<id>/a.b.0` is a discrete value, not a document: it comes
+      // back whole, with no line selector and no paging.
+      if (jsonPath === '') {
+        return {
+          url: url.href,
+          content: render(result),
+          contentType:
+            typeof result === 'string' ? 'text/plain' : 'application/json',
+          shape: 'value',
+        };
+      }
+      const value = jsonPathValue(result, jsonPath);
+      if (value === undefined) {
+        throw new Error(`agent://${id}/${jsonPath}: no such field`);
+      }
+      return {
+        url: url.href,
+        content: render(value),
+        contentType:
+          typeof value === 'string' ? 'text/plain' : 'application/json',
+        shape: 'value',
+      };
+    },
+    applyWrite(url: InternalUrl, content: string): void {
+      const to = url.rest === '' ? 'all' : url.rest;
+      if (to !== 'all' && getAgent(to) === undefined) {
+        const known = listAgents()
+          .map((agent) => agent.id)
+          .join(', ');
+        throw new Error(
+          `agent://${to}: no such agent.` +
+            (known ? ` Running agents: ${known}.` : ' No agents are running.'),
+        );
+      }
+      const outcome = sendPeerMessage(MAIN_AGENT_ID, to, content);
+      if (outcome.delivered === 0) {
+        throw new Error(
+          `agent://${to}: the agent exists but could not be reached. ` +
+            'It may have already finished; check the roster with `read agent://`.',
+        );
+      }
+    },
+  };
+}
+
 /** Every scheme gemini-cli registers at startup, in prompt order. */
 export function geminiSchemeSpecs(host: () => SchemeHost): SchemeSpec[] {
-  return [localScheme(host), cfgScheme(host), docsScheme(host)];
+  return [localScheme(host), cfgScheme(host), docsScheme(host), agentScheme()];
 }
 
 /** Build a router carrying gemini-cli's schemes. */

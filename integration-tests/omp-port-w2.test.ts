@@ -102,5 +102,19 @@ describe('omp port: internal URLs', () => {
       c.toolRequest.args.includes('local://missing.md'),
     );
     expect(missing?.toolRequest.success).toBe(false);
+
+    // 8. agent:// addresses a sibling subagent. With none running it says so
+    // plainly rather than returning an empty document, and a message to an
+    // agent that does not exist fails instead of vanishing.
+    expect(history).toContain('No agents are running.');
+    const ghostWrite = callsFor('write_file').find((c) =>
+      c.toolRequest.args.includes('agent://a1'),
+    );
+    expect(
+      ghostWrite,
+      'a message to a missing agent was attempted',
+    ).toBeTruthy();
+    expect(ghostWrite!.toolRequest.success).toBe(false);
+    expect(ghostWrite!.toolRequest.error).toContain('no such agent');
   });
 });
