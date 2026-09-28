@@ -125,6 +125,8 @@ export const ASK_USER_QUESTION_PARAM_PLACEHOLDER = 'placeholder';
 // ask_user option item params
 export const ASK_USER_OPTION_PARAM_LABEL = 'label';
 export const ASK_USER_OPTION_PARAM_DESCRIPTION = 'description';
+export const ASK_USER_OPTION_PARAM_PREVIEW = 'preview';
+export const ASK_USER_QUESTION_PARAM_RECOMMENDED = 'recommended';
 
 // -- exit_plan_mode --
 export const EXIT_PLAN_MODE_TOOL_NAME = 'exit_plan_mode';

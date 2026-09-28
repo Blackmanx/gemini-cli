@@ -176,7 +176,14 @@ export interface ToolExecutionFailure<E = Error> {
 
 export interface QuestionOption {
   label: string;
-  description: string;
+  /**
+   * Optional. A model that omits it gets a validation error, which teaches it
+   * to write filler rather than to choose; a missing description is simply a
+   * missing description.
+   */
+  description?: string;
+  /** Richer text shown when the option is expanded, e.g. a code sample. */
+  preview?: string;
 }
 
 export enum QuestionType {
@@ -198,6 +205,13 @@ export interface Question {
   placeholder?: string;
   /** Allow the question to consume more vertical space instead of being strictly capped. */
   unconstrainedHeight?: boolean;
+  /**
+   * Zero-based index of the option to preselect.
+   *
+   * The model usually has a defensible default; making the user restate it on
+   * every prompt is pure friction.
+   */
+  recommended?: number;
 }
 
 export interface AskUserRequest {

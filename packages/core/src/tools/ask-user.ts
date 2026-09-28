@@ -74,11 +74,13 @@ export class AskUserTool extends BaseDeclarativeTool<
           ) {
             return `Question ${i + 1}, option ${j + 1}: 'label' is required and must be a non-empty string.`;
           }
+          // `description` is optional on purpose: a model forced to supply
+          // one writes filler, and a padded option is worse than a bare label.
           if (
-            opt.description === undefined ||
+            opt.description !== undefined &&
             typeof opt.description !== 'string'
           ) {
-            return `Question ${i + 1}, option ${j + 1}: 'description' is required and must be a string.`;
+            return `Question ${i + 1}, option ${j + 1}: 'description' must be a string when present.`;
           }
         }
       }
@@ -107,13 +109,16 @@ export class AskUserTool extends BaseDeclarativeTool<
         if (q.placeholder) normalizedQ.placeholder = unescape(q.placeholder);
 
         if (q.options) {
-          normalizedQ.options = q.options.map((opt) => ({
-            ...opt,
-            label: unescape(opt.label),
-            description: opt.description?.trim()
-              ? unescape(opt.description.trim())
-              : '',
-          }));
+          normalizedQ.options = q.options.map((opt) => {
+            const normalized = { ...opt, label: unescape(opt.label) };
+            if (opt.description?.trim()) {
+              normalized.description = unescape(opt.description.trim());
+            }
+            if (opt.preview?.trim()) {
+              normalized.preview = unescape(opt.preview.trim());
+            }
+            return normalized;
+          });
         }
         return normalizedQ;
       }),

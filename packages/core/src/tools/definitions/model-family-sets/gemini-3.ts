@@ -84,6 +84,8 @@ import {
   ASK_USER_QUESTION_PARAM_PLACEHOLDER,
   ASK_USER_OPTION_PARAM_LABEL,
   ASK_USER_OPTION_PARAM_DESCRIPTION,
+  ASK_USER_OPTION_PARAM_PREVIEW,
+  ASK_USER_QUESTION_PARAM_RECOMMENDED,
   PLAN_MODE_PARAM_REASON,
 } from '../base-declarations.js';
 import {
@@ -765,10 +767,7 @@ The agent did not use the todo list because this task could be completed by a ti
                   "The selectable choices for 'choice' type questions. Provide 2-4 options. An 'Other' option is automatically added for 'choice' and 'yesno' types. Not needed for 'text' or 'yesno'.",
                 items: {
                   type: 'object',
-                  required: [
-                    ASK_USER_OPTION_PARAM_LABEL,
-                    ASK_USER_OPTION_PARAM_DESCRIPTION,
-                  ],
+                  required: [ASK_USER_OPTION_PARAM_LABEL],
                   properties: {
                     [ASK_USER_OPTION_PARAM_LABEL]: {
                       type: 'string',
@@ -778,7 +777,12 @@ The agent did not use the todo list because this task could be completed by a ti
                     [ASK_USER_OPTION_PARAM_DESCRIPTION]: {
                       type: 'string',
                       description:
-                        'Brief explanation of this option. Example: "Industry standard, supports SSO"',
+                        'Optional brief explanation of this option. Example: "Industry standard, supports SSO". Omit it rather than padding the option with filler.',
+                    },
+                    [ASK_USER_OPTION_PARAM_PREVIEW]: {
+                      type: 'string',
+                      description:
+                        'Optional longer text shown when the option is expanded, e.g. a code sample or the exact command.',
                     },
                   },
                 },
@@ -792,6 +796,12 @@ The agent did not use the todo list because this task could be completed by a ti
                 type: 'string',
                 description:
                   "Hint text shown in the input field. For type='text', shown in the main input. For type='choice' and 'yesno', shown in the 'Other' custom input.",
+              },
+              [ASK_USER_QUESTION_PARAM_RECOMMENDED]: {
+                type: 'integer',
+                minimum: 0,
+                description:
+                  "Only applies when type='choice'. Zero-based index of the option to preselect, when you have a defensible default. The user can still choose differently.",
               },
             },
           },

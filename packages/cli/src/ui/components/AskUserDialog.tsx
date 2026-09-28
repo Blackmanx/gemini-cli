@@ -413,7 +413,8 @@ const TextQuestionView: React.FC<TextQuestionViewProps> = ({
 interface OptionItem {
   key: string;
   label: string;
-  description: string;
+  /** Optional: a model that omits a description should not be forced to pad one. */
+  description?: string;
   type: 'option' | 'other' | 'done' | 'all';
   index: number;
 }
@@ -553,8 +554,17 @@ const ChoiceQuestionView: React.FC<ChoiceQuestionViewProps> = ({
   // Initialize state from initialAnswer if returning to a previously answered question
   const initialReducerState = useMemo((): ChoiceQuestionState => {
     if (!initialAnswer) {
+      // The model usually has a defensible default. Preselecting it saves the
+      // user from restating it, and they can still choose differently.
+      const recommended = question.recommended;
+      const hasRecommended =
+        recommended !== undefined &&
+        recommended >= 0 &&
+        recommended < questionOptions.length;
       return {
-        selectedIndices: new Set<number>(),
+        selectedIndices: hasRecommended
+          ? new Set<number>([recommended])
+          : new Set<number>(),
         isCustomOptionSelected: false,
         isCustomOptionFocused: false,
       };
@@ -590,7 +600,12 @@ const ChoiceQuestionView: React.FC<ChoiceQuestionViewProps> = ({
       isCustomOptionSelected,
       isCustomOptionFocused: false,
     };
-  }, [initialAnswer, questionOptions, question.multiSelect]);
+  }, [
+    initialAnswer,
+    questionOptions,
+    question.multiSelect,
+    question.recommended,
+  ]);
 
   const [state, dispatch] = useReducer(
     choiceQuestionReducer,
