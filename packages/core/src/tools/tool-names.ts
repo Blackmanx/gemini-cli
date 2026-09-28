@@ -195,6 +195,7 @@ export const TRACKER_VISUALIZE_TOOL_NAME = 'tracker_visualize';
 export const AGENT_TOOL_NAME = 'invoke_agent';
 
 export const WAIT_TOOL_NAME = 'wait';
+export const HASHLINE_EDIT_TOOL_NAME = 'hashline_edit';
 export const RETAIN_TOOL_NAME = 'retain';
 export const RECALL_TOOL_NAME = 'recall';
 export const REFLECT_TOOL_NAME = 'reflect';
@@ -303,6 +304,7 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   LSP_TOOL_NAME,
   LSP_EDIT_TOOL_NAME,
   WAIT_TOOL_NAME,
+  HASHLINE_EDIT_TOOL_NAME,
   AST_GREP_TOOL_NAME,
   GITHUB_TOOL_NAME,
   GENERATE_IMAGE_TOOL_NAME,

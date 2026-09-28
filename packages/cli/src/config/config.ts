@@ -107,6 +107,7 @@ export interface CliArgs {
   useTts?: boolean;
   useMemory?: boolean;
   useGithub?: boolean;
+  appendSystem?: string;
   magicKeywords?: MagicKeywordSettings;
   outputFormat: string | undefined;
   fakeResponses: string | undefined;
@@ -1098,6 +1099,7 @@ export async function loadCliConfig(
     useTts: settings.useTts,
     useMemory: settings.useMemory,
     useGithub: settings.useGithub,
+    appendSystem: settings.appendSystem,
     magicKeywords: settings.magicKeywords,
     modelRoles: settings.model?.roles,
     output: {

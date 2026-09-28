@@ -53,6 +53,7 @@ import { AgentTool } from '../agents/agent-tool.js';
 import { LspEditTool, LspTool } from '../tools/lsp.js';
 import { setWaitPeerMessageSource, WaitTool } from '../tools/wait.js';
 import { AstGrepTool } from '../tools/astGrep.js';
+import { HashlineEditTool } from '../tools/hashlineEdit.js';
 import { LearnTool } from '../tools/learn.js';
 import { ManageSkillTool } from '../skills/managedSkillsTools.js';
 import { getManagedSkillsDir } from '../skills/managedSkills.js';
@@ -718,6 +719,7 @@ export interface ConfigParameters {
   useTts?: boolean;
   useMemory?: boolean;
   useGithub?: boolean;
+  appendSystem?: string;
   magicKeywords?: MagicKeywordSettings;
   modelRoles?: Record<string, string>;
   env?: Record<string, string>;
@@ -840,6 +842,7 @@ export class Config implements McpContext, AgentLoopContext {
   private magicKeywords: MagicKeywordSettings | undefined;
   private readonly modelRoles: Readonly<Record<string, string>>;
   private readonly useGithub: boolean;
+  private readonly appendSystem: string | undefined;
   private importedRules: DiscoveryResult | undefined;
   private readonly mainAgentTools: string[] | undefined;
   /** @deprecated Use Policy Engine instead */
@@ -1357,6 +1360,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.magicKeywords = params.magicKeywords;
     this.modelRoles = params.modelRoles ?? {};
     this.useGithub = params.useGithub ?? false;
+    this.appendSystem = params.appendSystem;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
     this.enableHooks = params.enableHooks ?? true;
@@ -4065,6 +4069,16 @@ export class Config implements McpContext, AgentLoopContext {
     return this.useGithub;
   }
 
+  /**
+   * Standing instructions appended to the system prompt.
+   *
+   * Additive on purpose: replacing the whole prompt is the only other
+   * option today, and that silently drops every generated section.
+   */
+  getAppendSystemPrompt(): string | undefined {
+    return this.appendSystem;
+  }
+
   getUseGenerateImage(): boolean {
     return this.useGenerateImage;
   }
@@ -4432,6 +4446,13 @@ export class Config implements McpContext, AgentLoopContext {
 
     maybeRegister(AstGrepTool, () =>
       registry.registerTool(new AstGrepTool(this, this.messageBus)),
+    );
+
+    // Content-hash-anchored edits, alongside `replace` rather than instead of
+    // it: existing policies and skills name `replace`, and the model should
+    // be able to choose per call.
+    maybeRegister(HashlineEditTool, () =>
+      registry.registerTool(new HashlineEditTool(this, this.messageBus)),
     );
 
     // The GitHub tool reaches the network and can publish, so it is opt-in

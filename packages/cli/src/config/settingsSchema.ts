@@ -1917,6 +1917,17 @@ const SETTINGS_SCHEMA = {
     },
   },
 
+  appendSystem: {
+    type: 'string',
+    label: 'Append System Prompt',
+    category: 'Advanced',
+    requiresRestart: false,
+    default: '',
+    description:
+      'Standing instructions appended to the system prompt under a "User instructions" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.',
+    showInDialog: false,
+  },
+
   useGithub: {
     type: 'boolean',
     label: 'Use GitHub',

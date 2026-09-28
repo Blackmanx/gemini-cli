@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import type { HierarchicalMemory } from '../config/memory.js';
-import { GEMINI_DIR, makeRelative } from '../utils/paths.js';
+import { GEMINI_DIR, homedir, makeRelative } from '../utils/paths.js';
 import { ApprovalMode } from '../policy/types.js';
 import * as snippets from './snippets.js';
 import * as legacySnippets from './snippets.legacy.js';
@@ -272,6 +272,14 @@ export class PromptProvider {
     // Sanitize erratic newlines from composition
     let sanitizedPrompt = finalPrompt.replace(/\n{3,}/g, '\n\n');
 
+    // The user's own standing instructions. Read from settings and from
+    // APPEND_SYSTEM.md, so house rules can be added without replacing the
+    // generated prompt and losing every section in it.
+    const append = this.readAppendSystem(context);
+    if (append !== '') {
+      sanitizedPrompt += `\n\n# User instructions\n\n${append}`;
+    }
+
     // Conventions this repo already carries for other agents. Appended as a
     // distinct block, after the user's own memory, so a rule the agent did
     // not write stays attributable rather than blending into the prompt.
@@ -323,6 +331,32 @@ export class PromptProvider {
     guard: boolean = true,
   ): T | undefined {
     return guard && isSectionEnabled(key) ? factory() : undefined;
+  }
+
+  /**
+   * The user's standing instructions, from settings and `APPEND_SYSTEM.md`.
+   *
+   * Both are ADDITIVE. The existing way to customise the prompt is to replace
+   * it wholesale via `GEMINI_SYSTEM_MD`, which silently drops every generated
+   * section; this lets a user add house rules and keep them.
+   *
+   * `<cwd>/APPEND_SYSTEM.md` wins over the global one, matching how every
+   * other project-scoped file in this repo behaves.
+   */
+  private readAppendSystem(context: AgentLoopContext): string {
+    const candidates = [
+      path.join(context.config.getTargetDir(), 'APPEND_SYSTEM.md'),
+      path.join(homedir(), '.gemini', 'APPEND_SYSTEM.md'),
+    ];
+    for (const file of candidates) {
+      try {
+        const text = fs.readFileSync(file, 'utf8').trim();
+        if (text !== '') return text;
+      } catch {
+        // A missing or unreadable file simply contributes nothing.
+      }
+    }
+    return context.config.getAppendSystemPrompt?.()?.trim() ?? '';
   }
 
   private maybeWriteSystemMd(

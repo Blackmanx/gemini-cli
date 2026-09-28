@@ -3260,6 +3260,13 @@
       },
       "additionalProperties": false
     },
+    "appendSystem": {
+      "title": "Append System Prompt",
+      "description": "Standing instructions appended to the system prompt under a \"User instructions\" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.",
+      "markdownDescription": "Standing instructions appended to the system prompt under a \"User instructions\" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: ``",
+      "default": "",
+      "type": "string"
+    },
     "useGithub": {
       "title": "Use GitHub",
       "description": "Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.",

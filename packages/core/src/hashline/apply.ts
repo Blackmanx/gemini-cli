@@ -43,19 +43,16 @@ export type SnapshotResolver = (
   tag: string,
 ) => Snapshot | undefined;
 
-/** A content op paired with the original lines it claims to touch. */
+/** A content op placed in ORIGINAL line coordinates and checked. */
 interface AnchoredOp {
   op: Extract<HashlineOp, { kind: 'put' | 'cut' }>;
   order: number;
+  /** 0-based inclusive ORIGINAL lines this op rewrites or deletes. */
+  span: [number, number] | null;
+  /** 0-based ORIGINAL index this op inserts at; null for a span op. */
+  insertAt: number | null;
+  /** ORIGINAL 1-based lines this op claims, for the seen check. */
   touched: number[];
-}
-
-/** A content edit resolved against the snapshot, ready to splice. */
-interface Splice {
-  index: number;
-  remove: number;
-  body: string[];
-  order: number;
 }
 
 /** The anonymous register slot, boxed so `CUT` and `PUT` can share it. */
@@ -80,6 +77,9 @@ function splitContent(content: string): {
 }
 
 function joinContent(lines: string[], trailingNewline: boolean): string {
+  if (lines.length === 0) {
+    return '';
+  }
   return lines.join('\n') + (trailingNewline ? '\n' : '');
 }
 
@@ -100,7 +100,7 @@ function formatRanges(lines: number[]): string {
   let end = unique[0];
   for (let index = 1; index <= unique.length; index += 1) {
     const current = unique[index];
-    if (current !== undefined && current === end + 1) {
+    if (current === end + 1) {
       end = current;
       continue;
     }
@@ -131,63 +131,8 @@ function unseenMessage(
   );
 }
 
-/**
- * Record which ORIGINAL lines an op claims, and check them against the file.
- * Returns undefined when the op is out of bounds and must not be applied.
- */
-function anchorOp(
-  op: HashlineOp,
-  order: number,
-  lineCount: number,
-  seenRanges: LineRange[],
-  sectionPath: string,
-  tag: string,
-  failures: string[],
-): number[] | undefined {
-  if (op.kind === 'cut') {
-    return touchedForRange(
-      op.start,
-      op.end,
-      order,
-      lineCount,
-      seenRanges,
-      sectionPath,
-      tag,
-      failures,
-    );
-  }
-  if (op.kind !== 'put') {
-    return [];
-  }
-  if (op.gap === 'tail') {
-    return [];
-  }
-  if (op.gap !== undefined) {
-    return touchedForRange(
-      op.start,
-      op.start,
-      order,
-      lineCount,
-      seenRanges,
-      sectionPath,
-      tag,
-      failures,
-    );
-  }
-  return touchedForRange(
-    op.start,
-    op.end,
-    order,
-    lineCount,
-    seenRanges,
-    sectionPath,
-    tag,
-    failures,
-  );
-}
-
 /** Bounds-check and seen-check one inclusive ORIGINAL line range. */
-function touchedForRange(
+function anchorSpan(
   start: number,
   end: number,
   order: number,
@@ -196,7 +141,7 @@ function touchedForRange(
   sectionPath: string,
   tag: string,
   failures: string[],
-): number[] | undefined {
+): { span: [number, number]; touched: number[] } | undefined {
   if (start < 1 || end > lineCount) {
     failures.push(
       `${sectionPath}#${tag}: op ${order + 1} covers lines ${start}-${end}, but the tagged snapshot has ${lineCount} line(s). Re-read the file for fresh line numbers.`,
@@ -214,10 +159,103 @@ function touchedForRange(
   if (unseen.length > 0) {
     failures.push(unseenMessage(sectionPath, tag, unseen));
   }
-  return touched;
+  return { span: [start - 1, end - 1], touched };
 }
 
-/** Two ops claiming the same original line cannot both be honoured. */
+/**
+ * Place one op in ORIGINAL line coordinates and run the bounds and seen checks.
+ * Returns undefined when the op is out of bounds and must not be applied.
+ */
+function anchorOp(
+  op: Extract<HashlineOp, { kind: 'put' | 'cut' }>,
+  order: number,
+  lineCount: number,
+  seenRanges: LineRange[],
+  sectionPath: string,
+  tag: string,
+  failures: string[],
+): AnchoredOp | undefined {
+  const base = { op, order };
+  if (op.kind === 'cut') {
+    const placed = anchorSpan(
+      op.start,
+      op.end,
+      order,
+      lineCount,
+      seenRanges,
+      sectionPath,
+      tag,
+      failures,
+    );
+    if (placed === undefined) {
+      return undefined;
+    }
+    return {
+      ...base,
+      span: placed.span,
+      insertAt: null,
+      touched: placed.touched,
+    };
+  }
+  if (op.gap === 'tail') {
+    return { ...base, span: null, insertAt: lineCount, touched: [] };
+  }
+  if (op.gap !== undefined) {
+    const placed = anchorSpan(
+      op.start,
+      op.start,
+      order,
+      lineCount,
+      seenRanges,
+      sectionPath,
+      tag,
+      failures,
+    );
+    if (placed === undefined) {
+      return undefined;
+    }
+    return {
+      ...base,
+      span: null,
+      insertAt: op.gap === 'before' ? op.start - 1 : op.start,
+      touched: placed.touched,
+    };
+  }
+  const placed = anchorSpan(
+    op.start,
+    op.end,
+    order,
+    lineCount,
+    seenRanges,
+    sectionPath,
+    tag,
+    failures,
+  );
+  if (placed === undefined) {
+    return undefined;
+  }
+  return {
+    ...base,
+    span: placed.span,
+    insertAt: null,
+    touched: placed.touched,
+  };
+}
+
+/**
+ * Two ops that would rewrite the same ORIGINAL line have no well-defined
+ * combined result, so they are refused.
+ *
+ * Not every shared line is a conflict, though, and refusing those would break
+ * the format's own move idiom (`CUT 2.=3` then `PUT >3`). A span op claims the
+ * lines it replaces or deletes; a gap op claims only an insertion point. So:
+ *
+ * - two spans conflict when they intersect;
+ * - a gap conflicts with a span only when the insertion point falls strictly
+ *   inside the lines that span deletes, where the result would depend on which
+ *   op ran first;
+ * - two gaps never conflict; they compose in source order.
+ */
 function rejectOverlaps(
   anchored: AnchoredOp[],
   sectionPath: string,
@@ -228,15 +266,63 @@ function rejectOverlaps(
     for (let right = left + 1; right < anchored.length; right += 1) {
       const first = anchored[left];
       const second = anchored[right];
-      const shared = first.touched.filter((line) => second.touched.includes(line));
-      if (shared.length === 0) {
+      const shared = sharedClaims(first, second);
+      if (shared === null) {
         continue;
       }
       failures.push(
-        `${sectionPath}#${tag}: ops ${first.order + 1} and ${second.order + 1} both touch line(s) ${formatRanges(shared)}. Ops in one section must not overlap; split the change so each region is claimed once.`,
+        `${sectionPath}#${tag}: ops ${first.order + 1} and ${second.order + 1} both claim line(s) ${formatRanges(shared)}. Two ops in one section cannot rewrite the same original line; split the change so each region is claimed once.`,
       );
     }
   }
+}
+
+/**
+ * Whether an insertion point falls on or inside a span's rewritten lines.
+ * The span's own first line counts: inserting there would be immediately
+ * rewritten by the span, so which op "won" would decide the result.
+ */
+function landsInsideSpan(position: number, span: [number, number]): boolean {
+  return span[0] <= position && position <= span[1];
+}
+
+/**
+ * The original lines two ops fight over, or null when they compose cleanly.
+ *
+ * Two spans conflict where they intersect. A gap conflicts with a span only
+ * when its insertion point lands strictly inside the lines that span deletes,
+ * because that is the one case where the result depends on which op runs
+ * first. Two gaps, and a gap at either edge of a span, compose in source
+ * order — that is what makes `CUT 2.=3` followed by `PUT >3` work.
+ */
+function sharedClaims(first: AnchoredOp, second: AnchoredOp): number[] | null {
+  if (first.span !== null && second.span !== null) {
+    if (first.span[0] > second.span[1] || second.span[0] > first.span[1]) {
+      return null;
+    }
+  } else if (first.span !== null && second.insertAt !== null) {
+    if (!landsInsideSpan(second.insertAt, first.span)) {
+      return null;
+    }
+  } else if (first.insertAt !== null && second.span !== null) {
+    if (!landsInsideSpan(first.insertAt, second.span)) {
+      return null;
+    }
+  } else {
+    return null;
+  }
+  const shared: number[] = [];
+  for (const line of first.touched) {
+    if (second.touched.includes(line) && !shared.includes(line)) {
+      shared.push(line);
+    }
+  }
+  for (const line of second.touched) {
+    if (first.touched.includes(line) && !shared.includes(line)) {
+      shared.push(line);
+    }
+  }
+  return shared.length === 0 ? null : shared;
 }
 
 /**
@@ -287,16 +373,34 @@ function resolveRegisters(
   }
 }
 
-/** Turn resolved ops into descending-position splices over the line array. */
-function buildSplices(
+/** A replacement or deletion placed at its first ORIGINAL line index. */
+interface Placement {
+  end: number;
+  body: string[];
+}
+
+/**
+ * Fold every op into the result in one pass over the ORIGINAL lines.
+ *
+ * Splicing from the end backwards would be shorter, but it is wrong as soon
+ * as one op deletes lines that shift where a later op lands: `CUT 2.=3` then
+ * `PUT >3` would put the pasted lines back inside the range being deleted.
+ * Walking the original lines once and emitting each op where its anchor
+ * actually falls makes the anchors mean the same thing the model read, with
+ * no index arithmetic to get wrong. Returns null when nothing was placed.
+ */
+function composeContent(
   anchored: AnchoredOp[],
   bodies: Map<number, string[]>,
+  lines: string[],
   lineCount: number,
+  trailingNewline: boolean,
   sectionPath: string,
   tag: string,
   failures: string[],
-): Splice[] {
-  const splices: Splice[] = [];
+): string | null {
+  const placements = new Map<number, Placement>();
+  const gaps = new Map<number, Array<{ order: number; body: string[] }>>();
   for (const entry of anchored) {
     const op = entry.op;
     if (op.block) {
@@ -306,52 +410,63 @@ function buildSplices(
       );
       continue;
     }
-    if (op.kind === 'cut') {
-      splices.push({
-        index: op.start - 1,
-        remove: op.end - op.start + 1,
-        body: [],
-        order: entry.order,
-      });
-      continue;
-    }
+    let body: string[];
     const pasted = bodies.get(entry.order);
-    if (pasted === undefined && op.body.length === 0) {
-      // An unresolved paste already produced a failure; never splice a hole.
+    if (pasted !== undefined) {
+      body = pasted;
+    } else if (op.kind === 'put' && op.body.length > 0) {
+      body = op.body;
+    } else if (op.kind === 'cut') {
+      body = [];
+    } else {
+      // An unresolved paste already produced a failure; never emit a hole.
       continue;
     }
-    const body = pasted ?? op.body;
-    if (op.gap === 'before') {
-      splices.push({
-        index: op.start - 1,
-        remove: 0,
-        body,
-        order: entry.order,
-      });
+    if (entry.insertAt !== null) {
+      const existing = gaps.get(entry.insertAt);
+      if (existing === undefined) {
+        gaps.set(entry.insertAt, [{ order: entry.order, body }]);
+      } else {
+        existing.push({ order: entry.order, body });
+      }
       continue;
     }
-    if (op.gap === 'after') {
-      splices.push({ index: op.start, remove: 0, body, order: entry.order });
-      continue;
+    if (entry.span !== null) {
+      placements.set(entry.span[0], { end: entry.span[1], body });
     }
-    if (op.gap === 'tail') {
-      splices.push({ index: lineCount, remove: 0, body, order: entry.order });
-      continue;
-    }
-    splices.push({
-      index: op.start - 1,
-      remove: op.end - op.start + 1,
-      body,
-      order: entry.order,
-    });
   }
-  // Descending position keeps every ORIGINAL line number valid; for two
-  // insertions at the same position the later-declared one is applied first so
-  // the output ends up in source order.
-  splices.sort(
-    (left, right) => right.index - left.index || right.order - left.order,
-  );
-  return splices;
+  if (placements.size === 0 && gaps.size === 0) {
+    return null;
+  }
+  for (const queue of gaps.values()) {
+    queue.sort((left, right) => left.order - right.order);
+  }
+  const out: string[] = [];
+  let index = 0;
+  while (index <= lineCount) {
+    const queued = gaps.get(index);
+    if (queued !== undefined) {
+      for (const gap of queued) {
+        for (const line of gap.body) {
+          out.push(line);
+        }
+      }
+    }
+    if (index === lineCount) {
+      break;
+    }
+    const placement = placements.get(index);
+    if (placement !== undefined) {
+      for (const line of placement.body) {
+        out.push(line);
+      }
+      index = placement.end + 1;
+      continue;
+    }
+    out.push(lines[index]);
+    index += 1;
+  }
+  return joinContent(out, trailingNewline);
 }
 
 /**
@@ -366,8 +481,8 @@ function buildSplices(
  * - An op touching a line outside `seenRanges` is refused with a re-read
  *   instruction. This is the rule that turns "the line may have moved" from a
  *   corruption into a one-line retry.
- * - Overlapping ops in one section are refused: two ops claiming the same
- *   original line have no well-defined combined result.
+ * - Overlapping ops in one section are refused, because two ops claiming the
+ *   same original line have no well-defined combined result.
  * - A byte-identical result is refused as a no-op, so a looping model is told
  *   its change was already there instead of burning a turn on a silent no-op.
  * - All sections are validated before anything is written. This function
@@ -435,7 +550,7 @@ function applySection(
     if (op.kind !== 'put' && op.kind !== 'cut') {
       continue;
     }
-    const touched = anchorOp(
+    const placed = anchorOp(
       op,
       order,
       lineCount,
@@ -444,10 +559,9 @@ function applySection(
       tag,
       failures,
     );
-    if (touched === undefined) {
-      continue;
+    if (placed !== undefined) {
+      anchored.push(placed);
     }
-    anchored.push({ op, order, touched });
   }
   rejectOverlaps(anchored, path, tag, failures);
 
@@ -462,23 +576,21 @@ function applySection(
     failures,
     bodies,
   );
-  const splices = buildSplices(
+  const composed = composeContent(
     anchored,
     bodies,
+    lines,
     lineCount,
+    trailingNewline,
     path,
     tag,
     failures,
   );
 
   let finalContent = snapshot.content;
-  if (splices.length > 0) {
-    const working = lines.slice();
-    for (const splice of splices) {
-      working.splice(splice.index, splice.remove, ...splice.body);
-    }
-    finalContent = joinContent(working, trailingNewline);
-    if (finalContent === snapshot.content) {
+  if (composed !== null) {
+    finalContent = composed;
+    if (composed === snapshot.content) {
       // Refuse rather than write an identical file: an empty write costs a
       // turn, hides a stale line number, and reads as success when it is not.
       const described: string[] = [];

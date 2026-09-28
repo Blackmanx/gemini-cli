@@ -276,6 +276,22 @@ function rejectBodyRow(
   );
 }
 
+/**
+ * Whether a line can only be the start of the next op rather than a stray
+ * body row, so an open `PUT …:` body closes on it instead of swallowing it.
+ */
+function startsNewOp(trimmed: string): boolean {
+  if (trimmed === BEGIN_PATCH || trimmed === END_PATCH) {
+    return true;
+  }
+  for (const keyword of ['PUT', 'CUT', 'REM', 'MV']) {
+    if (trimmed === keyword || trimmed.startsWith(`${keyword} `)) {
+      return true;
+    }
+  }
+  return trimmed.startsWith('[') && trimmed.endsWith(']');
+}
+
 function countOps(section: HashlineSection, kind: 'remove' | 'move'): number {
   let total = 0;
   for (const op of section.ops) {
@@ -325,6 +341,9 @@ export function parseHashlineInput(input: string): ParsedHashlineInput {
       if (raw.startsWith('+')) {
         pending.op.body.push(raw.slice(1));
         continue;
+      }
+      if (raw.trim() !== '' && !startsNewOp(raw.trim())) {
+        rejectBodyRow(raw.trim(), inputLine, pending.section.path);
       }
       commitBody();
     }

@@ -38,6 +38,7 @@ import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
 import { logFileOperation } from '../telemetry/loggers.js';
 import { FileOperationEvent } from '../telemetry/types.js';
 import { READ_FILE_TOOL_NAME, READ_FILE_DISPLAY_NAME } from './tool-names.js';
+import { HashlineEditTool } from './hashlineEdit.js';
 import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
 import { READ_FILE_DEFINITION } from './definitions/coreTools.js';
 import { resolveToolDeclaration } from './definitions/resolver.js';
@@ -106,6 +107,23 @@ function applySelectorToResource(
       ? resolveTailSelector(selector, totalLines)
       : selector;
   return sliceLinesForSelector(content, resolved);
+}
+
+/**
+ * Read a file as text for snapshotting, or `undefined` when it is not text.
+ *
+ * A binary file decoded as UTF-8 produces replacement characters, and a tag
+ * over that is meaningless — worse, an edit anchored to it would apply to
+ * bytes the model never saw.
+ */
+async function readTextOrUndefined(file: string): Promise<string | undefined> {
+  try {
+    const buffer = await fs.promises.readFile(file);
+    if (buffer.includes(0)) return undefined;
+    return buffer.toString('utf8');
+  } catch {
+    return undefined;
+  }
 }
 
 class ReadFileToolInvocation extends BaseToolInvocation<
@@ -376,6 +394,27 @@ Action: To read more of the file, you can use the 'start_line' and 'end_line' pa
 ${result.llmContent}`;
     } else {
       llmContent = result.llmContent || '';
+    }
+
+    // Record what the model was actually shown, so `hashline_edit` has
+    // something to anchor to. Only text reads count: a binary part or a
+    // directory tree is not something a line-anchored edit can target.
+    if (typeof result.llmContent === 'string' && result.llmContent !== '') {
+      const wholeFile = await readTextOrUndefined(targetPathToRead);
+      if (wholeFile !== undefined) {
+        // The snapshot is the WHOLE file, because the edit is applied to the
+        // file. The seen range is what the model was shown, so an edit to a
+        // line it never read is refused even though the content is known.
+        const shownStart = result.isTruncated
+          ? (result.linesShown?.[0] ?? 1)
+          : (startLine ?? 1);
+        const shownEnd = result.isTruncated
+          ? (result.linesShown?.[1] ?? shownStart)
+          : (endLine ?? wholeFile.split('\n').length);
+        HashlineEditTool.snapshots.record(targetPathToRead, wholeFile, [
+          [shownStart, shownEnd],
+        ]);
+      }
     }
 
     const lines =
