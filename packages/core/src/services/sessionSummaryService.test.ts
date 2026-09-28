@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Config } from '../config/config.js';
 import { SessionSummaryService } from './sessionSummaryService.js';
 import type { BaseLlmClient } from '../core/baseLlmClient.js';
 import type { MessageRecord } from './chatRecordingService.js';
@@ -12,6 +13,7 @@ import type { GenerateContentResponse } from '@google/genai';
 
 describe('SessionSummaryService', () => {
   let service: SessionSummaryService;
+  let mockConfig: Config;
   let mockBaseLlmClient: BaseLlmClient;
   let mockGenerateContent: ReturnType<typeof vi.fn>;
 
@@ -34,7 +36,12 @@ describe('SessionSummaryService', () => {
       generateContent: mockGenerateContent,
     } as unknown as BaseLlmClient;
 
-    service = new SessionSummaryService(mockBaseLlmClient);
+    // A Config with no roles pinned: the summarizer keeps its built-in model.
+    mockConfig = {
+      getModelForRole: () => undefined,
+    } as unknown as Config;
+
+    service = new SessionSummaryService(mockBaseLlmClient, mockConfig);
   });
 
   afterEach(() => {

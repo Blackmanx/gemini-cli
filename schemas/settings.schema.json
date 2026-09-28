@@ -692,6 +692,35 @@
       "default": {},
       "type": "object",
       "properties": {
+        "roles": {
+          "title": "Model Roles",
+          "description": "Assign a model or model-config alias to each workload role. A role is a named slot the harness fills; unset roles keep their built-in model.",
+          "markdownDescription": "Assign a model or model-config alias to each workload role. A role is a named slot the harness fills; unset roles keep their built-in model.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{}`",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "roleFallbacks": {
+          "title": "Role Fallbacks",
+          "description": "Ordered fallback models per role, tried in order when the primary fails. Only Gemini models may be listed.",
+          "markdownDescription": "Ordered fallback models per role, tried in order when the primary fails. Only Gemini models may be listed.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `{}`",
+          "default": {},
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {}
+          }
+        },
+        "cycleOrder": {
+          "title": "Model Cycle Order",
+          "description": "The roles the model switcher cycles through, in order.",
+          "markdownDescription": "The roles the model switcher cycles through, in order.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `[\n  \"smol\",\n  \"default\",\n  \"slow\"\n]`",
+          "default": ["smol", "default", "slow"],
+          "type": "array",
+          "items": {}
+        },
         "name": {
           "title": "Model",
           "description": "The Gemini model to use for conversations.",
@@ -3230,6 +3259,13 @@
         }
       },
       "additionalProperties": false
+    },
+    "useGithub": {
+      "title": "Use GitHub",
+      "description": "Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.",
+      "markdownDescription": "Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+      "default": false,
+      "type": "boolean"
     },
     "useGenerateImage": {
       "title": "Use Generate Image",

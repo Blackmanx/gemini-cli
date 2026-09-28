@@ -531,6 +531,28 @@ their corresponding top-level category object in your `settings.json` file.
 
 #### `model`
 
+- **`model.roles`** (object):
+
+  - **Description:** Assign a model or model-config alias to each workload role.
+    A role is a named slot the harness fills; unset roles keep their built-in
+    model.
+  - **Default:** `{}`
+
+- **`model.roleFallbacks`** (object):
+
+  - **Description:** Ordered fallback models per role, tried in order when the
+    primary fails. Only Gemini models may be listed.
+  - **Default:** `{}`
+
+- **`model.cycleOrder`** (array):
+
+  - **Description:** The roles the model switcher cycles through, in order.
+  - **Default:**
+
+    ```json
+    ["smol", "default", "slow"]
+    ```
+
 - **`model.name`** (string):
 
   - **Description:** The Gemini model to use for conversations.
@@ -1926,6 +1948,65 @@ their corresponding top-level category object in your `settings.json` file.
 - **`useWriteTodos`** (boolean):
   - **Description:** Enable the write_todos tool.
   - **Default:** `true`
+
+#### `magicKeywords`
+
+- **`magicKeywords.enabled`** (boolean):
+
+  - **Description:** Master switch for every magic keyword.
+  - **Default:** `true`
+
+- **`magicKeywords.ultrathink`** (boolean):
+
+  - **Description:** A standalone "ultrathink" asks for careful multi-step
+    reasoning on that turn.
+  - **Default:** `true`
+
+- **`magicKeywords.orchestrate`** (boolean):
+
+  - **Description:** A standalone "orchestrate" asks for parallel delegation and
+    verification.
+  - **Default:** `true`
+
+- **`magicKeywords.workflowz`** (boolean):
+
+  - **Description:** A standalone "workflowz" asks for a deterministic
+    multi-subagent workflow.
+  - **Default:** `true`
+
+- **`magicKeywords.jevify`** (boolean):
+  - **Description:** A standalone "jevify" asks for bulk classification against
+    a frozen rule.
+  - **Default:** `true`
+
+#### `useGithub`
+
+- **`useGithub`** (boolean):
+  - **Description:** Enable the github tool, which drives the `gh` CLI. It can
+    reach the network and publish pull requests and issues, so it is off until
+    asked for.
+  - **Default:** `false`
+
+#### `useGenerateImage`
+
+- **`useGenerateImage`** (boolean):
+  - **Description:** Enable the generate_image tool. Calls a paid image model,
+    so it is off until asked for.
+  - **Default:** `false`
+
+#### `useTts`
+
+- **`useTts`** (boolean):
+  - **Description:** Enable the tts tool. Calls a paid speech model, so it is
+    off until asked for.
+  - **Default:** `false`
+
+#### `useMemory`
+
+- **`useMemory`** (boolean):
+  - **Description:** Enable the local memory bank and its
+    retain/recall/reflect/memory_edit tools.
+  - **Default:** `false`
 
 #### `security`
 

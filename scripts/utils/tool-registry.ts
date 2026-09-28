@@ -18,7 +18,10 @@ export type ToolCategory =
   | 'skills'
   | 'task-tracker'
   | 'agent'
-  | 'mcp';
+  | 'mcp'
+  | 'code-intelligence'
+  | 'media'
+  | 'memory';
 
 export interface ToolRegistryEntry {
   name: string;
@@ -64,6 +67,17 @@ const TOOL_CATEGORIES: Record<
   update_topic: 'agent',
   read_mcp_resource: 'mcp',
   list_mcp_resources: 'mcp',
+  ast_grep: 'code-intelligence',
+  github: 'web',
+  lsp: 'code-intelligence',
+  lsp_edit: 'code-intelligence',
+  wait: 'agent',
+  generate_image: 'media',
+  tts: 'media',
+  retain: 'memory',
+  recall: 'memory',
+  reflect: 'memory',
+  memory_edit: 'memory',
 };
 
 let registryCache: ToolRegistry | undefined;

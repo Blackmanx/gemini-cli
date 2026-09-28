@@ -205,6 +205,12 @@ export const WAIT_DISPLAY_NAME = 'Wait';
 export const GENERATE_IMAGE_DISPLAY_NAME = 'Generate Image';
 export const TTS_DISPLAY_NAME = 'Text to Speech';
 
+export const GITHUB_TOOL_NAME = 'github';
+export const GITHUB_DISPLAY_NAME = 'GitHub';
+
+export const AST_GREP_TOOL_NAME = 'ast_grep';
+export const AST_GREP_DISPLAY_NAME = 'AST Grep';
+
 export const LSP_TOOL_NAME = 'lsp';
 export const LSP_EDIT_TOOL_NAME = 'lsp_edit';
 export const LSP_DISPLAY_NAME = 'LanguageServer';
@@ -295,6 +301,8 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   LSP_TOOL_NAME,
   LSP_EDIT_TOOL_NAME,
   WAIT_TOOL_NAME,
+  AST_GREP_TOOL_NAME,
+  GITHUB_TOOL_NAME,
   GENERATE_IMAGE_TOOL_NAME,
   TTS_TOOL_NAME,
   RETAIN_TOOL_NAME,

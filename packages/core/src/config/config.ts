@@ -52,6 +52,8 @@ import { TopicState } from './topicState.js';
 import { AgentTool } from '../agents/agent-tool.js';
 import { LspEditTool, LspTool } from '../tools/lsp.js';
 import { setWaitPeerMessageSource, WaitTool } from '../tools/wait.js';
+import { AstGrepTool } from '../tools/astGrep.js';
+import { GithubTool } from '../tools/github.js';
 import { onPeerMessage } from '../agents/peerBus.js';
 import { listAgents } from '../agents/agentRegistry.js';
 import {
@@ -712,7 +714,9 @@ export interface ConfigParameters {
   useGenerateImage?: boolean;
   useTts?: boolean;
   useMemory?: boolean;
+  useGithub?: boolean;
   magicKeywords?: MagicKeywordSettings;
+  modelRoles?: Record<string, string>;
   env?: Record<string, string>;
   workspacePoliciesDir?: string;
   policyEngineConfig?: PolicyEngineConfig;
@@ -831,6 +835,8 @@ export class Config implements McpContext, AgentLoopContext {
   private memoryBackend: MemoryBackend | undefined;
   private deviceRegistry: DeviceRegistry | undefined;
   private magicKeywords: MagicKeywordSettings | undefined;
+  private readonly modelRoles: Readonly<Record<string, string>>;
+  private readonly useGithub: boolean;
   private importedRules: DiscoveryResult | undefined;
   private readonly mainAgentTools: string[] | undefined;
   /** @deprecated Use Policy Engine instead */
@@ -1346,6 +1352,8 @@ export class Config implements McpContext, AgentLoopContext {
     this.useTts = params.useTts ?? false;
     this.useMemory = params.useMemory ?? false;
     this.magicKeywords = params.magicKeywords;
+    this.modelRoles = params.modelRoles ?? {};
+    this.useGithub = params.useGithub ?? false;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
     this.enableHooks = params.enableHooks ?? true;
@@ -2062,6 +2070,26 @@ export class Config implements McpContext, AgentLoopContext {
 
   getFallbackOverride(model: string): string | undefined {
     return this.fallbackOverrides.get(model);
+  }
+
+  /**
+   * The model or model-config alias a named workload role is pinned to.
+   *
+   * A role is a named slot the harness fills rather than a provider: omp uses
+   * roles to route work by intent (cheap for summaries, slow for planning)
+   * across many vendors. Here the universe is Gemini only, and a role holds a
+   * model or an alias name — never a `provider/model` string.
+   *
+   * Returns `undefined` for an unset role, which means "keep the built-in
+   * model" rather than "use nothing".
+   */
+  getModelForRole(role: string): string | undefined {
+    return this.modelRoles[role];
+  }
+
+  /** Every configured role assignment, for the settings UI and `/model`. */
+  getModelRoles(): Readonly<Record<string, string>> {
+    return this.modelRoles;
   }
 
   getActiveModel(): string {
@@ -4029,6 +4057,11 @@ export class Config implements McpContext, AgentLoopContext {
   }
 
   /** Whether the paid image-generation tool is available this session. */
+  /** Whether the GitHub tool, which reaches the network, is available. */
+  getUseGithub(): boolean {
+    return this.useGithub;
+  }
+
   getUseGenerateImage(): boolean {
     return this.useGenerateImage;
   }
@@ -4393,6 +4426,18 @@ export class Config implements McpContext, AgentLoopContext {
     maybeRegister(LspEditTool, () =>
       registry.registerTool(new LspEditTool(this, this.messageBus)),
     );
+
+    maybeRegister(AstGrepTool, () =>
+      registry.registerTool(new AstGrepTool(this, this.messageBus)),
+    );
+
+    // The GitHub tool reaches the network and can publish, so it is opt-in
+    // like the paid tools and confirmable on every call.
+    if (this.getUseGithub()) {
+      maybeRegister(GithubTool, () =>
+        registry.registerTool(new GithubTool(this, this.messageBus)),
+      );
+    }
 
     // The wait barrier is always on: it is how a turn stops busy-waiting on
     // background work instead of burning turns polling for it.

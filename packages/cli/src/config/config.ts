@@ -106,6 +106,7 @@ export interface CliArgs {
   useGenerateImage?: boolean;
   useTts?: boolean;
   useMemory?: boolean;
+  useGithub?: boolean;
   magicKeywords?: MagicKeywordSettings;
   outputFormat: string | undefined;
   fakeResponses: string | undefined;
@@ -1096,7 +1097,9 @@ export async function loadCliConfig(
     useGenerateImage: settings.useGenerateImage,
     useTts: settings.useTts,
     useMemory: settings.useMemory,
+    useGithub: settings.useGithub,
     magicKeywords: settings.magicKeywords,
+    modelRoles: settings.model?.roles,
     output: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       format: (argv.outputFormat ?? settings.output?.format) as OutputFormat,

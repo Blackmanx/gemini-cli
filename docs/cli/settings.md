@@ -139,6 +139,16 @@ they appear in the UI.
 | Tool Output Truncation Threshold | `tools.truncateToolOutputThreshold`  | Maximum characters to show when truncating large tool outputs. Set to 0 or negative to disable truncation.                                                                 | `40000` |
 | Disable LLM Correction           | `tools.disableLLMCorrection`         | Disable LLM-based error correction for edit tools. When enabled, tools will fail immediately if exact string matches are not found, instead of attempting to self-correct. | `true`  |
 
+### MagicKeywords
+
+| UI Label              | Setting                     | Description                                                                   | Default |
+| --------------------- | --------------------------- | ----------------------------------------------------------------------------- | ------- |
+| Enable Magic Keywords | `magicKeywords.enabled`     | Master switch for every magic keyword.                                        | `true`  |
+| Ultrathink            | `magicKeywords.ultrathink`  | A standalone "ultrathink" asks for careful multi-step reasoning on that turn. | `true`  |
+| Orchestrate           | `magicKeywords.orchestrate` | A standalone "orchestrate" asks for parallel delegation and verification.     | `true`  |
+| Workflowz             | `magicKeywords.workflowz`   | A standalone "workflowz" asks for a deterministic multi-subagent workflow.    | `true`  |
+| Jevify                | `magicKeywords.jevify`      | A standalone "jevify" asks for bulk classification against a frozen rule.     | `true`  |
+
 ### Security
 
 | UI Label                              | Setting                                         | Description                                                                                                                                                                                                                          | Default |

@@ -9,6 +9,7 @@ import type { BaseLlmClient } from '../core/baseLlmClient.js';
 import { partListUnionToString } from '../core/geminiRequest.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import type { Content } from '@google/genai';
+import type { Config } from '../config/config.js';
 import { getResponseText } from '../utils/partUtils.js';
 import { LlmRole } from '../telemetry/types.js';
 
@@ -45,7 +46,10 @@ export interface GenerateSummaryOptions {
  * Uses Gemini Flash Lite to create concise, user-intent-focused summaries.
  */
 export class SessionSummaryService {
-  constructor(private readonly baseLlmClient: BaseLlmClient) {}
+  constructor(
+    private readonly baseLlmClient: BaseLlmClient,
+    private readonly config: Config,
+  ) {}
 
   /**
    * Generate a 1-line summary of a chat session focusing on user intent.
@@ -120,8 +124,14 @@ export class SessionSummaryService {
           },
         ];
 
+        // Compressing history is exactly the "cheap model" workload, so it
+        // answers to the `smol` role when the user has pinned one. Unset, the
+        // built-in summarizer model is used unchanged.
+        const summarizerModel =
+          this.config.getModelForRole('smol') ?? 'summarizer-default';
+
         const response = await this.baseLlmClient.generateContent({
-          modelConfigKey: { model: 'summarizer-default' },
+          modelConfigKey: { model: summarizerModel },
           contents,
           abortSignal: abortController.signal,
           promptId: 'session-summary-generation',

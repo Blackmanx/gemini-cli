@@ -357,7 +357,7 @@ async function generateAndSaveSummary(
       );
     } else {
       const baseLlmClient = new BaseLlmClient(contentGenerator, config);
-      const summaryService = new SessionSummaryService(baseLlmClient);
+      const summaryService = new SessionSummaryService(baseLlmClient, config);
       summary =
         (await summaryService.generateSummary({
           messages: conversation.messages,

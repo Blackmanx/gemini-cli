@@ -1068,6 +1068,37 @@ const SETTINGS_SCHEMA = {
     description: 'Settings related to the generative model.',
     showInDialog: false,
     properties: {
+      roles: {
+        type: 'object',
+        label: 'Model Roles',
+        category: 'Model',
+        requiresRestart: false,
+        default: {},
+        description:
+          'Assign a model or model-config alias to each workload role. A role is a named slot the harness fills; unset roles keep their built-in model.',
+        showInDialog: false,
+        additionalProperties: { type: 'string' },
+      },
+      roleFallbacks: {
+        type: 'object',
+        label: 'Role Fallbacks',
+        category: 'Model',
+        requiresRestart: false,
+        default: {},
+        description:
+          'Ordered fallback models per role, tried in order when the primary fails. Only Gemini models may be listed.',
+        showInDialog: false,
+        additionalProperties: { type: 'array' },
+      },
+      cycleOrder: {
+        type: 'array',
+        label: 'Model Cycle Order',
+        category: 'Model',
+        requiresRestart: false,
+        default: ['smol', 'default', 'slow'],
+        description: 'The roles the model switcher cycles through, in order.',
+        showInDialog: false,
+      },
       name: {
         type: 'string',
         label: 'Model',
@@ -1884,6 +1915,17 @@ const SETTINGS_SCHEMA = {
         showInDialog: true,
       },
     },
+  },
+
+  useGithub: {
+    type: 'boolean',
+    label: 'Use GitHub',
+    category: 'Advanced',
+    requiresRestart: false,
+    default: false,
+    description:
+      'Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.',
+    showInDialog: false,
   },
 
   useGenerateImage: {
