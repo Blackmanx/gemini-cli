@@ -51,7 +51,9 @@ import { UpdateTopicTool } from '../tools/topicTool.js';
 import { TopicState } from './topicState.js';
 import { AgentTool } from '../agents/agent-tool.js';
 import { LspEditTool, LspTool } from '../tools/lsp.js';
-import { WaitTool } from '../tools/wait.js';
+import { setWaitPeerMessageSource, WaitTool } from '../tools/wait.js';
+import { onPeerMessage } from '../agents/peerBus.js';
+import { listAgents } from '../agents/agentRegistry.js';
 import {
   DEFAULT_GENERATE_IMAGE_MODEL,
   GenerateImageTool,
@@ -1483,6 +1485,23 @@ export class Config implements McpContext, AgentLoopContext {
   private async _initialize(): Promise<void> {
     await this.storage.initialize();
     ragLogger.initialize(this.storage.getProjectTempLogsDir());
+
+    // The wait barrier needs to know a peer message can end it, so the peer
+    // bus is installed as its wake source before any agent can spawn.
+    setWaitPeerMessageSource({
+      subscribe: (listener) =>
+        onPeerMessage((message) =>
+          listener(
+            `Message from agent ${message.from} (${message.id}): ${message.body}`,
+          ),
+        ),
+      // "More than one running agent" means someone other than the caller
+      // exists. The tool does not know its own agent id, so counting is the
+      // honest test: with a single agent on the roster there is nobody to
+      // message and `wait` must answer immediately.
+      hasLivePeers: () =>
+        listAgents().filter((agent) => agent.status === 'running').length > 1,
+    });
 
     // Internal `scheme://` URLs (local://, cfg://, omp://) are served by a
     // process-wide router. It is installed here because the scheme host needs

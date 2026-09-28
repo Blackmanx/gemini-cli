@@ -56,18 +56,19 @@ interface MessageWindow {
  * Broadcast-only seam for peer messages. Deliberately has no "take"/"drain": a
  * message fans out to every subscriber, so two waits issued in the same
  * parallel tool batch both observe it and neither can starve the other.
- *
- * UNWIRED IN THIS REPO: the IRC peer bus is a separate change. Until it lands,
- * `setWaitPeerMessageSource` is never called, `peerMessageSource` stays
- * undefined, and this wake source is simply absent — it is never counted as a
- * reason to keep waiting, so a wait with no background job still returns
- * "nothing to wait for" immediately instead of blocking on a bus that cannot
- * deliver. The IRC bus task closes this seam by calling
- * `setWaitPeerMessageSource(bus)` with a bus whose `subscribe` fans messages
- * out to all current listeners and returns an unsubscribe function.
  */
 export interface WaitPeerMessageSource {
   subscribe(listener: (message: string) => void): () => void;
+  /**
+   * Whether anyone could actually message the caller right now.
+   *
+   * A bus being installed is not enough. Without this, every session would
+   * open a message window on every wait and block on a peer that does not
+   * exist — turning a fast "nothing to wait for" into a multi-second stall.
+   * Optional, so a source that cannot answer is treated as capable, which is
+   * the conservative direction.
+   */
+  hasLivePeers?(): boolean;
 }
 
 let peerMessageSource: WaitPeerMessageSource | undefined;
@@ -163,10 +164,12 @@ class WaitToolInvocation extends BaseToolInvocation<
         // its exit through ExecutionLifecycleService.
         const running = this.listRunningBackgroundProcesses();
 
-        // Wake source 1: a peer message. See WaitPeerMessageSource — unwired
-        // today, so `messageCapable` is false and this source cannot be the
-        // reason to keep waiting.
-        const messageCapable = peerMessageSource !== undefined;
+        // Wake source 1: a peer message. Only a reason to keep waiting when
+        // someone could actually send one — a bus with no live peers must not
+        // turn a fast answer into a multi-second stall.
+        const messageCapable =
+          peerMessageSource !== undefined &&
+          (peerMessageSource.hasLivePeers?.() ?? true);
 
         // Wake source 4: an in-flight subagent. NOT reachable from here: the
         // repo has no registry of running agent invocations. A scheduler turn

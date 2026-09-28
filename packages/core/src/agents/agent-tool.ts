@@ -32,6 +32,12 @@ import {
   GEN_AI_AGENT_NAME,
 } from '../telemetry/constants.js';
 import { AGENT_TOOL_NAME } from '../tools/tool-names.js';
+import {
+  finishAgent,
+  mintAgentId,
+  registerAgent,
+  type AgentHandle,
+} from './agentRegistry.js';
 
 /**
  * A unified tool for invoking subagents.
@@ -219,6 +225,32 @@ class DelegateInvocation extends BaseToolInvocation<
     const hintedParams = this.withUserHints(this.mappedInputs);
     const invocation = this.buildChildInvocation(hintedParams);
 
+    // Every subagent goes on the roster while it runs, so a sibling can
+    // address it with `agent://<id>` and `wait` knows a message can still end
+    // a wait. The handle is settled on every exit path.
+    const injections = this.context.config.injectionService;
+    const id = mintAgentId(undefined);
+    const handle: AgentHandle = {
+      id,
+      name: this.definition.name,
+      parentId: undefined,
+      task: String(this.mappedInputs['prompt'] ?? ''),
+      startedAt: Date.now(),
+      status: 'running',
+      deliver(message: string) {
+        // A settled agent cannot take a message, and saying so beats silently
+        // dropping it — the sender can then stop waiting for a reply.
+        if (handle.status !== 'running') return 'failed';
+        injections.addInjection(
+          `Message from agent ${id}: ${message}`,
+          'user_steering',
+        );
+        return 'delivered';
+      },
+      transcript: () => '',
+    };
+    registerAgent(handle);
+
     return runInDevTraceSpan(
       {
         operation: GeminiCliOperation.AgentCall,
@@ -232,12 +264,22 @@ class DelegateInvocation extends BaseToolInvocation<
       },
       async ({ metadata }) => {
         metadata.input = this.params;
-        const result = await invocation.execute({
-          abortSignal: signal,
-          updateOutput,
-        });
-        metadata.output = result;
-        return result;
+        try {
+          const result = await invocation.execute({
+            abortSignal: signal,
+            updateOutput,
+          });
+          metadata.output = result;
+          finishAgent(
+            id,
+            result.error === undefined ? 'done' : 'aborted',
+            result.data,
+          );
+          return result;
+        } catch (err) {
+          finishAgent(id, 'aborted');
+          throw err;
+        }
       },
     );
   }
