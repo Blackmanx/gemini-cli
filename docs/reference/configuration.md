@@ -1979,6 +1979,14 @@ their corresponding top-level category object in your `settings.json` file.
     a frozen rule.
   - **Default:** `true`
 
+#### `appendSystem`
+
+- **`appendSystem`** (string):
+  - **Description:** Standing instructions appended to the system prompt under a
+    "User instructions" heading. The generated prompt is kept intact. A project
+    APPEND_SYSTEM.md, when present, takes precedence over this.
+  - **Default:** `""`
+
 #### `useGithub`
 
 - **`useGithub`** (boolean):
