@@ -18,7 +18,8 @@
  * importer itself, whose `load` signature carries no note channel.)
  */
 
-import { unparsedFiles ,
+import {
+  unparsedFiles,
   loadClaudeRules,
   loadClineRules,
   loadCursorRules,
