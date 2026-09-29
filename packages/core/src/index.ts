@@ -378,3 +378,11 @@ export {
   secretRefName,
   SECRET_FILE_NAME,
 } from './secrets/store.js';
+
+// The agent roster: the live subagent tree, as text.
+export {
+  formatAgentRoster,
+  formatAgentActivity,
+  formatElapsed,
+  type RosterOptions,
+} from './agents/roster.js';

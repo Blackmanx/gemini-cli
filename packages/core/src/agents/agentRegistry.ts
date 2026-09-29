@@ -127,6 +127,14 @@ export function finishAgent(
 ): void {
   const handle = agents.get(id);
   if (handle === undefined) return;
+  // A handle whose status is neither done nor aborted is neither running nor
+  // settled, so it is invisible to every filter over the registry and shows up
+  // as a blank mark. Refuse rather than write a status nothing can read.
+  if (status !== 'done' && status !== 'aborted') {
+    throw new Error(
+      `finishAgent(${id}) needs a settled status, got ${String(status)}`,
+    );
+  }
   handle.status = status;
   if (result !== undefined) handle.result = result;
   notify();
