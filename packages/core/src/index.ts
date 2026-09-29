@@ -342,3 +342,16 @@ export {
   MAX_DIFF_FILES,
   type ReviewTarget,
 } from './review/diff.js';
+
+// Session forking: branch a recorded conversation while keeping its history.
+export {
+  forkSessionFile,
+  listSessions,
+  readSessionNode,
+  childrenOf,
+  parentSessionId,
+  PARENT_SESSION_FIELD,
+  type ForkResult,
+  type SessionHeader,
+  type SessionNode,
+} from './session/fork.js';
