@@ -835,7 +835,20 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly worktreeSettings: WorktreeSettings | undefined;
   readonly enableConseca: boolean;
 
-  private readonly coreTools: string[] | undefined;
+  private coreTools: string[] | undefined;
+
+  /**
+   * The tool allowlist while vibe mode is on, or `undefined` when it is off.
+   *
+   * Mutable, and separate from `coreTools`, so turning vibe mode off restores
+   * the user's own setting instead of leaving the session unrestricted.
+   */
+  private vibeCoreTools: string[] | undefined = undefined;
+
+  /** The allowlist to put back when vibe mode ends. */
+  private vibePreviousCoreTools: string[] | undefined = undefined;
+
+  private vibeMode = false;
   private readonly useGenerateImage: boolean;
   private readonly useTts: boolean;
   private readonly useMemory: boolean;
@@ -2562,7 +2575,37 @@ export class Config implements McpContext, AgentLoopContext {
   }
 
   getCoreTools(): string[] | undefined {
-    return this.coreTools;
+    return this.vibeMode ? this.vibeCoreTools : this.coreTools;
+  }
+
+  /**
+   * Narrow the live toolset. Used by vibe mode, which has to be able to put
+   * tools back, not only take them away.
+   */
+  setCoreTools(tools: string[] | undefined): void {
+    if (this.vibeMode) {
+      this.vibeCoreTools = tools;
+      return;
+    }
+    this.coreTools = tools;
+  }
+
+  /** Whether vibe mode is on. */
+  getVibeMode(): boolean {
+    return this.vibeMode;
+  }
+
+  setVibeMode(enabled: boolean): void {
+    this.vibeMode = enabled;
+  }
+
+  /** The allowlist vibe mode saved on the way in. */
+  getVibePreviousCoreTools(): string[] | undefined {
+    return this.vibePreviousCoreTools;
+  }
+
+  setVibePreviousCoreTools(tools: string[] | undefined): void {
+    this.vibePreviousCoreTools = tools;
   }
 
   getMainAgentTools(): string[] | undefined {

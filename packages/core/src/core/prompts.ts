@@ -8,6 +8,7 @@ import type { Config } from '../config/config.js';
 import type { HierarchicalMemory } from '../config/memory.js';
 import { PromptProvider } from '../prompts/promptProvider.js';
 import { resolvePathFromEnv as resolvePathFromEnvImpl } from '../prompts/utils.js';
+import { applyVibePrompt } from '../modes/vibe.js';
 
 /**
  * Resolves a path or switch value from an environment variable.
@@ -26,12 +27,15 @@ export function getCoreSystemPrompt(
   interactiveOverride?: boolean,
   topicUpdateNarrationOverride?: boolean,
 ): string {
-  return new PromptProvider().getCoreSystemPrompt(
+  const prompt = new PromptProvider().getCoreSystemPrompt(
     config,
     userMemory,
     interactiveOverride,
     topicUpdateNarrationOverride,
   );
+  // The toolset is the real guarantee; this tells the model why it changed, so
+  // a missing write tool is not mistaken for a broken harness.
+  return applyVibePrompt(prompt, config.getVibeMode());
 }
 
 /**

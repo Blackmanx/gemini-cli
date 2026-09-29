@@ -386,3 +386,12 @@ export {
   formatElapsed,
   type RosterOptions,
 } from './agents/roster.js';
+
+// Vibe mode: read-only exploration, enforced by removing the tools.
+export {
+  applyVibePrompt,
+  setVibeMode,
+  vibeBlockedTools,
+  VIBE_PROMPT_DIRECTIVE,
+  type VibeTools,
+} from './modes/vibe.js';
