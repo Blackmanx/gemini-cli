@@ -723,6 +723,7 @@ export interface ConfigParameters {
   appendSystem?: string;
   magicKeywords?: MagicKeywordSettings;
   modelRoles?: Record<string, string>;
+  modelCycleOrder?: string[];
   env?: Record<string, string>;
   workspacePoliciesDir?: string;
   policyEngineConfig?: PolicyEngineConfig;
@@ -842,6 +843,7 @@ export class Config implements McpContext, AgentLoopContext {
   private deviceRegistry: DeviceRegistry | undefined;
   private magicKeywords: MagicKeywordSettings | undefined;
   private readonly modelRoles: Readonly<Record<string, string>>;
+  private readonly modelCycleOrder: readonly string[] | undefined;
   private readonly useGithub: boolean;
   private readonly appendSystem: string | undefined;
   private importedRules: DiscoveryResult | undefined;
@@ -1360,6 +1362,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.useMemory = params.useMemory ?? false;
     this.magicKeywords = params.magicKeywords;
     this.modelRoles = params.modelRoles ?? {};
+    this.modelCycleOrder = params.modelCycleOrder;
     this.useGithub = params.useGithub ?? false;
     this.appendSystem = params.appendSystem;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
@@ -2096,6 +2099,19 @@ export class Config implements McpContext, AgentLoopContext {
   }
 
   /** Every configured role assignment, for the settings UI and `/model`. */
+  /**
+   * The roles the model switcher visits, in order.
+   *
+   * Defaults to `smol, default, slow`: cheap for grinding, the normal one for
+   * most work, slow for the steps where being wrong is expensive.
+   */
+  getModelCycleOrder(): readonly string[] {
+    const order = this.modelCycleOrder;
+    return Array.isArray(order) && order.length > 0
+      ? order.filter((role): role is string => typeof role === 'string')
+      : ['smol', 'default', 'slow'];
+  }
+
   getModelRoles(): Readonly<Record<string, string>> {
     return this.modelRoles;
   }

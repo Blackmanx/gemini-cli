@@ -127,6 +127,7 @@ import { type InitializationResult } from '../core/initializer.js';
 import { startAutoMemoryIfEnabled } from '../utils/autoMemory.js';
 import { useFocus } from './hooks/useFocus.js';
 import { useKeypress, type Key } from './hooks/useKeypress.js';
+import { useModelCycle } from './hooks/useModelCycle.js';
 import { KeypressPriority } from './contexts/KeypressContext.js';
 import { Command } from './key/keyMatchers.js';
 import { useLoadingIndicator } from './hooks/useLoadingIndicator.js';
@@ -1786,6 +1787,23 @@ Logging in with Google... Restarting Gemini CLI to continue.
     [handleSlashCommand, settings],
   );
 
+  // Ctrl+P moves to the next configured model role. Changing model through
+  // this path rather than the dialog is the point: the cost of opening a
+  // dialog is what stops people switching to the right model for a step.
+  const { cycle: cycleModel } = useModelCycle(
+    config,
+    config.getActiveModel(),
+    (model) => {
+      config.setModel(model, false);
+      // The switch has to be visible: a silent model change leaves the user
+      // reading output from a model they did not select.
+      historyManager.addItem({
+        type: 'info',
+        text: `Model switched to ${model}.`,
+      });
+    },
+  );
+
   const handleGlobalKeypress = useCallback(
     (key: Key): boolean => {
       // Debug log keystrokes if enabled
@@ -1795,6 +1813,11 @@ Logging in with Google... Restarting Gemini CLI to continue.
 
       if (shortcutsHelpVisible && isHelpDismissKey(key)) {
         setShortcutsHelpVisible(false);
+      }
+
+      if (keyMatchers[Command.CYCLE_MODEL](key)) {
+        cycleModel();
+        return true;
       }
 
       if (keyMatchers[Command.TOGGLE_MOUSE_MODE](key)) {
@@ -2010,6 +2033,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
       setConstrainHeight,
       setShowErrorDetails,
       config,
+      cycleModel,
       ideContextState,
       handleCtrlCPress,
       handleCtrlDPress,

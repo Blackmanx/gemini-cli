@@ -1104,6 +1104,7 @@ export async function loadCliConfig(
     appendSystem: settings.appendSystem,
     magicKeywords: settings.magicKeywords,
     modelRoles: settings.model?.roles,
+    modelCycleOrder: settings.model?.cycleOrder,
     output: {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
       format: (argv.outputFormat ?? settings.output?.format) as OutputFormat,

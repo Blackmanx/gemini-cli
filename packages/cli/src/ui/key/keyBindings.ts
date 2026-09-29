@@ -60,6 +60,9 @@ export enum Command {
   // Navigation
   NAVIGATION_UP = 'nav.up',
   NAVIGATION_DOWN = 'nav.down',
+  /** Move to the next configured model role. */
+  CYCLE_MODEL = 'app.cycleModel',
+
   DIALOG_NAVIGATION_UP = 'nav.dialog.up',
   DIALOG_NAVIGATION_DOWN = 'nav.dialog.down',
   DIALOG_NEXT = 'nav.dialog.next',
@@ -288,6 +291,7 @@ export const defaultKeyBindingConfig: KeyBindingConfig = new Map([
   [Command.KILL_LINE_RIGHT, [new KeyBinding('ctrl+k')]],
   [Command.KILL_LINE_LEFT, [new KeyBinding('ctrl+u')]],
   [Command.CLEAR_INPUT, [new KeyBinding('ctrl+c')]],
+  [Command.CYCLE_MODEL, [new KeyBinding('ctrl+p')]],
   [
     Command.DELETE_WORD_BACKWARD,
     [
@@ -563,6 +567,8 @@ export const commandCategories: readonly CommandCategory[] = [
  * Human-readable descriptions for each command, used in docs/tooling.
  */
 export const commandDescriptions: Readonly<Record<Command, string>> = {
+  [Command.CYCLE_MODEL]:
+    'Move to the next configured model role (see model.cycleOrder).',
   // Basic Controls
   [Command.RETURN]: 'Confirm the current selection or choice.',
   [Command.ESCAPE]: 'Dismiss dialogs or cancel the current focus.',
