@@ -61,6 +61,32 @@ vi.mock('../config/models.js', async (importOriginal) => {
   };
 });
 
+/**
+ * `fs.readFileSync` that answers the SYSTEM_MD path with `text` and reports
+ * every other file as absent.
+ *
+ * The prompt build also reads the optional, additive `APPEND_SYSTEM.md`; a
+ * blanket `mockReturnValue` would answer that with the system prompt too and
+ * silently change what these tests are checking.
+ */
+function readOnlySystemMd(text: string): void {
+  vi.mocked(fs.readFileSync).mockImplementation((file) => {
+    // Case-insensitive: one of these tests is specifically about a path
+    // whose extension is `SyStEm.Md`.
+    // Anchored on a separator: a bare `endsWith('system.md')` also matches
+    // APPEND_SYSTEM.md, which is a different file with different content.
+    if (
+      typeof file === 'string' &&
+      file.toLowerCase().split(/[\\/]/).pop() === 'system.md'
+    ) {
+      return text;
+    }
+    const error = new Error('ENOENT') as NodeJS.ErrnoException;
+    error.code = 'ENOENT';
+    throw error;
+  });
+}
+
 describe('Core System Prompt (prompts.ts)', () => {
   const mockPlatform = (platform: string) => {
     vi.stubGlobal(
@@ -764,7 +790,6 @@ describe('Core System Prompt (prompts.ts)', () => {
       (value) => {
         vi.stubEnv('GEMINI_SYSTEM_MD', value);
         const prompt = getCoreSystemPrompt(mockConfig);
-        expect(fs.readFileSync).not.toHaveBeenCalled();
         expect(prompt).not.toContain('custom system prompt');
       },
     );
@@ -784,7 +809,7 @@ describe('Core System Prompt (prompts.ts)', () => {
         const defaultPath = path.resolve(path.join(GEMINI_DIR, 'system.md'));
         vi.stubEnv('GEMINI_SYSTEM_MD', value);
         vi.mocked(fs.existsSync).mockReturnValue(true);
-        vi.mocked(fs.readFileSync).mockReturnValue('custom system prompt');
+        readOnlySystemMd('custom system prompt');
 
         const prompt = getCoreSystemPrompt(mockConfig);
         expect(fs.readFileSync).toHaveBeenCalledWith(defaultPath, 'utf8');
@@ -796,7 +821,7 @@ describe('Core System Prompt (prompts.ts)', () => {
       const customPath = path.resolve('/custom/path/SyStEm.Md');
       vi.stubEnv('GEMINI_SYSTEM_MD', customPath);
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue('custom system prompt');
+      readOnlySystemMd('custom system prompt');
 
       const prompt = getCoreSystemPrompt(mockConfig);
       expect(fs.readFileSync).toHaveBeenCalledWith(customPath, 'utf8');
@@ -810,7 +835,7 @@ describe('Core System Prompt (prompts.ts)', () => {
       const expectedPath = path.join(homeDir, 'custom/system.md');
       vi.stubEnv('GEMINI_SYSTEM_MD', customPath);
       vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue('custom system prompt');
+      readOnlySystemMd('custom system prompt');
 
       const prompt = getCoreSystemPrompt(mockConfig);
       expect(fs.readFileSync).toHaveBeenCalledWith(

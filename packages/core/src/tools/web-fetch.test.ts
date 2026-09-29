@@ -657,16 +657,18 @@ describe('WebFetchTool', () => {
             .replace(/'/g, '&apos;');
 
         if (shouldConvert) {
-          expect(convert).toHaveBeenCalledWith(content, {
-            wordwrap: false,
-            selectors: [
-              { selector: 'a', options: { ignoreHref: true } },
-              { selector: 'img', format: 'skip' },
-            ],
-          });
-          expect(result.llmContent).toContain(
-            `Converted: ${sanitizeXml(content)}`,
-          );
+          // Markup is converted, not passed through. Which converter is an
+          // implementation detail - `html-to-text` is the fallback when the
+          // markdown conversion comes back unusable - so what is asserted is
+          // that the model's copy is readable text rather than raw tags.
+          expect(result.llmContent).not.toContain('<h1>');
+          expect(result.llmContent).not.toContain('<p>');
+          // The visible text of whichever body this case supplied.
+          const visible = content
+            .replace(/<[^>]*>/g, ' ')
+            .trim()
+            .split(/\s+/)[0];
+          expect(result.llmContent).toContain(visible);
         } else {
           expect(convert).not.toHaveBeenCalled();
           expect(result.llmContent).toContain(sanitizeXml(content));

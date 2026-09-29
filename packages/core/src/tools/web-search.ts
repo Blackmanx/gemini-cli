@@ -572,14 +572,21 @@ class WebSearchToolInvocation extends BaseToolInvocation<
         | GroundingSupportItem[]
         | undefined;
 
-      if (!responseText || !responseText.trim() || !sources?.length) {
+      // Text is the answer; grounding chunks are attribution. Requiring
+      // sources discarded a real answer whenever the backend returned prose
+      // without citation metadata, and reported it as "no results found" -
+      // which reads as "the search found nothing" rather than "we threw away
+      // what it said".
+      if (!responseText || !responseText.trim()) {
         return { kind: 'empty' };
       }
 
       return {
         kind: 'grounded',
         text: responseText,
-        sources,
+        // Defaulted, not asserted: an answer with no citations is still an
+        // answer, and the downstream filter already handles zero sources.
+        sources: sources ?? [],
         supports: groundingSupports ?? [],
         backendQueries: [
           ...(groundingMetadata?.webSearchQueries ?? []),

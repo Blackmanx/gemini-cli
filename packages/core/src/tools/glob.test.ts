@@ -116,8 +116,8 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 2 file(s)');
-      expect(result.llmContent).toContain(path.join(tempRootDir, 'fileA.txt'));
-      expect(result.llmContent).toContain(path.join(tempRootDir, 'FileB.TXT'));
+      expect(result.llmContent).toContain('fileA.txt');
+      expect(result.llmContent).toContain('FileB.TXT');
       expect(result.returnDisplay).toBe('Found 2 matching file(s)');
     }, 30000);
 
@@ -126,7 +126,7 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 1 file(s)');
-      expect(result.llmContent).toContain(path.join(tempRootDir, 'fileA.txt'));
+      expect(result.llmContent).toContain('fileA.txt');
       expect(result.llmContent).not.toContain(
         path.join(tempRootDir, 'FileB.TXT'),
       );
@@ -150,8 +150,8 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 2 file(s)');
-      expect(result.llmContent).toContain(path.join(tempRootDir, 'fileA.txt'));
-      expect(result.llmContent).toContain(path.join(tempRootDir, 'FileB.TXT'));
+      expect(result.llmContent).toContain('fileA.txt');
+      expect(result.llmContent).toContain('FileB.TXT');
     }, 30000);
 
     it('should find files using a pattern that includes a subdirectory', async () => {
@@ -159,12 +159,9 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 2 file(s)');
-      expect(result.llmContent).toContain(
-        path.join(tempRootDir, 'sub', 'fileC.md'),
-      );
-      expect(result.llmContent).toContain(
-        path.join(tempRootDir, 'sub', 'FileD.MD'),
-      );
+      expect(result.llmContent).toContain('fileC.md');
+      expect(result.llmContent).toContain('# sub/');
+      expect(result.llmContent).toContain('FileD.MD');
     }, 30000);
 
     it('should find files in a specified relative path (relative to rootDir)', async () => {
@@ -172,12 +169,9 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 2 file(s)');
-      expect(result.llmContent).toContain(
-        path.join(tempRootDir, 'sub', 'fileC.md'),
-      );
-      expect(result.llmContent).toContain(
-        path.join(tempRootDir, 'sub', 'FileD.MD'),
-      );
+      expect(result.llmContent).toContain('fileC.md');
+      expect(result.llmContent).toContain('# sub/');
+      expect(result.llmContent).toContain('FileD.MD');
     }, 30000);
 
     it('should find files using a deep globstar pattern (e.g., **/*.log)', async () => {
@@ -185,9 +179,8 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 1 file(s)');
-      expect(result.llmContent).toContain(
-        path.join(tempRootDir, 'sub', 'deep', 'fileE.log'),
-      );
+      expect(result.llmContent).toContain('# sub/deep/');
+      expect(result.llmContent).toContain('fileE.log');
     }, 30000);
 
     it('should return "No files found" message when pattern matches nothing', async () => {
@@ -206,9 +199,7 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 1 file(s)');
-      expect(result.llmContent).toContain(
-        path.join(tempRootDir, 'file[1].txt'),
-      );
+      expect(result.llmContent).toContain('file[1].txt');
     }, 30000);
 
     it('should find files with special characters like [] and () in the path', async () => {
@@ -225,7 +216,9 @@ describe('GlobTool', () => {
       const invocation = globTool.build(params);
       const result = await invocation.execute({ abortSignal });
       expect(result.llmContent).toContain('Found 1 file(s)');
-      expect(result.llmContent).toContain(filePath);
+      expect(result.llmContent).toContain(
+        'src/app/[test]/(dashboard)/testing/components/code.tsx',
+      );
     }, 30000);
 
     it('should correctly sort files by modification time (newest first)', async () => {

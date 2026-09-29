@@ -147,6 +147,17 @@ const mockHookSystem = {
   fireBeforeAgentEvent: vi.fn().mockResolvedValue(undefined),
   fireAfterAgentEvent: vi.fn().mockResolvedValue(undefined),
   firePreCompressEvent: vi.fn().mockResolvedValue(undefined),
+  // The compaction and retry pairs. `fireBeforeSubagentSpawnEvent` answers a
+  // decision rather than nothing, so a test that allows a spawn sees
+  // `cancelled: false`.
+  // The per-model-call turn pair, fired 1:1 by the agent loop.
+  fireTurnStartEvent: vi.fn().mockResolvedValue(undefined),
+  fireTurnEndEvent: vi.fn().mockResolvedValue(undefined),
+  fireAutoCompactionStartEvent: vi.fn().mockResolvedValue(undefined),
+  fireAutoCompactionEndEvent: vi.fn().mockResolvedValue(undefined),
+  fireAutoRetryStartEvent: vi.fn().mockResolvedValue(undefined),
+  fireAutoRetryEndEvent: vi.fn().mockResolvedValue(undefined),
+  fireBeforeSubagentSpawnEvent: vi.fn().mockResolvedValue({ cancelled: false }),
 };
 
 /**

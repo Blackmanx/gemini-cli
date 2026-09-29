@@ -2856,6 +2856,10 @@ describe('GeminiChat', () => {
         }),
         fireAfterModelEvent: vi.fn().mockResolvedValue({ response: {} }),
         fireBeforeToolSelectionEvent: vi.fn().mockResolvedValue({}),
+        // The retry saga pair; both resolve to nothing and are announced
+        // around the retry, not in place of it.
+        fireAutoRetryStartEvent: vi.fn().mockResolvedValue(undefined),
+        fireAutoRetryEndEvent: vi.fn().mockResolvedValue(undefined),
       } as unknown as HookSystem;
       mockConfig.getHookSystem = vi.fn().mockReturnValue(mockHookSystem);
 

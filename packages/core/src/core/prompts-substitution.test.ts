@@ -17,6 +17,31 @@ vi.mock('../utils/gitUtils', () => ({
   isGitRepository: vi.fn().mockReturnValue(false),
 }));
 
+/**
+ * `fs.readFileSync` that answers the SYSTEM_MD path with `text` and reports
+ * every other file as absent.
+ *
+ * The prompt build also reads the optional, additive `APPEND_SYSTEM.md`. A
+ * blanket `mockReturnValue` answers that read with the system prompt too, so
+ * the same string would appear twice and these exact-equality assertions
+ * would be testing the fixture rather than the substitution.
+ */
+function readOnlySystemMd(text: string): void {
+  vi.mocked(fs.readFileSync).mockImplementation((file) => {
+    // Anchored on a separator: a bare `endsWith('system.md')` also matches
+    // APPEND_SYSTEM.md, which is a different file with different content.
+    if (
+      typeof file === 'string' &&
+      file.toLowerCase().split(/[\\/]/).pop() === 'system.md'
+    ) {
+      return text;
+    }
+    const error = new Error('ENOENT') as NodeJS.ErrnoException;
+    error.code = 'ENOENT';
+    throw error;
+  });
+}
+
 describe('Core System Prompt Substitution', () => {
   let mockConfig: Config;
   beforeEach(() => {
@@ -79,9 +104,7 @@ describe('Core System Prompt Substitution', () => {
     ];
     vi.mocked(mockConfig.getSkillManager().getSkills).mockReturnValue(skills);
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      'Skills go here: ${AgentSkills}',
-    );
+    readOnlySystemMd('Skills go here: ${AgentSkills}');
 
     const prompt = getCoreSystemPrompt(mockConfig);
 
@@ -93,7 +116,7 @@ describe('Core System Prompt Substitution', () => {
 
   it('should substitute ${SubAgents} in custom system prompt', () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue('Agents: ${SubAgents}');
+    readOnlySystemMd('Agents: ${SubAgents}');
 
     vi.mocked(mockConfig.getAgentRegistry().getAllDefinitions).mockReturnValue([
       {
@@ -112,7 +135,7 @@ describe('Core System Prompt Substitution', () => {
 
   it('should substitute ${AvailableTools} in custom system prompt', () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue('Tools:\n${AvailableTools}');
+    readOnlySystemMd('Tools:\n${AvailableTools}');
 
     const prompt = getCoreSystemPrompt(mockConfig);
 
@@ -124,9 +147,7 @@ describe('Core System Prompt Substitution', () => {
 
   it('should substitute tool names using the ${toolName}_ToolName pattern', () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      'Use ${write_file_ToolName} and ${read_file_ToolName}.',
-    );
+    readOnlySystemMd('Use ${write_file_ToolName} and ${read_file_ToolName}.');
 
     const prompt = getCoreSystemPrompt(mockConfig);
 
@@ -139,9 +160,7 @@ describe('Core System Prompt Substitution', () => {
 
   it('should not substitute old patterns', () => {
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue(
-      '${WriteFileToolName} and ${WRITE_FILE_TOOL_NAME}',
-    );
+    readOnlySystemMd('${WriteFileToolName} and ${WRITE_FILE_TOOL_NAME}');
 
     const prompt = getCoreSystemPrompt(mockConfig);
 
@@ -154,7 +173,7 @@ describe('Core System Prompt Substitution', () => {
         .getAllToolNames,
     ).mockReturnValue([]);
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.readFileSync).mockReturnValue('Use ${write_file_ToolName}.');
+    readOnlySystemMd('Use ${write_file_ToolName}.');
 
     const prompt = getCoreSystemPrompt(mockConfig);
 

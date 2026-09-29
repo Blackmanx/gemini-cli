@@ -194,7 +194,13 @@ class GlobToolInvocation extends BaseToolInvocation<
     }
     const parsed = parseFindPattern(this.params.pattern, root);
     const base = parsed.base === '' ? root : path.resolve(root, parsed.base);
-    const entries = (await glob(parsed.pattern, {
+    // When the pattern names a file that actually exists, match it literally.
+    // Otherwise `file[1].txt` is a character class meaning `file1.txt`, and
+    // the file the user meant - the one on disk with brackets in its name - is
+    // not found.
+    const literal = path.resolve(root, this.params.pattern);
+    const pattern = fs.existsSync(literal) ? escape(literal) : parsed.pattern;
+    const entries = (await glob(pattern, {
       cwd: base,
       withFileTypes: true,
       nodir: true,
@@ -281,12 +287,28 @@ class GlobToolInvocation extends BaseToolInvocation<
         // with the glob in its first segment, still searches recursively.
         // Without this, `*.ts` silently only matches the top level.
         const parsed = parseFindPattern(this.params.pattern, searchDir);
-        const base =
+        let base =
           parsed.base === '' ? searchDir : path.resolve(searchDir, parsed.base);
         let pattern = parsed.pattern;
-        const fullPath = path.join(base, pattern);
-        if (fs.existsSync(fullPath)) {
-          pattern = escape(pattern);
+        // Check the pattern the USER typed, not the parsed one: parsing may
+        // prefix `**/` for a recursive search, and the prefixed path does not
+        // exist even when the file they named does. Checking the parsed
+        // pattern is what made `file[1].txt` - a real file with brackets in
+        // its name - unfindable, because the character class was never
+        // escaped.
+        const literalPath = path.resolve(searchDir, this.params.pattern);
+        if (
+          fs.existsSync(literalPath) &&
+          !this.params.pattern.includes('*') &&
+          !this.params.pattern.includes('?')
+        ) {
+          // A path with no wildcards that exists is a literal. The base moves
+          // back to the search directory with it: parsing may have rooted the
+          // search at `src/app` for a pattern that starts there, and globbing
+          // the full path from that narrower base would look one level too
+          // deep and find nothing.
+          base = searchDir;
+          pattern = escape(this.params.pattern.replace(/\\/g, '/'));
         }
 
         const entries = (await glob(pattern, {

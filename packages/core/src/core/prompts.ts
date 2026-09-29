@@ -35,7 +35,7 @@ export function getCoreSystemPrompt(
   );
   // The toolset is the real guarantee; this tells the model why it changed, so
   // a missing write tool is not mistaken for a broken harness.
-  return applyVibePrompt(prompt, config.getVibeMode());
+  return applyVibePrompt(prompt, config.getVibeMode?.() === true);
 }
 
 /**

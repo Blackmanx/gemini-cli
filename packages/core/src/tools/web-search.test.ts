@@ -112,7 +112,9 @@ describe('WebSearchTool', () => {
       expect(result.returnDisplay).toBe(
         'Search results for "successful query" returned.',
       );
-      expect(result.sources).toBeUndefined();
+      // An empty list rather than undefined: the answer arrived, it just
+      // carried no citations.
+      expect(result.sources).toEqual([]);
     });
 
     it('should handle no search results found', async () => {

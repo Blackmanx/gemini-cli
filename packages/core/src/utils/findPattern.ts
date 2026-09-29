@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { existsSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 
 const GLOB_PATH_CHARS = ['*', '?', '[', '{'] as const;
@@ -76,6 +77,18 @@ export function parseFindPattern(
   const firstGlobIndex = firstGlobSegment(segments);
 
   if (firstGlobIndex === -1) {
+    // No glob characters. If the whole thing names an existing FILE it is a
+    // literal, and the search must be rooted at its DIRECTORY: treating
+    // `notes.md` as a base and searching `**/*` inside it looks for a
+    // directory called `notes.md`, finds nothing, and reports "no files
+    // found" for a file that is right there.
+    const asFile = path.resolve(startDir ?? process.cwd(), stripped);
+    if (existsSync(asFile) && statSync(asFile).isFile()) {
+      return {
+        base: relativize(path.dirname(asFile), startDir),
+        pattern: path.basename(asFile),
+      };
+    }
     return { base: relativize(stripped, startDir), pattern: '**/*' };
   }
 

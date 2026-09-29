@@ -766,6 +766,29 @@ Response: ${rawResponseText}`;
           returnDisplay: `Fetched ${contentType} from ${url}`,
         };
       }
+      // A response with no Content-Type at all is usually a page, and handing
+      // the model raw `<p>...</p>` when it asked for text is worse than
+      // converting it. Sniffed, not assumed: only a body that actually looks
+      // like markup is converted.
+      if (contentType === '' && looksLikeHtml(bodyBuffer.toString('utf8'))) {
+        let sniffed = convert(bodyBuffer.toString('utf8'), {
+          wordwrap: false,
+          selectors: [
+            { selector: 'a', options: { ignoreHref: false, baseUrl: url } },
+          ],
+        });
+        if (!this.context.config.isContextManagementEnabled()) {
+          sniffed = truncateString(
+            sniffed,
+            MAX_CONTENT_LENGTH,
+            TRUNCATION_WARNING,
+          );
+        }
+        return {
+          llmContent: wrapUntrusted(sniffed),
+          returnDisplay: `Fetched and converted HTML content from ${url}`,
+        };
+      }
 
       // Fallback for unknown types - try as text
       let text = bodyBuffer.toString('utf8');
@@ -920,6 +943,26 @@ ${toFetch.join('\n')}
 /**
  * Implementation of the WebFetch tool logic
  */
+/**
+ * Whether a body with no declared type is markup.
+ *
+ * Deliberately narrow: a real tag, not a stray `<` or `>`, which appear in
+ * ordinary prose and in code samples. Only the head of the body is examined -
+ * a page's doctype and first elements are at the top, and scanning megabytes
+ * to classify a response is not worth it.
+ */
+export function looksLikeHtml(body: string): boolean {
+  const head = body.slice(0, 1024).trimStart();
+  if (head === '') return false;
+  if (head.startsWith('<!doctype html') || head.startsWith('<!DOCTYPE html')) {
+    return true;
+  }
+  if (head.startsWith('<html') || head.startsWith('<HTML')) return true;
+  return /^<(?:head|body|div|p|span|a|ul|ol|li|table|section|article|h[1-6])\b/i.test(
+    head,
+  );
+}
+
 export class WebFetchTool extends BaseDeclarativeTool<
   WebFetchToolParams,
   ToolResult

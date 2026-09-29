@@ -262,7 +262,38 @@ export class PromptProvider {
       basePrompt = getCoreSystemPrompt(options);
     }
 
-    // --- Finalization (Shell) ---
+    // The user's own standing instructions, and the conventions this repo
+    // carries for other agents.
+    //
+    // The instructions go through `applySubstitutions`, so a user who writes
+    // `${AvailableTools}` in their house rules gets it resolved exactly as it
+    // would in GEMINI_SYSTEM_MD. Appending the raw text would ship a literal
+    // `${...}` to the model, which reads as a broken template rather than as
+    // what the user wrote.
+    const skillsPrompt = activeSnippets.renderAgentSkills(
+      skills.map((s) => ({
+        name: s.name,
+        description: s.description,
+        location: s.location,
+      })),
+    );
+    const append = this.readAppendSystem(context);
+    if (append !== '') {
+      const rendered = applySubstitutions(
+        append,
+        context.config,
+        skillsPrompt,
+        isModernModel,
+      );
+      basePrompt += `\n\n# User instructions\n\n${rendered}`;
+    }
+    // Appended as a distinct block, after the user's own memory, so a rule
+    // the agent did not write stays attributable rather than blending in.
+    const importedRules = context.config.getImportedRulesBlock?.();
+    if (importedRules) {
+      basePrompt += `\n\n${importedRules}`;
+    }
+
     const finalPrompt = activeSnippets.renderFinalShell(
       basePrompt,
       userMemory,
@@ -271,22 +302,6 @@ export class PromptProvider {
 
     // Sanitize erratic newlines from composition
     let sanitizedPrompt = finalPrompt.replace(/\n{3,}/g, '\n\n');
-
-    // The user's own standing instructions. Read from settings and from
-    // APPEND_SYSTEM.md, so house rules can be added without replacing the
-    // generated prompt and losing every section in it.
-    const append = this.readAppendSystem(context);
-    if (append !== '') {
-      sanitizedPrompt += `\n\n# User instructions\n\n${append}`;
-    }
-
-    // Conventions this repo already carries for other agents. Appended as a
-    // distinct block, after the user's own memory, so a rule the agent did
-    // not write stays attributable rather than blending into the prompt.
-    const importedRules = context.config.getImportedRulesBlock();
-    if (importedRules) {
-      sanitizedPrompt += `\n\n${importedRules}`;
-    }
 
     // Context Reinjection (Active Topic)
     if (isTopicUpdateNarrationEnabled) {
@@ -344,8 +359,15 @@ export class PromptProvider {
    * other project-scoped file in this repo behaves.
    */
   private readAppendSystem(context: AgentLoopContext): string {
+    // Every step here is best-effort: this function reads OPTIONAL files, and a
+    // prompt that throws because one is missing would take down the session.
+    // A config that cannot say what its target directory is falls back to the
+    // global file rather than failing.
+    const targetDir = context.config.getTargetDir?.();
     const candidates = [
-      path.join(context.config.getTargetDir(), 'APPEND_SYSTEM.md'),
+      ...(targetDir === undefined
+        ? []
+        : [path.join(targetDir, 'APPEND_SYSTEM.md')]),
       path.join(homedir(), '.gemini', 'APPEND_SYSTEM.md'),
     ];
     for (const file of candidates) {

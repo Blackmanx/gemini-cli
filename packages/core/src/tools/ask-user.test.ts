@@ -321,7 +321,23 @@ describe('AskUserTool', () => {
       expect(result).toContain("'label' is required");
     });
 
-    it('should return error if option is missing description', () => {
+    it('should accept an option with no description', () => {
+      // The label alone carries the choice. Requiring a description forced
+      // the model to pad every option with prose just to satisfy the schema.
+      const result = tool.validateToolParams({
+        questions: [
+          {
+            question: 'Pick one?',
+            header: 'Choice',
+            type: QuestionType.CHOICE,
+            options: [{ label: 'A' }, { label: 'B', description: 'Option B' }],
+          },
+        ],
+      });
+      expect(result).toBeNull();
+    });
+
+    it('should still reject an option with no label', () => {
       const result = tool.validateToolParams({
         questions: [
           {
@@ -329,13 +345,15 @@ describe('AskUserTool', () => {
             header: 'Choice',
             type: QuestionType.CHOICE,
             options: [
-              { label: 'A' } as { label: string; description: string },
-              { label: 'B', description: 'Option B' },
+              { description: 'no label' } as {
+                label: string;
+                description: string;
+              },
             ],
           },
         ],
       });
-      expect(result).toContain("must have required property 'description'");
+      expect(result).toContain("must have required property 'label'");
     });
   });
 

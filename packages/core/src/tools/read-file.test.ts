@@ -291,22 +291,31 @@ describe('ReadFileTool', () => {
       );
     });
 
-    it('should return error if path is a directory', async () => {
+    it('should list a directory rather than failing', async () => {
+      // Reading a directory used to be an error, which meant the model had to
+      // switch tools and re-issue the call to find out what was in it. It now
+      // lists, so a directory is readable through the same tool.
       const dirPath = path.join(tempRootDir, 'directory');
+      await fsp.mkdir(dirPath);
+      await fsp.writeFile(path.join(dirPath, 'inside.txt'), 'content');
+      const params: ReadFileToolParams = { file_path: dirPath };
+      const invocation = tool.build(params);
+
+      const result = await invocation.execute({ abortSignal });
+      expect(result.error).toBeUndefined();
+      expect(result.llmContent).toContain('Directory listing');
+      expect(result.llmContent).toContain('inside.txt');
+    });
+
+    it('should report an empty directory as empty, not as an error', async () => {
+      const dirPath = path.join(tempRootDir, 'empty-directory');
       await fsp.mkdir(dirPath);
       const params: ReadFileToolParams = { file_path: dirPath };
       const invocation = tool.build(params);
 
       const result = await invocation.execute({ abortSignal });
-      expect(result).toEqual({
-        llmContent:
-          'Could not read file because the provided path is a directory, not a file.',
-        returnDisplay: 'Path is a directory.',
-        error: {
-          message: `Path is a directory, not a file: ${dirPath}`,
-          type: ToolErrorType.TARGET_IS_DIRECTORY,
-        },
-      });
+      expect(result.error).toBeUndefined();
+      expect(result.llmContent).toContain('(empty directory)');
     });
 
     it('should return error for a file that is too large', async () => {
