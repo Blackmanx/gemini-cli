@@ -52,6 +52,43 @@ export enum HookEventName {
   BeforeModel = 'BeforeModel',
   AfterModel = 'AfterModel',
   BeforeToolSelection = 'BeforeToolSelection',
+  /**
+   * A model turn is about to be dispatched. Fires once per model call in the
+   * agent loop, paired 1:1 with {@link HookEventName.TurnEnd}.
+   */
+  TurnStart = 'TurnStart',
+  /**
+   * The model turn dispatched at the matching {@link HookEventName.TurnStart}
+   * has finished, successfully or not.
+   */
+  TurnEnd = 'TurnEnd',
+  /**
+   * Automatic context compaction is about to run. Unlike the read-only
+   * {@link HookEventName.PreCompress}, this pair reports the outcome: the
+   * matching {@link HookEventName.AutoCompactionEnd} carries the resulting
+   * compression status and token counts.
+   */
+  AutoCompactionStart = 'AutoCompactionStart',
+  /**
+   * The automatic compaction started at the matching
+   * {@link HookEventName.AutoCompactionStart} has settled, successfully or not.
+   */
+  AutoCompactionEnd = 'AutoCompactionEnd',
+  /**
+   * The transport gave up on an attempt and is backing off before retrying.
+   * Fires at most once per model call, on the first retry.
+   */
+  AutoRetryStart = 'AutoRetryStart',
+  /**
+   * The retry saga started at the matching {@link HookEventName.AutoRetryStart}
+   * has settled, either recovered or exhausted.
+   */
+  AutoRetryEnd = 'AutoRetryEnd',
+  /**
+   * A subagent delegation is about to be dispatched. Cancellable: see
+   * {@link BeforeSubagentSpawnOutput}.
+   */
+  BeforeSubagentSpawn = 'BeforeSubagentSpawn',
 }
 
 /**
@@ -156,6 +193,21 @@ export interface HookOutput {
   systemMessage?: string;
   decision?: HookDecision;
   reason?: string;
+  /**
+   * Veto the operation a `before_*` event is guarding.
+   *
+   * Only meaningful on the cancellable events (currently
+   * {@link HookEventName.BeforeSubagentSpawn}); ignored elsewhere, so a hook
+   * that always sets it is harmless on events that cannot be stopped.
+   *
+   * This is fail-closed, and deliberately so. A hook that crashes, times out,
+   * or exits non-zero is treated as a refusal, not as an absent opinion: the
+   * guard exists to stop work, and a guard that silently waves through
+   * because it broke is worse than no guard at all. The counterpart of that
+   * rule is that a hook which wants to *allow* the operation must say so
+   * explicitly (`{"cancel": false}`) rather than by staying quiet.
+   */
+  cancel?: boolean;
   hookSpecificOutput?: Record<string, unknown>;
 }
 
@@ -193,6 +245,7 @@ export class DefaultHookOutput implements HookOutput {
   systemMessage?: string;
   decision?: HookDecision;
   reason?: string;
+  cancel?: boolean;
   hookSpecificOutput?: Record<string, unknown>;
 
   constructor(data: Partial<HookOutput> = {}) {
@@ -202,6 +255,7 @@ export class DefaultHookOutput implements HookOutput {
     this.systemMessage = data.systemMessage;
     this.decision = data.decision;
     this.reason = data.reason;
+    this.cancel = data.cancel;
     this.hookSpecificOutput = data.hookSpecificOutput;
   }
 
@@ -719,6 +773,173 @@ export interface BeforeToolSelectionOutput extends HookOutput {
     hookEventName: 'BeforeToolSelection';
     toolConfig?: HookToolConfig;
   };
+}
+
+/**
+ * TurnStart hook input - a model turn is about to be dispatched
+ */
+export interface TurnStartInput extends HookInput {
+  prompt_id: string;
+  /** Monotonic index of this turn within the session. */
+  turn_index: number;
+  model: string;
+}
+
+/**
+ * TurnStart hook output
+ *
+ * Observation only: by the time a turn starts the request has already been
+ * shaped by {@link HookEventName.BeforeModel}. Use that event to change it.
+ */
+export interface TurnStartOutput {
+  suppressOutput?: boolean;
+  systemMessage?: string;
+}
+
+/**
+ * TurnEnd hook input - the turn dispatched at the matching TurnStart finished
+ */
+export interface TurnEndInput extends HookInput {
+  prompt_id: string;
+  /** Matches the `turn_index` reported by the paired TurnStart. */
+  turn_index: number;
+  model: string;
+  /** Text the model produced this turn; empty when the turn produced none. */
+  response_text: string;
+  finish_reason?: string;
+  /** True when the stream ended in an error event. */
+  error: boolean;
+  /** Tool calls the model requested this turn, by name. */
+  tool_call_names: string[];
+}
+
+/**
+ * TurnEnd hook output
+ *
+ * Observation only. The turn is already over; {@link HookEventName.AfterAgent}
+ * is the event that can still change what happens next.
+ */
+export interface TurnEndOutput {
+  suppressOutput?: boolean;
+  systemMessage?: string;
+}
+
+/**
+ * AutoCompactionStart hook input - automatic compaction is about to run
+ */
+export interface AutoCompactionStartInput extends HookInput {
+  prompt_id: string;
+  /** Model whose context window is being compacted. */
+  model: string;
+  /** Token count of the history before compaction. */
+  original_token_count: number;
+}
+
+/**
+ * AutoCompactionStart hook output
+ */
+export interface AutoCompactionStartOutput {
+  suppressOutput?: boolean;
+  systemMessage?: string;
+}
+
+/**
+ * AutoCompactionEnd hook input - the automatic compaction has settled
+ */
+export interface AutoCompactionEndInput extends HookInput {
+  prompt_id: string;
+  model: string;
+  /**
+   * The `CompressionStatus` member *name* — `COMPRESSED`, `NOOP`,
+   * `CONTENT_TRUNCATED`, or one of the failure statuses — rather than the
+   * numeric enum value, because this reaches a hook command as JSON.
+   */
+  compression_status: string;
+  original_token_count: number;
+  new_token_count: number;
+  /** True when compaction was attempted but decided there was nothing to do. */
+  skipped: boolean;
+}
+
+/**
+ * AutoCompactionEnd hook output
+ */
+export interface AutoCompactionEndOutput {
+  suppressOutput?: boolean;
+  systemMessage?: string;
+}
+
+/**
+ * AutoRetryStart hook input - the model call is backing off before a retry
+ */
+export interface AutoRetryStartInput extends HookInput {
+  attempt: number;
+  max_attempts: number;
+  delay_ms: number;
+  error_message: string;
+  error_type: string;
+  model: string;
+}
+
+/**
+ * AutoRetryStart hook output
+ */
+export interface AutoRetryStartOutput {
+  suppressOutput?: boolean;
+  systemMessage?: string;
+}
+
+/**
+ * AutoRetryEnd hook input - the retry saga has settled
+ */
+export interface AutoRetryEndInput extends HookInput {
+  /** Attempts made before the saga settled; 0 when no retry ever happened. */
+  attempt: number;
+  success: boolean;
+  /** The error the saga gave up on, when `success` is false. */
+  error_message?: string;
+  model: string;
+}
+
+/**
+ * AutoRetryEnd hook output
+ */
+export interface AutoRetryEndOutput {
+  suppressOutput?: boolean;
+  systemMessage?: string;
+}
+
+/**
+ * BeforeSubagentSpawn hook input - a delegation is about to be dispatched
+ */
+export interface BeforeSubagentSpawnInput extends HookInput {
+  /** Name of the subagent about to run, as the model spelled it. */
+  agent_name: string;
+  /** Where the subagent runs. */
+  agent_kind: 'local' | 'remote';
+  prompt: string;
+  /** The mapped input the subagent actually receives, not the raw prompt. */
+  agent_input: Record<string, unknown>;
+  /**
+   * True when this branch is one of several fanned out by a single batched
+   * delegation, so a hook can tell "the only subagent" from "one of five".
+   */
+  batch: boolean;
+}
+
+/**
+ * BeforeSubagentSpawn hook output
+ */
+export interface BeforeSubagentSpawnOutput extends HookOutput {
+  /**
+   * Set `cancel: true` to stop this delegation. The subagent never starts and
+   * the model is told the delegation was refused, with `reason` as the
+   * explanation.
+   *
+   * Fail-closed, as described on {@link HookOutput.cancel}: a hook that fails
+   * is a refusal, not a pass.
+   */
+  cancel?: boolean;
 }
 
 /**

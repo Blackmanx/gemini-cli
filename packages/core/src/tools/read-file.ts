@@ -204,7 +204,7 @@ class ReadFileToolInvocation extends BaseToolInvocation<
       };
     }
     try {
-      const resource = router.resolve(href, {
+      const resource = await router.resolve(href, {
         cwd: this.config.getTargetDir(),
       });
       const text =

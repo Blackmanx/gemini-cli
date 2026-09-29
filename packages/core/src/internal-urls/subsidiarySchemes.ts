@@ -263,7 +263,7 @@ function historyScheme(host: SubsidiarySchemeHost): SchemeSpec {
     selectors: 'lines',
     immutable: true,
     linkable: true,
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const dir = host.chatsDir?.();
       if (dir === undefined) {
         throw new Error(
@@ -448,7 +448,10 @@ function procScheme(host: SubsidiarySchemeHost): SchemeSpec {
       contentOptional: (url: InternalUrl): boolean =>
         url.rest.endsWith(KILL_SUFFIX),
     },
-    resolve(url: InternalUrl, context?: ResolveContext): InternalResource {
+    async resolve(
+      url: InternalUrl,
+      context?: ResolveContext,
+    ): Promise<InternalResource> {
       const table = requireTable(host, context);
       if (url.rest === '') {
         return {
@@ -509,11 +512,11 @@ function procScheme(host: SubsidiarySchemeHost): SchemeSpec {
         contentType: 'text/markdown',
       };
     },
-    applyWrite(
+    async applyWrite(
       url: InternalUrl,
       content: string,
       context?: WriteContext,
-    ): void {
+    ): Promise<void> {
       const table = requireTable(host, context);
       if (url.rest.endsWith(KILL_SUFFIX)) {
         const target = url.rest.slice(0, -KILL_SUFFIX.length);
@@ -605,7 +608,7 @@ function mcpScheme(host: SubsidiarySchemeHost): SchemeSpec {
     backing: 'remote',
     selectors: 'opaque',
     immutable: true,
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const access = host.mcp?.();
       if (access === undefined) {
         throw new Error(
@@ -693,7 +696,7 @@ function memoryScheme(host: SubsidiarySchemeHost): SchemeSpec {
     backing: 'virtual',
     selectors: 'opaque',
     immutable: true,
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const bank = host.memory?.();
       if (bank === undefined) {
         throw new Error(
@@ -816,7 +819,7 @@ function skillScheme(host: SubsidiarySchemeHost): SchemeSpec {
     selectors: 'lines',
     immutable: true,
     linkable: true,
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const skills = host.skills?.();
       if (skills === undefined) {
         throw new Error(
@@ -897,7 +900,7 @@ function artifactScheme(host: SubsidiarySchemeHost): SchemeSpec {
     unbounded: true,
     artifactStore: true,
     compactTranscript: true,
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const dirs = host.artifactDirs?.() ?? [];
       if (dirs.length === 0) {
         throw new Error(

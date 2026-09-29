@@ -125,7 +125,10 @@ function localScheme(host: () => SchemeHost): SchemeSpec {
       scope: 'sandbox',
       tier: () => 'write',
     },
-    resolve(url: InternalUrl, _context?: ResolveContext): InternalResource {
+    async resolve(
+      url: InternalUrl,
+      _context?: ResolveContext,
+    ): Promise<InternalResource> {
       const dir = host().scratchDir;
       if (!dir) {
         throw new Error('local:// is unavailable: no scratch directory');
@@ -192,7 +195,7 @@ function cfgScheme(host: () => SchemeHost): SchemeSpec {
       scope: 'device',
       tier: () => 'write',
     },
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const settings = mergeSettingsFiles(host().settingsFiles?.() ?? []);
       if (url.rest === '' || url.rest === '.') {
         return {
@@ -220,7 +223,7 @@ function cfgScheme(host: () => SchemeHost): SchemeSpec {
           typeof value === 'string' ? 'text/plain' : 'application/json',
       };
     },
-    applyWrite(url: InternalUrl): never {
+    async applyWrite(url: InternalUrl): Promise<never> {
       throw new Error(
         `${url.href}: settings are edited in settings.json, not through cfg://`,
       );
@@ -301,7 +304,7 @@ function docsScheme(host: () => SchemeHost): SchemeSpec {
     backing: 'file',
     selectors: 'lines',
     immutable: true,
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const dir = host().docsDir;
       if (!dir) {
         throw new Error('omp:// is unavailable: no documentation directory');
@@ -380,7 +383,7 @@ function agentScheme(): SchemeSpec {
       // need write approval; plan mode may still use it.
       tier: () => 'read',
     },
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const id = url.rest.split('/')[0] ?? '';
       const jsonPath = url.rest.slice(id.length + 1);
       if (id === '') {
@@ -442,7 +445,7 @@ function agentScheme(): SchemeSpec {
         shape: 'value',
       };
     },
-    applyWrite(url: InternalUrl, content: string): void {
+    async applyWrite(url: InternalUrl, content: string): Promise<void> {
       const to = url.rest === '' ? 'all' : url.rest;
       if (to !== 'all' && getAgent(to) === undefined) {
         const known = listAgents()
@@ -486,7 +489,7 @@ function deviceScheme(host: () => SchemeHost): SchemeSpec {
       // what it touches, and the policy engine sees it as such.
       tier: () => 'exec',
     },
-    resolve(url: InternalUrl): InternalResource {
+    async resolve(url: InternalUrl): Promise<InternalResource> {
       const registry = host().devices?.();
       if (registry === undefined) {
         throw new Error('xd:// is unavailable: no device table is installed.');
@@ -521,7 +524,10 @@ function deviceScheme(host: () => SchemeHost): SchemeSpec {
         contentType: 'text/markdown',
       };
     },
-    applyWrite(url: InternalUrl, content: string): InternalResource {
+    async applyWrite(
+      url: InternalUrl,
+      content: string,
+    ): Promise<InternalResource> {
       const registry = host().devices?.();
       if (registry === undefined) {
         throw new Error('xd:// is unavailable: no device table is installed.');

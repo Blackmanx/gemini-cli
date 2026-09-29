@@ -216,6 +216,12 @@ class DelegateInvocation extends BaseToolInvocation<
     _toolName?: string,
     _toolDisplayName?: string,
     private readonly onAgentEvent?: (event: AgentEvent) => void,
+    /**
+     * True when this branch is one of several dispatched by a single batched
+     * call, so a BeforeSubagentSpawn hook can tell "the only subagent" from
+     * "one of five".
+     */
+    private readonly batch: boolean = false,
   ) {
     super(
       params,
@@ -294,6 +300,24 @@ class DelegateInvocation extends BaseToolInvocation<
   async execute(options: ExecuteOptions): Promise<ToolResult> {
     const { abortSignal: signal, updateOutput } = options;
     const hintedParams = this.withUserHints(this.mappedInputs);
+
+    // Before the child invocation is even built: a refused delegation must not
+    // construct an executor, mint a roster handle, or open a trace span for
+    // work that will never happen.
+    const hookSystem = this.context.config.getEnableHooks()
+      ? this.context.config.getHookSystem()
+      : undefined;
+    const decision = await hookSystem?.fireBeforeSubagentSpawnEvent({
+      agent_name: this.definition.name,
+      agent_kind: this.definition.kind,
+      prompt: this.params.prompt,
+      agent_input: { ...hintedParams },
+      batch: this.batch,
+    });
+    if (decision?.cancelled) {
+      return refusedSpawn(this.definition.name, decision.reason);
+    }
+
     const invocation = this.buildChildInvocation(hintedParams);
 
     // Every subagent goes on the roster while it runs, so a sibling can
@@ -445,6 +469,7 @@ class BatchDelegateInvocation extends BaseToolInvocation<
         undefined,
         undefined,
         this.onAgentEvent,
+        /* batch */ true,
       );
       return { task, invocation };
     });
@@ -503,6 +528,26 @@ class BatchDelegateInvocation extends BaseToolInvocation<
       returnDisplay: summary,
     };
   }
+}
+
+/**
+ * The result of a delegation a `BeforeSubagentSpawn` hook refused.
+ *
+ * Carries `error` as well as prose on purpose. Without it the model sees a
+ * successful tool call that returned a sentence, and the natural reading is
+ * "the subagent ran and had nothing to say" — so it delegates again, to the
+ * same refusal, until the turn budget runs out. As a failure the model
+ * treats it as a blocked operation and changes course.
+ */
+function refusedSpawn(agentName: string, reason?: string): ToolResult {
+  const explanation =
+    reason ?? 'a BeforeSubagentSpawn hook refused this delegation';
+  const message = `Subagent '${agentName}' was not started: ${explanation}`;
+  return {
+    llmContent: message,
+    returnDisplay: message,
+    error: { message },
+  };
 }
 
 /**

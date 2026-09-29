@@ -355,3 +355,26 @@ export {
   type SessionHeader,
   type SessionNode,
 } from './session/fork.js';
+
+// Secrets: a store of literal values, `secret://name` references, and
+// reversible placeholders that are stable across sessions but unguessable.
+export {
+  getSecretPlaceholderKey,
+  placeholderKeyPath,
+  resetSecretPlaceholderKeyCache,
+  sanitizeLabel,
+  sanitizeForCollisionCheck,
+  labelCollidesWithSecret,
+  placeholderFor,
+  scanPlaceholders,
+  obfuscateSecrets,
+  deobfuscateSecrets,
+  MIN_SECRET_LENGTH,
+  type ObfuscateResult,
+} from './secrets/obfuscator.js';
+export {
+  SecretStore,
+  isSecretRef,
+  secretRefName,
+  SECRET_FILE_NAME,
+} from './secrets/store.js';

@@ -254,8 +254,16 @@ export interface SchemeSpec {
    * Resolve an internal URL to its content. The router defaults
    * {@link InternalResource.immutable} from {@link SchemeSpec.immutable}.
    * Throws an `Error` with a user-friendly message when resolution fails.
+   *
+   * Async because a scheme may reach the network (`pr://`, `issue://`,
+   * `ssh://`). A synchronous contract would force those handlers to use
+   * `spawnSync`, which blocks the Node event loop and so freezes the TUI —
+   * spinner, streaming output and keypresses — for the length of a round trip.
    */
-  resolve(url: InternalUrl, context?: ResolveContext): InternalResource;
+  resolve(
+    url: InternalUrl,
+    context?: ResolveContext,
+  ): Promise<InternalResource>;
   /**
    * Absolute path of the local file or directory backing `url`, without
    * materializing content. `null` when the URL has no local backing (a
@@ -276,7 +284,7 @@ export interface SchemeSpec {
     url: InternalUrl,
     content: string,
     context?: WriteContext,
-  ): InternalWriteResult | void;
+  ): Promise<InternalWriteResult | void> | InternalWriteResult | void;
   /**
    * Expand a virtual container URL into its searchable leaf documents for
    * `grep`/`find`. Leaf `url`s must round-trip through `resolve`.

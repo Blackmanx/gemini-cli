@@ -9,7 +9,16 @@ import { HookRegistry, type HookRegistryEntry } from './hookRegistry.js';
 import { HookRunner } from './hookRunner.js';
 import { HookAggregator, type AggregatedHookResult } from './hookAggregator.js';
 import { HookPlanner } from './hookPlanner.js';
-import { HookEventHandler } from './hookEventHandler.js';
+import {
+  HookEventHandler,
+  type TurnStartDetails,
+  type TurnEndDetails,
+  type AutoCompactionStartDetails,
+  type AutoCompactionEndDetails,
+  type AutoRetryStartDetails,
+  type AutoRetryEndDetails,
+  type BeforeSubagentSpawnDetails,
+} from './hookEventHandler.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import {
   NotificationType,
@@ -146,6 +155,22 @@ function getNotificationMessage(
     default:
       return `Tool requires confirmation`;
   }
+}
+
+/**
+ * The answer to "may this subagent delegation proceed?".
+ *
+ * A decision rather than a boolean because the refusal has to reach the model
+ * as prose: a spawn that silently does not happen looks identical to a
+ * subagent that produced nothing, and the model will retry the same call
+ * forever.
+ */
+export interface SubagentSpawnDecision {
+  cancelled: boolean;
+  /** Why the delegation was refused. Absent when it was allowed. */
+  reason?: string;
+  /** Message for the user, distinct from what the model is told. */
+  systemMessage?: string;
 }
 
 export class HookSystem {
@@ -442,6 +467,131 @@ export class HookSystem {
         `NotificationEvent failed for ${confirmationDetails.title}:`,
         error,
       );
+    }
+  }
+
+  /**
+   * Notify hooks that a model turn is about to be dispatched.
+   *
+   * Fire-and-forget by design: a hook cannot veto the turn from here (the
+   * request is already committed by the time this is reached) and a hook that
+   * fails here must not take the turn down with it.
+   */
+  async fireTurnStartEvent(details: TurnStartDetails): Promise<void> {
+    await this.notifyBestEffort(
+      () => this.hookEventHandler.fireTurnStartEvent(details),
+      'TurnStart',
+    );
+  }
+
+  /**
+   * Notify hooks that the turn dispatched at the paired TurnStart settled.
+   */
+  async fireTurnEndEvent(details: TurnEndDetails): Promise<void> {
+    await this.notifyBestEffort(
+      () => this.hookEventHandler.fireTurnEndEvent(details),
+      'TurnEnd',
+    );
+  }
+
+  /**
+   * Notify hooks that automatic compaction is about to run.
+   */
+  async fireAutoCompactionStartEvent(
+    details: AutoCompactionStartDetails,
+  ): Promise<void> {
+    await this.notifyBestEffort(
+      () => this.hookEventHandler.fireAutoCompactionStartEvent(details),
+      'AutoCompactionStart',
+    );
+  }
+
+  /**
+   * Notify hooks of the outcome of an automatic compaction.
+   */
+  async fireAutoCompactionEndEvent(
+    details: AutoCompactionEndDetails,
+  ): Promise<void> {
+    await this.notifyBestEffort(
+      () => this.hookEventHandler.fireAutoCompactionEndEvent(details),
+      'AutoCompactionEnd',
+    );
+  }
+
+  /**
+   * Notify hooks that a model call is backing off before a retry.
+   */
+  async fireAutoRetryStartEvent(details: AutoRetryStartDetails): Promise<void> {
+    await this.notifyBestEffort(
+      () => this.hookEventHandler.fireAutoRetryStartEvent(details),
+      'AutoRetryStart',
+    );
+  }
+
+  /**
+   * Notify hooks that a retry saga settled.
+   */
+  async fireAutoRetryEndEvent(details: AutoRetryEndDetails): Promise<void> {
+    await this.notifyBestEffort(
+      () => this.hookEventHandler.fireAutoRetryEndEvent(details),
+      'AutoRetryEnd',
+    );
+  }
+
+  /**
+   * Ask hooks whether a subagent delegation may proceed.
+   *
+   * Fail-closed, and it is the emission site's call to make: a hook that
+   * throws, exits non-zero, or asks to cancel all produce the same answer —
+   * do not spawn. A guard that lets work through because the guard itself
+   * broke is not a guard.
+   */
+  async fireBeforeSubagentSpawnEvent(
+    details: BeforeSubagentSpawnDetails,
+  ): Promise<SubagentSpawnDecision> {
+    try {
+      const result =
+        await this.hookEventHandler.fireBeforeSubagentSpawnEvent(details);
+      const output = result.finalOutput;
+      const refusedByHook =
+        output?.cancel === true || output?.isBlockingDecision();
+      if (!result.success || refusedByHook) {
+        const reason = result.success
+          ? output?.getEffectiveReason()
+          : (result.errors[0]?.message ?? 'a BeforeSubagentSpawn hook failed');
+        return {
+          cancelled: true,
+          reason: reason ?? 'Subagent spawn cancelled by a hook',
+          systemMessage: output?.systemMessage,
+        };
+      }
+      return { cancelled: false };
+    } catch (error) {
+      return {
+        cancelled: true,
+        reason:
+          error instanceof Error
+            ? error.message
+            : 'BeforeSubagentSpawn hook failed',
+      };
+    }
+  }
+
+  /**
+   * Run a notification hook, swallowing its failure.
+   *
+   * Every non-cancellable event routes through here. A hook that breaks while
+   * merely observing something must not be able to break the thing it is
+   * observing — the caller has already decided to do the work.
+   */
+  private async notifyBestEffort(
+    fire: () => Promise<AggregatedHookResult>,
+    eventName: string,
+  ): Promise<void> {
+    try {
+      await fire();
+    } catch (error) {
+      debugLogger.debug(`${eventName} hooks failed:`, error);
     }
   }
 }

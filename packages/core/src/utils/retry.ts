@@ -36,7 +36,16 @@ export interface RetryOptions {
   retryFetchErrors?: boolean;
   signal?: AbortSignal;
   getAvailabilityContext?: () => RetryAvailabilityContext | undefined;
-  onRetry?: (attempt: number, error: unknown, delayMs: number) => void;
+  /**
+   * Called just before each backoff sleep. May return a promise, which is
+   * awaited — an observer that has to finish its work before the retry
+   * proceeds needs that, and the existing synchronous callers are unaffected.
+   */
+  onRetry?: (
+    attempt: number,
+    error: unknown,
+    delayMs: number,
+  ) => void | Promise<void>;
 }
 
 const DEFAULT_RETRY_OPTIONS: RetryOptions = {
@@ -320,7 +329,7 @@ export async function retryWithBackoff<T>(
         const jitter = currentDelay * 0.3 * (Math.random() * 2 - 1);
         const delayWithJitter = Math.max(0, currentDelay + jitter);
         if (onRetry) {
-          onRetry(attempt, new Error('Invalid content'), delayWithJitter);
+          await onRetry(attempt, new Error('Invalid content'), delayWithJitter);
         }
         await delay(delayWithJitter, signal);
         currentDelay = Math.min(maxDelayMs, currentDelay * 2);
@@ -481,7 +490,7 @@ export async function retryWithBackoff<T>(
             `Attempt ${attempt} failed: ${classifiedError.message}. Retrying after ${Math.round(delayWithJitter)}ms...`,
           );
           if (onRetry) {
-            onRetry(attempt, error, delayWithJitter);
+            await onRetry(attempt, error, delayWithJitter);
           }
           await delay(delayWithJitter, signal);
           currentDelay = Math.min(maxDelayMs, currentDelay * 2);
@@ -494,7 +503,7 @@ export async function retryWithBackoff<T>(
           const jitter = currentDelay * 0.3 * (Math.random() * 2 - 1);
           const delayWithJitter = Math.max(0, currentDelay + jitter);
           if (onRetry) {
-            onRetry(attempt, error, delayWithJitter);
+            await onRetry(attempt, error, delayWithJitter);
           }
           await delay(delayWithJitter, signal);
           currentDelay = Math.min(maxDelayMs, currentDelay * 2);
@@ -518,7 +527,7 @@ export async function retryWithBackoff<T>(
       const jitter = currentDelay * 0.3 * (Math.random() * 2 - 1);
       const delayWithJitter = Math.max(0, currentDelay + jitter);
       if (onRetry) {
-        onRetry(attempt, error, delayWithJitter);
+        await onRetry(attempt, error, delayWithJitter);
       }
       await delay(delayWithJitter, signal);
       currentDelay = Math.min(maxDelayMs, currentDelay * 2);

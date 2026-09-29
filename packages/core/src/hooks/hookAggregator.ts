@@ -92,8 +92,8 @@ export class HookAggregator {
       case HookEventName.BeforeAgent:
       case HookEventName.AfterAgent:
       case HookEventName.SessionStart:
+      case HookEventName.BeforeSubagentSpawn:
         return this.mergeWithOrDecision(outputs);
-
       case HookEventName.BeforeModel:
       case HookEventName.AfterModel:
         return this.mergeWithFieldReplacement(outputs);
@@ -136,6 +136,13 @@ export class HookAggregator {
         if (output.stopReason) {
           messages.push(output.stopReason);
         }
+      }
+
+      // Handle cancel flag. OR, not last-wins: with several hooks on the same
+      // event a veto from any one of them has to survive, or the veto is only
+      // as strong as the order the runner happened to finish them in.
+      if (output.cancel === true) {
+        merged.cancel = true;
       }
 
       // Handle decision (OR logic for blocking)

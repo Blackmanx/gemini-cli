@@ -814,6 +814,21 @@ export class GeminiClient {
     // Update tools with the final modelId to ensure model-dependent descriptions are used.
     await this.setTools(modelToUse);
 
+    // A "turn" here is one model call, not one user prompt: the agent loop
+    // makes several of them per prompt. The pair brackets exactly that call,
+    // so the events never overlap and `turn_index` orders them.
+    const hookSystem = this.config.getEnableHooks()
+      ? this.config.getHookSystem()
+      : undefined;
+    const turnIndex = this.sessionTurnCount;
+    if (hookSystem) {
+      await hookSystem.fireTurnStartEvent({
+        prompt_id,
+        turn_index: turnIndex,
+        model: modelToUse,
+      });
+    }
+
     const resultStream = turn.run(modelConfigKey, request, signal, {
       displayContent,
       role: LlmRole.MAIN,
@@ -823,35 +838,53 @@ export class GeminiClient {
 
     let loopDetectedAbort = false;
     let loopRecoverResult: { detail?: string } | undefined;
-    for await (const event of resultStream) {
-      const loopResult = this.loopDetector.addAndCheck(event);
-      if (loopResult.count > 1) {
-        yield { type: GeminiEventType.LoopDetected };
-        loopDetectedAbort = true;
-        break;
-      } else if (loopResult.count === 1) {
-        if (boundedTurns <= 1) {
-          yield { type: GeminiEventType.MaxSessionTurns };
+    try {
+      for await (const event of resultStream) {
+        const loopResult = this.loopDetector.addAndCheck(event);
+        if (loopResult.count > 1) {
+          yield { type: GeminiEventType.LoopDetected };
           loopDetectedAbort = true;
           break;
+        } else if (loopResult.count === 1) {
+          if (boundedTurns <= 1) {
+            yield { type: GeminiEventType.MaxSessionTurns };
+            loopDetectedAbort = true;
+            break;
+          }
+          loopRecoverResult = loopResult;
+          break;
         }
-        loopRecoverResult = loopResult;
-        break;
-      }
-      yield event;
+        yield event;
 
-      if (event.type === GeminiEventType.Finished && this.contextManager) {
-        const usageMetadata = event.value.usageMetadata;
-        if (usageMetadata && usageMetadata.promptTokenCount !== undefined) {
-          this.contextManager.getEnvironment().eventBus.emitTokenGroundTruth({
-            actualTokens: usageMetadata.promptTokenCount,
-            promptBaseUnits: currentBaseUnits,
-          });
+        if (event.type === GeminiEventType.Finished && this.contextManager) {
+          const usageMetadata = event.value.usageMetadata;
+          if (usageMetadata && usageMetadata.promptTokenCount !== undefined) {
+            this.contextManager.getEnvironment().eventBus.emitTokenGroundTruth({
+              actualTokens: usageMetadata.promptTokenCount,
+              promptBaseUnits: currentBaseUnits,
+            });
+          }
+        }
+        this.updateTelemetryTokenCount();
+        if (event.type === GeminiEventType.Error) {
+          isError = true;
         }
       }
-      this.updateTelemetryTokenCount();
-      if (event.type === GeminiEventType.Error) {
-        isError = true;
+    } finally {
+      // Fires on every exit from the model call, including the loop-detection
+      // and max-turns breaks above and an early consumer `return()`. A
+      // TurnStart with no matching TurnEnd would leave a hook watching a turn
+      // that never closes.
+      if (hookSystem) {
+        await hookSystem.fireTurnEndEvent({
+          prompt_id,
+          turn_index: turnIndex,
+          model: modelToUse,
+          response_text: turn.getResponseText() || '',
+          ...(turn.finishReason ? { finish_reason: turn.finishReason } : {}),
+          error: isError,
+          tool_call_names: turn.pendingToolCalls.map((call) => call.name),
+        });
       }
     }
 

@@ -403,7 +403,7 @@ class WriteFileToolInvocation extends BaseToolInvocation<
           returnDisplay: `Wrote ${href}`,
         };
       }
-      const result = router.write(href, content, {
+      const result = await router.write(href, content, {
         cwd: this.config.getTargetDir(),
       });
       const note = result?.details ? `: ${result.details}` : '';

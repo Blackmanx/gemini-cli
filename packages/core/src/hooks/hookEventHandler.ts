@@ -29,6 +29,13 @@ import {
   type PreCompressTrigger,
   type HookExecutionResult,
   type McpToolContext,
+  type TurnStartInput,
+  type TurnEndInput,
+  type AutoCompactionStartInput,
+  type AutoCompactionEndInput,
+  type AutoRetryStartInput,
+  type AutoRetryEndInput,
+  type BeforeSubagentSpawnInput,
 } from './types.js';
 import { defaultHookTranslator } from './hookTranslator.js';
 import type {
@@ -40,6 +47,29 @@ import { HookCallEvent } from '../telemetry/types.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import { coreEvents } from '../utils/events.js';
 import type { AgentLoopContext } from '../config/agent-loop-context.js';
+
+/**
+ * The event-specific half of a hook input, minus the session fields
+ * `createBaseInput` supplies. Splitting it this way keeps an emission site
+ * from restating `session_id`, `cwd`, and `transcript_path` — values it has
+ * no business knowing, and would only get wrong.
+ */
+export type TurnStartDetails = Omit<TurnStartInput, keyof HookInput>;
+export type TurnEndDetails = Omit<TurnEndInput, keyof HookInput>;
+export type AutoCompactionStartDetails = Omit<
+  AutoCompactionStartInput,
+  keyof HookInput
+>;
+export type AutoCompactionEndDetails = Omit<
+  AutoCompactionEndInput,
+  keyof HookInput
+>;
+export type AutoRetryStartDetails = Omit<AutoRetryStartInput, keyof HookInput>;
+export type AutoRetryEndDetails = Omit<AutoRetryEndInput, keyof HookInput>;
+export type BeforeSubagentSpawnDetails = Omit<
+  BeforeSubagentSpawnInput,
+  keyof HookInput
+>;
 
 /**
  * Hook event bus that coordinates hook execution across the system
@@ -274,6 +304,109 @@ export class HookEventHandler {
       undefined,
       llmRequest,
     );
+  }
+
+  /**
+   * Fire a TurnStart event - a model turn is about to be dispatched
+   */
+  async fireTurnStartEvent(
+    details: TurnStartDetails,
+  ): Promise<AggregatedHookResult> {
+    const input: TurnStartInput = {
+      ...this.createBaseInput(HookEventName.TurnStart),
+      ...details,
+    };
+
+    return this.executeHooks(HookEventName.TurnStart, input);
+  }
+
+  /**
+   * Fire a TurnEnd event - the turn dispatched at the paired TurnStart settled
+   */
+  async fireTurnEndEvent(
+    details: TurnEndDetails,
+  ): Promise<AggregatedHookResult> {
+    const input: TurnEndInput = {
+      ...this.createBaseInput(HookEventName.TurnEnd),
+      ...details,
+    };
+
+    return this.executeHooks(HookEventName.TurnEnd, input);
+  }
+
+  /**
+   * Fire an AutoCompactionStart event
+   */
+  async fireAutoCompactionStartEvent(
+    details: AutoCompactionStartDetails,
+  ): Promise<AggregatedHookResult> {
+    const input: AutoCompactionStartInput = {
+      ...this.createBaseInput(HookEventName.AutoCompactionStart),
+      ...details,
+    };
+
+    return this.executeHooks(HookEventName.AutoCompactionStart, input);
+  }
+
+  /**
+   * Fire an AutoCompactionEnd event, carrying the outcome PreCompress cannot
+   */
+  async fireAutoCompactionEndEvent(
+    details: AutoCompactionEndDetails,
+  ): Promise<AggregatedHookResult> {
+    const input: AutoCompactionEndInput = {
+      ...this.createBaseInput(HookEventName.AutoCompactionEnd),
+      ...details,
+    };
+
+    return this.executeHooks(HookEventName.AutoCompactionEnd, input);
+  }
+
+  /**
+   * Fire an AutoRetryStart event
+   */
+  async fireAutoRetryStartEvent(
+    details: AutoRetryStartDetails,
+  ): Promise<AggregatedHookResult> {
+    const input: AutoRetryStartInput = {
+      ...this.createBaseInput(HookEventName.AutoRetryStart),
+      ...details,
+    };
+
+    return this.executeHooks(HookEventName.AutoRetryStart, input);
+  }
+
+  /**
+   * Fire an AutoRetryEnd event
+   */
+  async fireAutoRetryEndEvent(
+    details: AutoRetryEndDetails,
+  ): Promise<AggregatedHookResult> {
+    const input: AutoRetryEndInput = {
+      ...this.createBaseInput(HookEventName.AutoRetryEnd),
+      ...details,
+    };
+
+    return this.executeHooks(HookEventName.AutoRetryEnd, input);
+  }
+
+  /**
+   * Fire a BeforeSubagentSpawn event
+   *
+   * `agentName` doubles as the matcher context, so a hook can be scoped to one
+   * subagent (`"matcher": "codebase-investigator"`) rather than to every
+   * delegation the session makes.
+   */
+  async fireBeforeSubagentSpawnEvent(
+    details: BeforeSubagentSpawnDetails,
+  ): Promise<AggregatedHookResult> {
+    const input: BeforeSubagentSpawnInput = {
+      ...this.createBaseInput(HookEventName.BeforeSubagentSpawn),
+      ...details,
+    };
+
+    const context: HookEventContext = { toolName: details.agent_name };
+    return this.executeHooks(HookEventName.BeforeSubagentSpawn, input, context);
   }
 
   /**

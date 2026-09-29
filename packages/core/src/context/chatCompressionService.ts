@@ -464,7 +464,88 @@ async function truncateHistoryToBudget(
 }
 
 export class ChatCompressionService {
+  /**
+   * Compact the chat history, bracketing an *automatic* attempt with the
+   * `AutoCompactionStart` / `AutoCompactionEnd` pair.
+   *
+   * The existing `PreCompress` event fires read-only and cannot report what
+   * came of it, so a hook watching compaction has no way to learn whether the
+   * summary landed, was truncated, or bailed as a no-op. This pair closes
+   * that gap. Manual `/compress` deliberately does not fire it: the event is
+   * named for the automatic path, and a user who typed the command already
+   * knows they asked.
+   */
   async compress(
+    chat: GeminiChat,
+    promptId: string,
+    force: boolean,
+    model: string,
+    config: Config,
+    hasFailedCompressionAttempt: boolean,
+    abortSignal?: AbortSignal,
+  ): Promise<{ newHistory: Content[] | null; info: ChatCompressionInfo }> {
+    if (force) {
+      return this.runCompression(
+        chat,
+        promptId,
+        force,
+        model,
+        config,
+        hasFailedCompressionAttempt,
+        abortSignal,
+      );
+    }
+
+    const hookSystem = config.getEnableHooks()
+      ? config.getHookSystem()
+      : undefined;
+    if (hookSystem) {
+      await hookSystem.fireAutoCompactionStartEvent({
+        prompt_id: promptId,
+        model,
+        original_token_count: chat.getLastPromptTokenCount(),
+      });
+    }
+
+    try {
+      const outcome = await this.runCompression(
+        chat,
+        promptId,
+        force,
+        model,
+        config,
+        hasFailedCompressionAttempt,
+        abortSignal,
+      );
+      if (hookSystem) {
+        await hookSystem.fireAutoCompactionEndEvent({
+          prompt_id: promptId,
+          model,
+          compression_status: CompressionStatus[outcome.info.compressionStatus],
+          original_token_count: outcome.info.originalTokenCount,
+          new_token_count: outcome.info.newTokenCount,
+          skipped: outcome.info.compressionStatus === CompressionStatus.NOOP,
+        });
+      }
+      return outcome;
+    } catch (error) {
+      // A compaction that throws still has to close its pair, or a hook
+      // watching AutoCompactionStart waits forever for an end.
+      if (hookSystem) {
+        await hookSystem.fireAutoCompactionEndEvent({
+          prompt_id: promptId,
+          model,
+          compression_status: 'THREW',
+          original_token_count: 0,
+          new_token_count: 0,
+          skipped: false,
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async runCompression(
     chat: GeminiChat,
     promptId: string,
     force: boolean,

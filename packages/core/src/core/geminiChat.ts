@@ -70,6 +70,11 @@ import {
 } from '../availability/policyHelpers.js';
 import { coreEvents } from '../utils/events.js';
 import type { AgentLoopContext } from '../config/agent-loop-context.js';
+import type {
+  AutoRetryStartInput,
+  AutoRetryEndInput,
+  HookInput,
+} from '../hooks/types.js';
 
 export enum StreamEventType {
   /** A regular content chunk from the API. */
@@ -381,6 +386,15 @@ export class GeminiChat {
   private promptOriginalHistoryLength?: number;
   private promptOriginalTokenCount?: number;
 
+  /**
+   * Retry sagas nest: the mid-stream loop re-enters the connection phase,
+   * which has its own `retryWithBackoff`. Counting open sagas keeps the
+   * outermost one — the one a user means by "this call had to be retried" —
+   * the only one that reaches a hook, so a retry that recursed does not
+   * report twice.
+   */
+  private openRetrySagas = 0;
+
   constructor(
     readonly context: AgentLoopContext,
     private systemInstruction: string = '',
@@ -645,6 +659,15 @@ export class GeminiChat {
     ): AsyncGenerator<StreamEvent, void, void> {
       let isSuccess = false;
       let caughtError: unknown = undefined;
+      // Whether the outermost saga is open, so the `finally` below knows it
+      // has a pair left to close. The connection phase can open and close
+      // its own saga inside one of these attempts; only the outer one is
+      // announced, and this flag tracks that one.
+      let midStreamSagaOpen = false;
+      let lastMidStreamAttempt = 0;
+      // Sagas opened and closed within one model call, so the depth counter
+      // must start from a known state rather than inherit a leaked one.
+      this.openRetrySagas = 0;
 
       try {
         const maxAttempts = this.context.config.getMaxAttempts();
@@ -767,6 +790,19 @@ export class GeminiChat {
                   error: errorType,
                   model,
                 });
+                lastMidStreamAttempt = attempt + 1;
+                if (!midStreamSagaOpen) {
+                  midStreamSagaOpen = true;
+                  await this.beginRetrySaga({
+                    attempt: attempt + 1,
+                    max_attempts: Math.min(maxAttempts, maxMidStreamAttempts),
+                    delay_ms: delayMs,
+                    error_message:
+                      error instanceof Error ? error.message : String(error),
+                    error_type: errorType,
+                    model,
+                  });
+                }
                 await new Promise((res) => setTimeout(res, delayMs));
                 continue;
               }
@@ -817,6 +853,22 @@ export class GeminiChat {
             this.lastPromptTokenCount = baselinePromptTokenCount;
           }
         }
+        if (midStreamSagaOpen) {
+          midStreamSagaOpen = false;
+          await this.endRetrySaga({
+            attempt: lastMidStreamAttempt,
+            success: isSuccess,
+            ...(isSuccess || caughtError === undefined
+              ? {}
+              : {
+                  error_message:
+                    caughtError instanceof Error
+                      ? caughtError.message
+                      : String(caughtError),
+                }),
+            model,
+          });
+        }
         streamDoneResolver!();
       }
     };
@@ -865,6 +917,34 @@ export class GeminiChat {
     }
 
     return binaryParts.length > 0 ? binaryParts : undefined;
+  }
+
+  /**
+   * Announce that a model call is backing off before a retry. Idempotent for
+   * the outermost saga: a nested open is counted, not announced.
+   */
+  private async beginRetrySaga(
+    details: Omit<AutoRetryStartInput, keyof HookInput>,
+  ): Promise<void> {
+    this.openRetrySagas++;
+    if (this.openRetrySagas > 1) {
+      return;
+    }
+    await this.context.config.getHookSystem()?.fireAutoRetryStartEvent(details);
+  }
+
+  /**
+   * Close the retry saga opened by {@link beginRetrySaga}. Only the outermost
+   * close is announced, and it reports whether the call recovered.
+   */
+  private async endRetrySaga(
+    details: Omit<AutoRetryEndInput, keyof HookInput>,
+  ): Promise<void> {
+    this.openRetrySagas = Math.max(0, this.openRetrySagas - 1);
+    if (this.openRetrySagas > 0) {
+      return;
+    }
+    await this.context.config.getHookSystem()?.fireAutoRetryEndEvent(details);
   }
 
   private async makeApiCallAndProcessStream(
@@ -1110,26 +1190,76 @@ export class GeminiChat {
       );
     };
 
-    const streamResponse = await retryWithBackoff(apiCall, {
-      onPersistent429: onPersistent429Callback,
-      onValidationRequired: onValidationRequiredCallback,
-      authType: this.context.config.getContentGeneratorConfig()?.authType,
-      retryFetchErrors: this.context.config.getRetryFetchErrors(),
-      signal: abortSignal,
-      maxAttempts:
-        availabilityMaxAttempts ?? this.context.config.getMaxAttempts(),
-      getAvailabilityContext,
-      onRetry: (attempt, error, delayMs) => {
-        coreEvents.emitRetryAttempt({
-          attempt,
-          maxAttempts:
-            availabilityMaxAttempts ?? this.context.config.getMaxAttempts(),
-          delayMs,
-          error: error instanceof Error ? error.message : String(error),
+    const maxAttempts =
+      availabilityMaxAttempts ?? this.context.config.getMaxAttempts();
+
+    // `onRetry` is awaited by `retryWithBackoff`, so a hook that fires here
+    // finishes before the backoff sleep starts rather than racing the
+    // request it is describing.
+    let retryAttempts = 0;
+    let connectionSagaOpen = false;
+    const onRetryAttempt = async (
+      attempt: number,
+      error: unknown,
+      delayMs: number,
+    ) => {
+      retryAttempts = attempt;
+      coreEvents.emitRetryAttempt({
+        attempt,
+        maxAttempts,
+        delayMs,
+        error: error instanceof Error ? error.message : String(error),
+        model: lastModelToUse,
+      });
+      if (connectionSagaOpen) {
+        return;
+      }
+      connectionSagaOpen = true;
+      await this.beginRetrySaga({
+        attempt,
+        max_attempts: maxAttempts,
+        delay_ms: Math.round(delayMs),
+        error_message: error instanceof Error ? error.message : String(error),
+        error_type: getRetryErrorType(error),
+        model: lastModelToUse,
+      });
+    };
+
+    let streamResponse: AsyncGenerator<GenerateContentResponse>;
+    try {
+      streamResponse = await retryWithBackoff(apiCall, {
+        onPersistent429: onPersistent429Callback,
+        onValidationRequired: onValidationRequiredCallback,
+        authType: this.context.config.getContentGeneratorConfig()?.authType,
+        retryFetchErrors: this.context.config.getRetryFetchErrors(),
+        signal: abortSignal,
+        maxAttempts,
+        getAvailabilityContext,
+        onRetry: onRetryAttempt,
+      });
+    } catch (error) {
+      // A saga that was opened has to be closed even when the call died,
+      // or a hook watching AutoRetryStart waits forever.
+      if (connectionSagaOpen) {
+        connectionSagaOpen = false;
+        await this.endRetrySaga({
+          attempt: retryAttempts,
+          success: false,
+          error_message: error instanceof Error ? error.message : String(error),
           model: lastModelToUse,
         });
-      },
-    });
+      }
+      throw error;
+    }
+
+    if (connectionSagaOpen) {
+      connectionSagaOpen = false;
+      await this.endRetrySaga({
+        attempt: retryAttempts,
+        success: true,
+        model: lastModelToUse,
+      });
+    }
 
     // Store the original request for AfterModel hooks
     const originalRequest: GenerateContentParameters = {

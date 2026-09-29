@@ -222,7 +222,10 @@ export class InternalUrlRouter {
    * everything else (including a file-backed URL that does not exist yet) is
    * resolved by the handler into a `resource`.
    */
-  target(input: string, context?: ResolveContext): UrlTarget | null {
+  async target(
+    input: string,
+    context?: ResolveContext,
+  ): Promise<UrlTarget | null> {
     const registered = this.#registered(input);
     if (!registered) return null;
     const { path: bare, sel } = this.split(input);
@@ -235,7 +238,7 @@ export class InternalUrlRouter {
         return { kind: 'file', path: located, selector: sel };
     }
 
-    const resolved = spec.resolve(url, context);
+    const resolved = await spec.resolve(url, context);
     return {
       kind: 'resource',
       resource: {
@@ -281,12 +284,12 @@ export class InternalUrlRouter {
    * non-remote scheme diagnoses its own miss (so the user sees which ids exist),
    * and a remote/virtual scheme is told to `read` the URL instead.
    */
-  requireLocal(
+  async requireLocal(
     input: string,
     action: string,
     context?: ResolveContext,
     options?: LocateOptions,
-  ): string {
+  ): Promise<string> {
     const registered = this.#registered(input);
     if (!registered) {
       throw new Error(
@@ -304,7 +307,7 @@ export class InternalUrlRouter {
         // Let the handler name the miss (`Cannot find artifact://9: …`), but
         // never swallow the caller's abort.
         try {
-          spec.resolve(url, context);
+          await spec.resolve(url, context);
         } catch (error) {
           if (context?.signal?.aborted) throw error;
           const reason = error instanceof Error ? error.message : String(error);
@@ -411,10 +414,10 @@ export class InternalUrlRouter {
    * Searchable leaf documents behind `input`; `null` when its scheme cannot
    * enumerate (search then treats the URL as a single document).
    */
-  enumerate(
+  async enumerate(
     input: string,
     context?: ResolveContext,
-  ): Array<{ url: string; content: string }> | null {
+  ): Promise<Array<{ url: string; content: string }> | null> {
     const registered = this.#registered(input);
     if (!registered?.spec.enumerate) return null;
     return registered.spec.enumerate(registered.parsed, context);
@@ -453,10 +456,13 @@ export class InternalUrlRouter {
    * Resolve a registered internal URL through its handler, defaulting
    * `immutable` from the spec.
    */
-  resolve(input: string, context?: ResolveContext): InternalResource {
+  async resolve(
+    input: string,
+    context?: ResolveContext,
+  ): Promise<InternalResource> {
     const registered = this.#required(input);
     const { path: bare } = this.split(input);
-    const resource = registered.spec.resolve(
+    const resource = await registered.spec.resolve(
       this.#at(registered, bare),
       context,
     );
@@ -470,11 +476,11 @@ export class InternalUrlRouter {
    * Write a registered internal URL through its handler. `null`/a non-URL is
    * rejected — file writes are the tools' job, not the router's.
    */
-  write(
+  async write(
     input: string,
     content: string,
     context?: WriteContext,
-  ): InternalWriteResult | void {
+  ): Promise<InternalWriteResult | void> {
     const registered = this.#required(input);
     const { path: bare } = this.split(input);
     const { spec } = registered;
