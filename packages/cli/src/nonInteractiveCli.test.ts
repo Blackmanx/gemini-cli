@@ -157,6 +157,7 @@ describe('runNonInteractive', () => {
     mockToolRegistry = {
       getTool: vi.fn(),
       getFunctionDeclarations: vi.fn().mockReturnValue([]),
+      getAllTools: vi.fn().mockReturnValue([]),
     } as unknown as ToolRegistry;
 
     mockGeminiClient = {
@@ -173,6 +174,8 @@ describe('runNonInteractive', () => {
 
     mockConfig = {
       initialize: vi.fn().mockReturnValue(Promise.resolve(undefined)),
+      // Absent by default: the feature is off unless the user turns it on.
+      getMagicKeywordsSettings: vi.fn().mockReturnValue(undefined),
       getMessageBus: vi.fn().mockReturnValue({
         subscribe: vi.fn(),
         unsubscribe: vi.fn(),
@@ -1330,6 +1333,7 @@ describe('runNonInteractive', () => {
         run: vi.fn(),
       }),
       getFunctionDeclarations: vi.fn().mockReturnValue([{ name: 'ShellTool' }]),
+      getAllTools: vi.fn().mockReturnValue([]),
     } as unknown as ToolRegistry);
 
     const toolCallEvent: ServerGeminiStreamEvent = {

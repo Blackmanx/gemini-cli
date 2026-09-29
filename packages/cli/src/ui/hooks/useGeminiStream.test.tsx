@@ -334,7 +334,11 @@ describe('useGeminiStream', () => {
       getProjectTempCheckpointsDir: vi.fn(() => '/test/temp/checkpoints'),
     } as any,
     getToolRegistry: vi.fn(
-      () => ({ getToolSchemaList: vi.fn(() => []) }) as any,
+      () =>
+        ({
+          getToolSchemaList: vi.fn(() => []),
+          getAllTools: vi.fn(() => []),
+        }) as any,
     ),
     getProjectRoot: vi.fn(() => '/test/dir'),
     getCheckpointingEnabled: vi.fn(() => false),
