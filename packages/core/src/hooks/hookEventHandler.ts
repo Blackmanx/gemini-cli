@@ -46,7 +46,32 @@ import { logHookCall } from '../telemetry/loggers.js';
 import { HookCallEvent } from '../telemetry/types.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import { coreEvents } from '../utils/events.js';
-import type { AgentLoopContext } from '../config/agent-loop-context.js';
+import type { Config } from '../config/config.js';
+import type { GeminiClient } from '../core/client.js';
+
+/**
+ * What a hook invocation actually reads off the surrounding turn.
+ *
+ * Deliberately NOT {@link AgentLoopContext}: this handler never sees a full
+ * agent loop, and claiming that type hid a real defect. `HookSystem` passes a
+ * `Config`, so `context.config` was `undefined` at runtime and every emission
+ * threw on `getSessionId()`. Observational events swallowed it and silently
+ * stopped working; `before_subagent_spawn` turned it into a refusal of every
+ * spawn, for a reason that had nothing to do with any hook's opinion.
+ *
+ * Naming the real dependency is what makes the mismatch impossible to write
+ * again.
+ */
+export interface HookContext {
+  /** The global runtime configuration. */
+  readonly config: Config;
+  /**
+   * The client, if one exists yet. Optional because hooks can fire before the
+   * client is constructed - a transcript path is a nicety, not a reason to
+   * drop an event.
+   */
+  readonly geminiClient?: GeminiClient;
+}
 
 /**
  * The event-specific half of a hook input, minus the session fields
@@ -75,7 +100,7 @@ export type BeforeSubagentSpawnDetails = Omit<
  * Hook event bus that coordinates hook execution across the system
  */
 export class HookEventHandler {
-  private readonly context: AgentLoopContext;
+  private readonly context: HookContext;
   private readonly hookPlanner: HookPlanner;
   private readonly hookRunner: HookRunner;
   private readonly hookAggregator: HookAggregator;
@@ -88,7 +113,7 @@ export class HookEventHandler {
   private readonly reportedFailures = new WeakMap<object, Set<string>>();
 
   constructor(
-    context: AgentLoopContext,
+    context: HookContext,
     hookPlanner: HookPlanner,
     hookRunner: HookRunner,
     hookAggregator: HookAggregator,

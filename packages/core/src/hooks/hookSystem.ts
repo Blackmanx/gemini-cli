@@ -187,7 +187,14 @@ export class HookSystem {
     this.hookAggregator = new HookAggregator();
     this.hookPlanner = new HookPlanner(this.hookRegistry);
     this.hookEventHandler = new HookEventHandler(
-      config,
+      // A getter, not a snapshot: the client is constructed during
+      // initialization, which happens after this.
+      {
+        config,
+        get geminiClient() {
+          return config.geminiClient;
+        },
+      },
       this.hookPlanner,
       this.hookRunner,
       this.hookAggregator,

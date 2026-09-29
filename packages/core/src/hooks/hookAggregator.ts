@@ -44,12 +44,26 @@ export class HookAggregator {
     const errors: Error[] = [];
     let totalDuration = 0;
 
-    // Collect all outputs and errors
+    // Collect all outputs and errors.
+    //
+    // A hook that exits non-zero is a failure even though nothing threw, so
+    // `!result.success` has to be counted and not only `result.error`. Reading
+    // only `error` made `success` mean "nothing threw" rather than "everything
+    // worked", and a refusal gate built on it fails OPEN: a broken guard let
+    // the action through.
     for (const result of results) {
       totalDuration += result.duration;
 
       if (result.error) {
         errors.push(result.error);
+      } else if (!result.success) {
+        const detail = result.stderr?.trim();
+        errors.push(
+          new Error(
+            `Hook exited ${String(result.exitCode ?? 'non-zero')}` +
+              (detail === undefined || detail === '' ? '' : `: ${detail}`),
+          ),
+        );
       }
 
       if (result.output) {
