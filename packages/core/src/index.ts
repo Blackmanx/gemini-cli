@@ -332,3 +332,13 @@ export {
   type MagicKeywordSettings,
 } from './modes/magicKeywords.js';
 export { partListUnionToString } from './core/geminiRequest.js';
+
+// Code review: freezing the diff under review, and how many reviewers it earns.
+export {
+  collectReviewTarget,
+  countChangedLines,
+  getRecommendedReviewAgentCount,
+  MAX_DIFF_CHARS,
+  MAX_DIFF_FILES,
+  type ReviewTarget,
+} from './review/diff.js';
