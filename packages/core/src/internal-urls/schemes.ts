@@ -15,6 +15,7 @@ import {
   subsidiarySchemeSpecs,
   type SubsidiarySchemeHost,
 } from './subsidiarySchemes.js';
+import { liveConflictSchemeSpecs } from './conflictSchemeHost.js';
 import { getAgent, listAgents } from '../agents/agentRegistry.js';
 import { getErrorMessage } from '../utils/errors.js';
 import { sendPeerMessage } from '../agents/peerBus.js';
@@ -589,6 +590,7 @@ export function geminiSchemeSpecs(host: () => SchemeHost): SchemeSpec[] {
     agentScheme(),
     deviceScheme(host),
     ...subsidiarySchemeSpecs(host().subsidiary?.() ?? {}),
+    ...liveConflictSchemeSpecs(),
   ];
 }
 
