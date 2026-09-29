@@ -208,13 +208,15 @@ describe('WriteFileTool', () => {
     // Reset mocks before each test
     mockConfigInternal.getApprovalMode.mockReturnValue(ApprovalMode.DEFAULT);
     mockConfigInternal.setApprovalMode.mockClear();
+    mockConfigInternal.getDisableLLMCorrection.mockReturnValue(true);
+    mockConfigInternal.getBaseLlmClient.mockClear();
     mockEnsureCorrectFileContent.mockReset();
 
     // Default mock implementations that return valid structures
     mockEnsureCorrectFileContent.mockImplementation(
       async (
         content: string,
-        _baseClient: BaseLlmClient,
+        _baseClient: BaseLlmClient | undefined,
         signal?: AbortSignal,
       ): Promise<string> => {
         if (signal?.aborted) {
@@ -340,6 +342,37 @@ describe('WriteFileTool', () => {
   });
 
   describe('getCorrectedFileContent', () => {
+    it('should not build an LLM client when correction is disabled', async () => {
+      // Every non-JSON write goes through this path, so eagerly resolving a
+      // client built one per write and immediately threw it away.
+      const filePath = path.join(rootDir, 'no_client_needed.txt');
+      mockEnsureCorrectFileContent.mockResolvedValue('content');
+
+      await getCorrectedFileContent(
+        mockConfig,
+        filePath,
+        'proposed',
+        new AbortController().signal,
+      );
+
+      expect(mockConfigInternal.getBaseLlmClient).not.toHaveBeenCalled();
+    });
+
+    it('should build an LLM client when correction is enabled', async () => {
+      const filePath = path.join(rootDir, 'client_needed.txt');
+      mockEnsureCorrectFileContent.mockResolvedValue('content');
+      mockConfigInternal.getDisableLLMCorrection.mockReturnValue(false);
+
+      await getCorrectedFileContent(
+        mockConfig,
+        filePath,
+        'proposed',
+        new AbortController().signal,
+      );
+
+      expect(mockConfigInternal.getBaseLlmClient).toHaveBeenCalled();
+    });
+
     it('should call ensureCorrectFileContent for a new file', async () => {
       const filePath = path.join(rootDir, 'new_corrected_file.txt');
       const proposedContent = 'Proposed new content.';
@@ -355,9 +388,10 @@ describe('WriteFileTool', () => {
         abortSignal,
       );
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape
@@ -390,7 +424,7 @@ describe('WriteFileTool', () => {
 
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         false, // aggressiveUnescape
@@ -415,9 +449,10 @@ describe('WriteFileTool', () => {
         abortSignal,
       );
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape
@@ -526,9 +561,10 @@ describe('WriteFileTool', () => {
         abortSignal,
       )) as ToolEditConfirmationDetails;
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape
@@ -564,9 +600,10 @@ describe('WriteFileTool', () => {
         abortSignal,
       )) as ToolEditConfirmationDetails;
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape
@@ -770,9 +807,10 @@ describe('WriteFileTool', () => {
 
       const result = await invocation.execute({ abortSignal });
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape
@@ -815,9 +853,10 @@ describe('WriteFileTool', () => {
 
       const result = await invocation.execute({ abortSignal });
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape
@@ -1086,9 +1125,10 @@ describe('WriteFileTool', () => {
         abortSignal,
       );
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape
@@ -1114,9 +1154,10 @@ describe('WriteFileTool', () => {
         abortSignal,
       );
 
+      // Correction is disabled in this suite, so no client is built for it.
       expect(mockEnsureCorrectFileContent).toHaveBeenCalledWith(
         proposedContent,
-        mockBaseLlmClientInstance,
+        undefined,
         abortSignal,
         true,
         true, // aggressiveUnescape

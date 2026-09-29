@@ -242,7 +242,11 @@ describe('ReadFileTool', () => {
       const result = await invocation.execute({ abortSignal });
       expect(result).toEqual(
         expect.objectContaining({
-          llmContent: fileContent,
+          llmContent: expect.stringMatching(
+            new RegExp(
+              `^${fileContent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n+\\[[^\\]]+#[0-9A-F]{4}\\]$`,
+            ),
+          ),
           returnDisplay: '',
           display: expect.objectContaining({
             name: 'ReadFile',
@@ -280,7 +284,11 @@ describe('ReadFileTool', () => {
       const result = await invocation.execute({ abortSignal });
       expect(result).toEqual(
         expect.objectContaining({
-          llmContent: fileContent,
+          llmContent: expect.stringMatching(
+            new RegExp(
+              `^${fileContent.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n+\\[[^\\]]+#[0-9A-F]{4}\\]$`,
+            ),
+          ),
           returnDisplay: '',
           display: expect.objectContaining({
             name: 'ReadFile',
@@ -305,6 +313,40 @@ describe('ReadFileTool', () => {
       expect(result.error).toBeUndefined();
       expect(result.llmContent).toContain('Directory listing');
       expect(result.llmContent).toContain('inside.txt');
+    });
+
+    it('should surface the hashline_edit anchor for text it actually showed', async () => {
+      // `hashline_edit` keys every patch `[path#TAG]`. The tag is generated
+      // when the file is read, so if the read does not SHOW the tag the model
+      // has no way to write a valid patch and the tool refuses everything.
+      const filePath = path.join(tempRootDir, 'anchored.ts');
+      await fsp.writeFile(filePath, 'line one\nline two\n', 'utf-8');
+      const invocation = tool.build({ file_path: filePath });
+
+      const result = await invocation.execute({ abortSignal });
+      const content = result.llmContent as string;
+      const shown = content.match(/\[([^\]#]+)#([0-9A-F]{4})\]$/);
+      expect(shown).not.toBeNull();
+      expect(shown![1]).toBe('anchored.ts');
+      // The tag is appended, not substituted: the file is still all there.
+      expect(content.startsWith('line one\nline two\n')).toBe(true);
+    });
+
+    it('should not surface an anchor for content it did not show', async () => {
+      // An over-size file yields a "Cannot display content" placeholder. A tag
+      // there would anchor an edit to text the model was never shown, which is
+      // exactly what the content hash exists to prevent.
+      const big = path.join(tempRootDir, 'big.svg');
+      await fsp.writeFile(
+        big,
+        '<svg>' + 'x'.repeat(1024 * 1024 + 1) + '</svg>',
+      );
+      const invocation = tool.build({ file_path: big });
+
+      const result = await invocation.execute({ abortSignal });
+      expect(result.llmContent).toBe(
+        'Cannot display content of SVG file larger than 1MB: big.svg',
+      );
     });
 
     it('should report an empty directory as empty, not as an error', async () => {
@@ -411,7 +453,9 @@ describe('ReadFileTool', () => {
       const invocation = tool.build(params);
 
       const result = await invocation.execute({ abortSignal });
-      expect(result.llmContent).toBe(svgContent);
+      expect(result.llmContent).toMatch(
+        /^<svg><circle cx="50" cy="50" r="40"\/><\/svg>\n+\[[^\]]+#[0-9A-F]{4}\]$/,
+      );
       expect(result.returnDisplay).toBe('Read SVG as text: image.svg');
     });
 
@@ -482,7 +526,9 @@ describe('ReadFileTool', () => {
       const invocation = tool.build(params);
 
       const result = await invocation.execute({ abortSignal });
-      expect(result.llmContent).toBe(tempFileContent);
+      expect(result.llmContent).toMatch(
+        /^This is temporary output content\n+\[[^\]]+#[0-9A-F]{4}\]$/,
+      );
       expect(result.returnDisplay).toBe('');
     });
 
@@ -509,7 +555,9 @@ describe('ReadFileTool', () => {
       vi.mocked(discoverJitContext).mockClear();
 
       const result = await invocation.execute({ abortSignal });
-      expect(result.llmContent).toBe('print("hello")');
+      expect(result.llmContent).toMatch(
+        /^print\("hello"\)\n+\[[^\]]+#[0-9A-F]{4}\]$/,
+      );
 
       // Telemetry must record extension for target2 (.py), not the stale target1 (.txt)
       expect(logFileOperation).toHaveBeenCalledWith(

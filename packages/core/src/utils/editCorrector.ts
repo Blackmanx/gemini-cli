@@ -30,7 +30,9 @@ const fileContentCorrectionCache = new LRUCache<string, string>(MAX_CACHE_SIZE);
 
 export async function ensureCorrectFileContent(
   content: string,
-  baseLlmClient: BaseLlmClient,
+  // Undefined is allowed and means "no client": the correction pass is
+  // optional, so a caller that has disabled it should not have to build one.
+  baseLlmClient: BaseLlmClient | undefined,
   abortSignal: AbortSignal,
   disableLLMCorrection: boolean = true,
   aggressiveUnescape: boolean = false,
@@ -53,6 +55,15 @@ export async function ensureCorrectFileContent(
     }
     fileContentCorrectionCache.set(content, content);
     return content;
+  }
+
+  // Reached only with correction enabled, so the client is genuinely needed;
+  // a caller that enabled correction without supplying one is a bug, and
+  // says so instead of failing deeper in the call.
+  if (baseLlmClient === undefined) {
+    throw new Error(
+      'LLM content correction is enabled but no base LLM client was provided.',
+    );
   }
 
   const correctedContent = await correctStringEscaping(

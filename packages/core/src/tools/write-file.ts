@@ -217,11 +217,16 @@ export async function getCorrectedFileContent(
       !isGemini2Model(resolvedModel) &&
       !isCustomModel(resolvedModel, config);
 
+    // Resolved only when it is used. `ensureCorrectFileContent` never touches
+    // the client with correction off, and every non-JSON write goes through
+    // here, so resolving it eagerly made each write build a client it would
+    // immediately discard.
+    const disableLLMCorrection = config.getDisableLLMCorrection();
     correctedContent = await ensureCorrectFileContent(
       proposedContent,
-      config.getBaseLlmClient(),
+      disableLLMCorrection ? undefined : config.getBaseLlmClient(),
       abortSignal,
-      config.getDisableLLMCorrection(),
+      disableLLMCorrection,
       aggressiveUnescape,
     );
   }

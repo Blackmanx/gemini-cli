@@ -399,9 +399,15 @@ ${result.llmContent}`;
     // Record what the model was actually shown, so `hashline_edit` has
     // something to anchor to. Only text reads count: a binary part or a
     // directory tree is not something a line-anchored edit can target.
+    //
+    // And only when that text came FROM THIS FILE. A "Cannot display content
+    // of ..." placeholder is text too, but it did not come from the file, and
+    // handing it a tag would let the model anchor an edit to content it was
+    // never shown - the one thing the anchor exists to prevent.
+    let hashlineTag: string | undefined;
     if (typeof result.llmContent === 'string' && result.llmContent !== '') {
       const wholeFile = await readTextOrUndefined(targetPathToRead);
-      if (wholeFile !== undefined) {
+      if (wholeFile !== undefined && wholeFile.includes(result.llmContent)) {
         // The snapshot is the WHOLE file, because the edit is applied to the
         // file. The seen range is what the model was shown, so an edit to a
         // line it never read is refused even though the content is known.
@@ -411,10 +417,22 @@ ${result.llmContent}`;
         const shownEnd = result.isTruncated
           ? (result.linesShown?.[1] ?? shownStart)
           : (endLine ?? wholeFile.split('\n').length);
-        HashlineEditTool.snapshots.record(targetPathToRead, wholeFile, [
-          [shownStart, shownEnd],
-        ]);
+        hashlineTag = HashlineEditTool.snapshots.record(
+          targetPathToRead,
+          wholeFile,
+          [[shownStart, shownEnd]],
+        );
       }
+    }
+
+    // The tag has to be VISIBLE or `hashline_edit` is unusable: every patch
+    // is keyed `[path#TAG]`, and a tag the model never saw is a tag it cannot
+    // write, so every patch would be refused as a file it had not read.
+    if (hashlineTag !== undefined && typeof llmContent === 'string') {
+      const rel =
+        makeRelative(targetPathToRead, this.config.getTargetDir()) ||
+        targetPathToRead;
+      llmContent += `\n\n[${rel}#${hashlineTag}]`;
     }
 
     const lines =
