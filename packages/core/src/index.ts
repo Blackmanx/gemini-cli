@@ -395,3 +395,18 @@ export {
   VIBE_PROMPT_DIRECTIVE,
   type VibeTools,
 } from './modes/vibe.js';
+
+// Credential-shaped redaction, shared by memory writes and shared sessions.
+export { redactSecrets, redactText, restoreTokens } from './memory/redact.js';
+
+// Shell completion script generation.
+export {
+  bashCompletion,
+  zshCompletion,
+  fishCompletion,
+  completionScript,
+  installHint,
+  isShell,
+  type Shell,
+  type CompletionFlag,
+} from './config/completions.js';
