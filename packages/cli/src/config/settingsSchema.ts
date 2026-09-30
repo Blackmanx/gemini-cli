@@ -234,14 +234,17 @@ const SETTINGS_SCHEMA = {
         description: oneLine`
           The default approval mode for tool execution.
           'default' prompts for approval, 'auto_edit' auto-approves edit tools,
-          and 'plan' is read-only mode. YOLO mode (auto-approve all actions) can
-          only be enabled via command line (--yolo or --approval-mode=yolo).
+          'plan' is read-only mode, and 'yolo' auto-approves all actions. YOLO
+          can also be enabled for a single run with --yolo. Note that
+          security.disableYoloMode and admin.secureModeEnabled still override
+          this setting.
         `,
         showInDialog: true,
         options: [
           { value: 'default', label: 'Default' },
           { value: 'auto_edit', label: 'Auto Edit' },
           { value: 'plan', label: 'Plan' },
+          { value: 'yolo', label: 'YOLO (auto-approve all)' },
         ],
       },
       devtools: {
@@ -1852,7 +1855,7 @@ const SETTINGS_SCHEMA = {
     requiresRestart: false,
     default: true,
     description: 'Enable the write_todos tool.',
-    showInDialog: false,
+    showInDialog: true,
   },
 
   magicKeywords: {
@@ -1925,7 +1928,7 @@ const SETTINGS_SCHEMA = {
     default: '',
     description:
       'Standing instructions appended to the system prompt under a "User instructions" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.',
-    showInDialog: false,
+    showInDialog: true,
   },
 
   useGithub: {
@@ -1936,7 +1939,7 @@ const SETTINGS_SCHEMA = {
     default: false,
     description:
       'Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.',
-    showInDialog: false,
+    showInDialog: true,
   },
 
   useGenerateImage: {
@@ -1947,7 +1950,7 @@ const SETTINGS_SCHEMA = {
     default: false,
     description:
       'Enable the generate_image tool. Calls a paid image model, so it is off until asked for.',
-    showInDialog: false,
+    showInDialog: true,
   },
 
   useTts: {
@@ -1958,7 +1961,7 @@ const SETTINGS_SCHEMA = {
     default: false,
     description:
       'Enable the tts tool. Calls a paid speech model, so it is off until asked for.',
-    showInDialog: false,
+    showInDialog: true,
   },
 
   useMemory: {
@@ -1969,7 +1972,7 @@ const SETTINGS_SCHEMA = {
     default: false,
     description:
       'Enable the local memory bank and its retain/recall/reflect/memory_edit tools.',
-    showInDialog: false,
+    showInDialog: true,
   },
   security: {
     type: 'object',
@@ -2377,7 +2380,7 @@ const SETTINGS_SCHEMA = {
         requiresRestart: true,
         default: true,
         description: 'Enable local and remote subagents.',
-        showInDialog: false,
+        showInDialog: true,
       },
       worktrees: {
         type: 'boolean',

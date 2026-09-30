@@ -2916,6 +2916,29 @@ describe('loadCliConfig approval mode', () => {
       );
     });
 
+    it('should honour yolo from settings', async () => {
+      // YOLO used to be filtered out of this setting on purpose, so writing
+      // "yolo" into settings.json silently did nothing. It is now honoured,
+      // which is what makes it selectable in /settings at all.
+      process.argv = ['node', 'script.js'];
+      const settings = createTestMergedSettings({
+        general: { defaultApprovalMode: 'yolo' },
+      });
+      const argv = await parseArguments(settings);
+      const config = await loadCliConfig(settings, 'test-session', argv);
+      expect(config.getApprovalMode()).toBe(ServerConfig.ApprovalMode.YOLO);
+    });
+
+    it('should still let an explicit flag win over yolo in settings', async () => {
+      process.argv = ['node', 'script.js', '--approval-mode', 'plan'];
+      const settings = createTestMergedSettings({
+        general: { defaultApprovalMode: 'yolo' },
+      });
+      const argv = await parseArguments(settings);
+      const config = await loadCliConfig(settings, 'test-session', argv);
+      expect(config.getApprovalMode()).toBe(ServerConfig.ApprovalMode.PLAN);
+    });
+
     it('should prioritize --yolo flag over settings', async () => {
       process.argv = ['node', 'script.js', '--yolo'];
       const settings = createTestMergedSettings({

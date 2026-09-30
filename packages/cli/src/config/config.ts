@@ -703,14 +703,24 @@ export async function loadCliConfig(
 
   const question = argv.promptInteractive || argv.prompt || '';
 
-  // Determine approval mode with backward compatibility
+  // Determine approval mode with backward compatibility.
+  //
+  // `yolo` is accepted here from settings as well as from the flag. It used
+  // to be filtered out on purpose, so the mode could only ever be reached by
+  // passing --yolo on the command line. That made `defaultApprovalMode`
+  // unreachable for the one mode people most often want to keep on, and the
+  // filter was invisible: writing "yolo" into settings.json did nothing and
+  // reported nothing. A persistent setting is now honoured, and the schema
+  // offers it in /settings.
+  //
+  // `security.disableYoloMode` and `admin.secureModeEnabled` still override
+  // this below; those are admin kill switches and outrank user preference by
+  // design.
   let approvalMode: ApprovalMode;
   const rawApprovalMode =
     argv.approvalMode ||
     (argv.yolo ? 'yolo' : undefined) ||
-    ((settings.general?.defaultApprovalMode as string) !== 'yolo'
-      ? settings.general?.defaultApprovalMode
-      : undefined);
+    (settings.general?.defaultApprovalMode as string | undefined);
 
   if (rawApprovalMode) {
     switch (rawApprovalMode) {
