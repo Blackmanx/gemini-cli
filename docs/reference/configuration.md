@@ -2020,6 +2020,19 @@ their corresponding top-level category object in your `settings.json` file.
     served that model.
   - **Default:** `false`
 
+- **`omp.contextFilePriority`** (array):
+
+  - **Description:** Which context file to load, in order of preference. Only
+    the first one that exists is read, so listing several never duplicates their
+    content into every request. AGENTS.md is the cross-agent convention and
+    CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file
+    in charge.
+  - **Default:**
+
+    ```json
+    ["GEMINI.md", "AGENTS.md", "CLAUDE.md"]
+    ```
+
 - **`omp.goal.enabled`** (boolean):
 
   - **Description:** Show /goal and register the goal tool.

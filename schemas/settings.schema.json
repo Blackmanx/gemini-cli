@@ -3302,6 +3302,16 @@
           "default": false,
           "type": "boolean"
         },
+        "contextFilePriority": {
+          "title": "OMP: Context File Priority",
+          "description": "Which context file to load, in order of preference. Only the first one that exists is read, so listing several never duplicates their content into every request. AGENTS.md is the cross-agent convention and CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file in charge.",
+          "markdownDescription": "Which context file to load, in order of preference. Only the first one that exists is read, so listing several never duplicates their content into every request. AGENTS.md is the cross-agent convention and CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file in charge.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `[\n  \"GEMINI.md\",\n  \"AGENTS.md\",\n  \"CLAUDE.md\"\n]`",
+          "default": ["GEMINI.md", "AGENTS.md", "CLAUDE.md"],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "goal": {
           "title": "OMP: Goal Mode",
           "description": "The session goal, set with /goal. Off by default: a goal with a token budget is a hard cap the model is steered against, so it is opt-in.",

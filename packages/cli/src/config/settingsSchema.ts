@@ -1990,6 +1990,18 @@ const SETTINGS_SCHEMA = {
           'Offer gemini-3.5-flash-lite in /model even when the server has not sent its GA flag. Without this the Flash Lite entry silently shows the older 3.1 model instead. Only turn it on if your account is actually served that model.',
         showInDialog: true,
       },
+      contextFilePriority: {
+        type: 'array',
+        label: 'OMP: Context File Priority',
+        category: 'Context',
+        requiresRestart: false,
+        default: ['GEMINI.md', 'AGENTS.md', 'CLAUDE.md'] as string[],
+        items: { type: 'string' },
+        mergeStrategy: MergeStrategy.UNION,
+        description:
+          "Which context file to load, in order of preference. Only the first one that exists is read, so listing several never duplicates their content into every request. AGENTS.md is the cross-agent convention and CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file in charge.",
+        showInDialog: true,
+      },
       goal: {
         type: 'object',
         label: 'OMP: Goal Mode',

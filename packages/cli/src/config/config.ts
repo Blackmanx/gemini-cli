@@ -8,6 +8,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import process from 'node:process';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { execa } from 'execa';
 import { mcpCommand } from '../commands/mcp.js';
 import { extensionsCommand } from '../commands/extensions.js';
@@ -31,6 +32,8 @@ import {
   ASK_USER_TOOL_NAME,
   getVersion,
   coreEvents,
+  GEMINI_DIR,
+  homedir,
   GEMINI_MODEL_ALIAS_AUTO,
   getAdminErrorMessage,
   isHeadlessMode,
@@ -589,6 +592,24 @@ export interface LoadCliConfigOptions {
   loadedSettings?: LoadedSettings;
 }
 
+/**
+ * First context-file candidate that exists, searching the workspace and then
+ * the user's global agent directory. Returns undefined when none are present,
+ * which leaves the caller on the default rather than guessing.
+ */
+function pickContextFile(
+  candidates: readonly string[] | undefined,
+  cwd: string,
+): string | undefined {
+  if (!candidates?.length) return undefined;
+  const globalDir = path.join(homedir(), GEMINI_DIR);
+  for (const name of candidates) {
+    if (fs.existsSync(path.resolve(cwd, name))) return name;
+    if (fs.existsSync(path.join(globalDir, name))) return name;
+  }
+  return undefined;
+}
+
 export async function loadCliConfig(
   settings: MergedSettings,
   sessionId: string,
@@ -627,13 +648,18 @@ export async function loadCliConfig(
 
   // Set the context filename in the server's memory file helpers before loading memory
   // TODO(b/343434939): This is a bit of a hack. The contextFileName should ideally be passed
-  // directly to the Config constructor in core, and have core handle setGeminiMdFilename.
-  // However, loadHierarchicalGeminiMemory is called *before* createServerConfig.
   if (settings.context?.fileName) {
     setServerGeminiMdFilename(settings.context.fileName);
   } else {
-    // Reset to default if not provided in settings.
-    resetGeminiMdFilename(DEFAULT_CONTEXT_FILENAME);
+    // The port can read the context file other agents use, so a repo written
+    // for Codex or Claude is picked up without being copied. Only the first
+    // candidate that actually exists is loaded: loading several would put
+    // near-duplicate instructions into every request, which is exactly the
+    // token cost this is meant to avoid.
+    resetGeminiMdFilename(
+      pickContextFile(settings.omp?.contextFilePriority, cwd) ??
+        DEFAULT_CONTEXT_FILENAME,
+    );
   }
 
   const fileService = new FileDiscoveryService(cwd);
