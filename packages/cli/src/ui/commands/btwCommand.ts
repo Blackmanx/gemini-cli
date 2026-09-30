@@ -6,6 +6,7 @@
 
 import { CommandKind, type SlashCommand } from './types.js';
 import {
+  coreEvents,
   debugLogger,
   getPromptIdWithFallback,
   getResponseText,
@@ -55,35 +56,41 @@ export const btwCommand: SlashCommand = {
       };
     }
 
-    // Returned rather than pushed onto the UI directly. Poking history items
-    // in from here races whatever the session is doing with its own pending
-    // item: the user's input gets dropped and the previous turn's output
-    // reappears. The processor owns that bookkeeping.
-    try {
-      const response = await config.getBaseLlmClient().generateContent({
-        // A synthetic key: this request bypasses the main chat, so it must not
-        // resolve through the model-role cycle a normal turn would use.
+    // Deliberately not awaited. This command runs while a turn is in flight,
+    // and blocking the command processor on a second model call interleaves
+    // with the live one: the pending item gets clobbered, the earlier turn's
+    // output reappears in place of the answer, and the input bar goes away.
+    // Asking and returning is what keeps the session usable.
+    void config
+      .getBaseLlmClient()
+      .generateContent({
+        // A synthetic key: this request bypasses the main chat, so it must
+        // not resolve through the model-role cycle a normal turn would use.
         modelConfigKey: { model: 'btw' },
         abortSignal: new AbortController().signal,
         contents: [{ role: 'user', parts: [{ text: question }] }],
         systemInstruction: BTW_SYSTEM_INSTRUCTION,
         promptId: getPromptIdWithFallback('btw'),
         role: LlmRole.UTILITY_TOOL,
+      })
+      .then((response) => {
+        const answer = getResponseText(response)?.trim();
+        coreEvents.emitFeedback(
+          'info',
+          `btw: ${question}\n\n${answer || '(no answer)'}`,
+        );
+      })
+      .catch((error: unknown) => {
+        coreEvents.emitFeedback(
+          'error',
+          `btw failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
       });
-      const answer = getResponseText(response)?.trim();
-      return {
-        type: 'message',
-        messageType: 'info',
-        content: `btw: ${question}\n\n${answer || '(no answer)'}`,
-      };
-    } catch (error) {
-      return {
-        type: 'message',
-        messageType: 'error',
-        content: `btw failed: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      };
-    }
+
+    return {
+      type: 'message',
+      messageType: 'info',
+      content: `btw: ${question}\n\n(answering in a moment -- the agent keeps working)`,
+    };
   },
 };
