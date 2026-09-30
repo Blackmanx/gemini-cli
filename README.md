@@ -295,6 +295,57 @@ system prompt directive that tells the model to treat that content as passive
 data both stay on, so prompt-injection protection still applies. The setting
 does nothing outside YOLO; other approval modes keep asking.
 
+### Context files: `AGENTS.md` and friends
+
+Besides `GEMINI.md`, this build reads the context files other agents use, so a
+repo written for another tool works without copying its instructions. The
+default order is:
+
+```
+AGENTS.md  →  GEMINI.md  →  CLAUDE.md
+```
+
+**Only the first one that exists is read.** Loading two would put near-duplicate
+instructions into every request, which is the cost you are usually trying to
+avoid. `AGENTS.md` is first because it is the cross-agent convention: if a repo
+carries one, that is the file the project means for any agent.
+
+Change the order, or the set, to taste via `omp.contextFilePriority`:
+
+```json
+{ "omp": { "contextFilePriority": ["AGENTS.md", "GEMINI.md", "CLAUDE.md"] } }
+```
+
+Put your own file first to win outright:
+
+```json
+{ "omp": { "contextFilePriority": ["CONTRIBUTING.md", "AGENTS.md"] } }
+```
+
+Or drop a candidate entirely, if you never want it picked up:
+
+```json
+{ "omp": { "contextFilePriority": ["AGENTS.md"] } }
+```
+
+The list **replaces** the default rather than adding to it, so whatever you
+leave out is gone. It is editable in `/settings` under "OMP: Context File
+Priority" as a comma-separated string, and from the command line:
+
+```bash
+gemini config set omp.contextFilePriority '["AGENTS.md", "GEMINI.md"]'
+```
+
+Prefer your old `context.fileName`? It still wins over all of this, and it takes
+a list too:
+
+```json
+{ "context": { "fileName": ["AGENTS.md", "CLAUDE.md"] } }
+```
+
+The difference: `context.fileName` loads **every** file you list, so use it only
+when the files genuinely do not overlap.
+
 ### `/settings` while a task is running
 
 `/settings` is safe to open mid-task. A running task otherwise swallows slash
