@@ -71,6 +71,86 @@ conda activate gemini_env
 npm install -g @google/gemini-cli
 ```
 
+#### Install globally from source (this repo, `feature/omp-port`)
+
+This fork is not published to npm. To install it globally on your machine so you
+can launch it with `gemini` from any directory:
+
+```bash
+git clone --branch feature/omp-port https://github.com/Blackmanx/gemini-cli.git
+cd gemini-cli-omp
+npm install
+npm run build
+cd packages/cli
+npm link
+```
+
+`npm link` registers the `gemini` binary in your global npm prefix (same place
+`npm install -g` puts it), so `gemini` is now on your `PATH`:
+
+```bash
+gemini --version   # 0.63.0-nightly... (the version in package.json)
+gemini            # launch the interactive CLI
+```
+
+##### If the global npm prefix is not on your PATH
+
+`npm link` writes the `gemini` symlink into the global npm prefix
+(`npm config get prefix`/bin), the same directory `npm install -g` uses. If you
+have never installed anything globally, that directory may not exist or may not
+be on your `PATH`. You have two options:
+
+Fix the `PATH` (recommended, keeps `npm link` working for later updates):
+
+```bash
+npm config get prefix      # e.g. /home/you/.nvm/versions/node/v24.16.0
+echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+Or skip `npm link` entirely and put a symlink yourself in a directory that is
+already on your `PATH`:
+
+```bash
+ln -sf "$PWD/packages/cli/dist/index.js" ~/.local/bin/gemini
+```
+
+Either way, from any directory:
+
+```bash
+gemini --version
+gemini
+```
+
+The symlink points at `dist/index.js` directly, so after `git pull` you only
+need `npm run build` — no re-linking. `dist/index.js` has a
+`#!/usr/bin/env node` shebang, so it is executable on its own; this requires
+only Node >= 20 on the `PATH`, not a global npm install.
+
+To update later, pull the latest changes and rebuild:
+
+```bash
+cd gemini-cli-omp
+git pull
+npm run build
+```
+
+To uninstall:
+
+```bash
+cd gemini-cli-omp/packages/cli
+npm unlink -g @google/gemini-cli
+```
+
+Or, if you used the manual symlink:
+
+```bash
+rm ~/.local/bin/gemini
+```
+
+Requirements: Node.js >= 20 (see `.nvmrc`), and a writable directory on your
+`PATH` (`npm config get prefix`/bin, or `~/.local/bin`).
+
 ## Release Channels
 
 See [Releases](https://www.geminicli.com/docs/changelogs) for more details.
