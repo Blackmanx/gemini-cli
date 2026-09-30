@@ -51,6 +51,7 @@ import {
   SAFETY_BLOCKED_MESSAGE,
   RECITATION_BLOCKED_MESSAGE,
   OTHER_BLOCKED_MESSAGE,
+  renderGoalPrompt,
   TRUE_EMPTY_RESPONSE_MESSAGE,
   applyMagicKeywordNotices,
 } from '@google/gemini-cli-core';
@@ -740,6 +741,10 @@ export const useGeminiStream = (
   const lastPromptIdRef = useRef<string | null>(null);
   const loopDetectedRef = useRef(false);
   const autoNudgeAttemptCountRef = useRef<number>(0);
+  // Guards the goal auto-continuation loop. A goal the model keeps failing to
+  // advance would otherwise re-enter forever, spending tokens.
+  const goalContinuationCountRef = useRef<number>(0);
+  const MAX_GOAL_CONTINUATIONS = 3;
   const MAX_AUTO_NUDGE_ATTEMPTS = 2;
   const submitQueryRef = useRef<
     | ((
@@ -1675,10 +1680,31 @@ export const useGeminiStream = (
             prompt_id,
           );
         }
+
+        // An active goal the model walked away from is not finished. With
+        // auto-continuation on, send it straight back to work rather than
+        // waiting for the user to notice.
+        if (
+          config.isGoalContinuationEnabled() &&
+          goalContinuationCountRef.current < MAX_GOAL_CONTINUATIONS
+        ) {
+          const goalRuntime = config.getGoalRuntime();
+          const activeGoal = goalRuntime.getGoal();
+          if (activeGoal && goalRuntime.isAccounting()) {
+            goalContinuationCountRef.current += 1;
+            // eslint-disable-next-line @typescript-eslint/no-floating-promises
+            submitQueryRef.current?.(
+              [{ text: renderGoalPrompt('continuation', activeGoal) }],
+              { isContinuation: true },
+              prompt_id,
+            );
+          }
+        }
       }
       return StreamProcessingStatus.Completed;
     },
     [
+      config,
       handleContentEvent,
       handleThoughtEvent,
       thoughtRef,

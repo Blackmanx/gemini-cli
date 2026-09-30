@@ -182,6 +182,125 @@ rm ~/.local/bin/gemini
 Either install path needs only Node >= 20 (see `.nvmrc`); the bundle is
 self-contained and has no runtime dependency on the clone.
 
+## 🧭 What this fork adds
+
+Everything here lives under the `omp` namespace in settings, so the port can be
+identified and removed as a unit. Delete the `omp` block and the fork's
+behaviour is upstream's again.
+
+### `/goal` — hold the model to an objective
+
+Sets an objective the model is expected to work toward for the rest of the
+session. It gets the objective in its system prompt and can be given a token
+budget it is held to.
+
+```bash
+/goal set fix the flaky upload test 50000   # objective, optional token budget
+/goal show                                    # objective, status, tokens, time
+/goal pause                                   # stop accruing tokens
+/goal resume                                  # pick a paused goal back up
+/goal drop                                    # abandon it
+/goal clear                                   # end it without claiming it was met
+```
+
+The model drives the same lifecycle through the `goal` tool (`op=create`, `get`,
+`complete`, `drop`), so it can mark its own work done without you intervening.
+
+**The token budget is the point.** When the budget is reached, the model is
+steered to stop and wrap up rather than left to keep spending. The steer is
+delivered as an injection into the turn that overspent, and it is deliberately
+not gated on model steering the way `user_steering` is — dropping it would waste
+the tokens it exists to save.
+
+Only genuinely new tokens are charged. Cached reads of an already-seen prefix
+are excluded, because a re-read is not new work.
+
+To have the model keep going on its own when it stops with a goal still open:
+
+```json
+{ "omp": { "goal": { "continuation": true } } }
+```
+
+Off by default, because it spends tokens without asking. It also stops on its
+own after a few consecutive continuations, so a goal the model cannot advance
+does not loop forever.
+
+### `/btw` — ask a side question
+
+Asks something tangential without putting it in the conversation. The answer
+arrives as its own block, and the main transcript is untouched — a tangent in
+the transcript would be carried into every later turn, and the model would start
+answering questions nobody asked.
+
+```bash
+/btw why did it pick that file?
+```
+
+It has no tools and no history, so it cannot act on your workspace. If the
+answer needs something only the session knows, it will say so.
+
+### Headless mode: pay for less harness
+
+Every non-interactive run (`gemini -p "..."`) is a fresh process, so the harness
+is sent again on every invocation with no cached prefix to amortize it. Measured
+on this build, the first request carried ~17.9k tokens before your prompt even
+landed: ~5.9k system instruction, ~9.0k tool schemas across 23 tools, and ~3.0k
+session context. The interactive flag changed almost none of it — ~118 tokens.
+
+`omp.headlessHarness` decides how much of that gets sent:
+
+```json
+{ "omp": { "headlessHarness": "slim" } }
+```
+
+| value            | what is sent                                                       | first request |
+| ---------------- | ------------------------------------------------------------------ | ------------- |
+| `full` (default) | composed system prompt, session context, every tool schema         | ~17.9k        |
+| `slim`           | short system prompt, no schemas for tools that cannot run headless | ~12.1k        |
+| `api`            | short system prompt, no tools, no session context                  | ~55           |
+
+`slim` is still a working agent: it can read, search, edit and run commands.
+`api` is a plain one-shot text call with no file access at all — the prompt
+tells the model so outright, because a model that believes it has tools will ask
+for them and it will be right to.
+
+Interactive runs ignore this entirely. A `GEMINI_SYSTEM_MD` you wrote yourself
+still wins over `slim` and `api`: someone who wrote their own prompt has already
+made the call this setting makes for them.
+
+### Tainted commands in YOLO
+
+A command that reuses flags or arguments found in untrusted tool output (a
+`web_fetch`, an MCP result) normally outranks the policy engine: it prompts even
+in YOLO, and is denied outright in headless YOLO. That is deliberate — the
+detection is what makes a prompt-injection attempt visible.
+
+If you would rather YOLO trusted you:
+
+```json
+{ "omp": { "allowTaintedCommandsInYolo": true } }
+```
+
+Only the extra confirmation goes away. The `<untrusted_context>` marking and the
+system prompt directive that tells the model to treat that content as passive
+data both stay on, so prompt-injection protection still applies. The setting
+does nothing outside YOLO; other approval modes keep asking.
+
+### `/settings` while a task is running
+
+`/settings` is safe to open mid-task. A running task otherwise swallows slash
+commands, and only those marked concurrent-safe get through. Editing settings is
+just config state: it takes effect on the next turn, and the entries that need a
+restart already say so in the dialog.
+
+### No autoupdates
+
+This build does not update itself. The upstream updater runs the package manager
+against the official package, which on a fork installed from source would
+replace your checkout with upstream. There is no update check, no notification,
+and no setting to re-enable it. Update by pulling and re-bundling, as in the
+install section above.
+
 ## Release Channels
 
 See [Releases](https://www.geminicli.com/docs/changelogs) for more details.
