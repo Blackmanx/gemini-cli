@@ -32,8 +32,6 @@ import {
 } from '@google/gemini-cli-core';
 import type { InitializationResult } from './core/initializer.js';
 import type { LoadedSettings } from './config/settings.js';
-import { checkForUpdates } from './ui/utils/updateCheck.js';
-import { handleAutoUpdate } from './utils/handleAutoUpdate.js';
 import { SettingsContext } from './ui/contexts/SettingsContext.js';
 import { MouseProvider } from './ui/contexts/MouseContext.js';
 import { StreamingState } from './ui/types.js';
@@ -176,23 +174,6 @@ export async function startInteractiveUI(
     cleanupLineWrapping = () => enableLineWrapping();
     registerCleanup(cleanupLineWrapping);
   }
-
-  checkForUpdates(settings)
-    .then((info) => {
-      handleAutoUpdate(
-        info,
-        settings,
-        config.getProjectRoot(),
-        config.getSandboxEnabled(),
-      );
-    })
-    .catch((err) => {
-      // Silently ignore update check errors.
-      if (config.getDebugMode()) {
-        debugLogger.warn('Update check failed:', err);
-      }
-    });
-
   const cleanupUnmount = () => instance.unmount();
   const cleanupNonResumableCurrentSession = async () => {
     try {

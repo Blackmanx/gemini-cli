@@ -213,9 +213,6 @@ describe('SettingsSchema', () => {
         true,
       );
       expect(
-        getSettingsSchema().general.properties.enableAutoUpdate.showInDialog,
-      ).toBe(true);
-      expect(
         getSettingsSchema().ui.properties.hideWindowTitle.showInDialog,
       ).toBe(true);
       expect(getSettingsSchema().ui.properties.hideTips.showInDialog).toBe(

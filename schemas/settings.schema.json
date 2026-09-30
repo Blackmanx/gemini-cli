@@ -102,20 +102,6 @@
           "default": false,
           "type": "boolean"
         },
-        "enableAutoUpdate": {
-          "title": "Enable Auto Update",
-          "description": "Enable automatic updates.",
-          "markdownDescription": "Enable automatic updates.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `true`",
-          "default": true,
-          "type": "boolean"
-        },
-        "enableAutoUpdateNotification": {
-          "title": "Enable Auto Update Notification",
-          "description": "Enable update notification prompts.",
-          "markdownDescription": "Enable update notification prompts.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `true`",
-          "default": true,
-          "type": "boolean"
-        },
         "enableNotifications": {
           "title": "Enable Terminal Notifications",
           "description": "Enable terminal run-event notifications for action-required prompts and session completion.",
@@ -3308,6 +3294,30 @@
           "markdownDescription": "In YOLO mode, run commands that reuse flags or arguments from untrusted tool output (web fetches, MCP results) without asking, instead of re-prompting on every one. The untrusted-context marking and the prompt-injection protection it feeds stay on; only the extra confirmation is dropped.\n\n- Category: `Security`\n- Requires restart: `no`\n- Default: `false`",
           "default": false,
           "type": "boolean"
+        },
+        "goal": {
+          "title": "OMP: Goal Mode",
+          "description": "The session goal, set with /goal. Off by default: a goal with a token budget is a hard cap the model is steered against, so it is opt-in.",
+          "markdownDescription": "The session goal, set with /goal. Off by default: a goal with a token budget is a hard cap the model is steered against, so it is opt-in.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `{}`",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "title": "OMP: Enable Goal Mode",
+              "description": "Show /goal and register the goal tool.",
+              "markdownDescription": "Show /goal and register the goal tool.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "continuation": {
+              "title": "OMP: Auto-Continue Goals",
+              "description": "When the model stops with a goal still active, send it another turn instead of waiting for you. Off by default: it spends tokens without asking.",
+              "markdownDescription": "When the model stops with a goal still active, send it another turn instead of waiting for you. Off by default: it spends tokens without asking.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `false`",
+              "default": false,
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         },
         "headlessHarness": {
           "title": "OMP: Headless Harness",

@@ -5,7 +5,6 @@
  */
 
 import { runExitCleanup } from './cleanup.js';
-import { waitForUpdateCompletion } from './handleAutoUpdate.js';
 
 /**
  * Exit code used to signal that the CLI should be relaunched.
@@ -25,7 +24,6 @@ export function _resetRelaunchStateForTesting(): void {
 export async function relaunchApp(): Promise<void> {
   if (isRelaunching) return;
   isRelaunching = true;
-  await waitForUpdateCompletion();
   await runExitCleanup();
   process.exit(RELAUNCH_EXIT_CODE);
 }

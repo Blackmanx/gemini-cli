@@ -8,11 +8,16 @@
  * Source of an injection into the model conversation.
  * - `user_steering`: Interactive guidance from the user (gated on model steering).
  * - `background_completion`: Output from a backgrounded execution that has finished.
+ * - `goal_budget`: a goal's token budget running out, telling the model to
+ *   stop spending. Not gated on model steering: it arrives in the turn that
+ *   overspent, so dropping it would waste the very tokens it exists to save.
  */
-
 import { debugLogger } from '../utils/debugLogger.js';
 
-export type InjectionSource = 'user_steering' | 'background_completion';
+export type InjectionSource =
+  | 'user_steering'
+  | 'background_completion'
+  | 'goal_budget';
 
 /**
  * Typed listener that receives both the injection text and its source.

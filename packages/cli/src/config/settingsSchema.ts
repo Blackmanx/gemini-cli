@@ -256,24 +256,6 @@ const SETTINGS_SCHEMA = {
         description: 'Enable DevTools inspector on launch.',
         showInDialog: false,
       },
-      enableAutoUpdate: {
-        type: 'boolean',
-        label: 'Enable Auto Update',
-        category: 'General',
-        requiresRestart: false,
-        default: true,
-        description: 'Enable automatic updates.',
-        showInDialog: true,
-      },
-      enableAutoUpdateNotification: {
-        type: 'boolean',
-        label: 'Enable Auto Update Notification',
-        category: 'General',
-        requiresRestart: false,
-        default: true,
-        description: 'Enable update notification prompts.',
-        showInDialog: false,
-      },
       enableNotifications: {
         type: 'boolean',
         label: 'Enable Terminal Notifications',
@@ -1997,6 +1979,37 @@ const SETTINGS_SCHEMA = {
         description:
           'In YOLO mode, run commands that reuse flags or arguments from untrusted tool output (web fetches, MCP results) without asking, instead of re-prompting on every one. The untrusted-context marking and the prompt-injection protection it feeds stay on; only the extra confirmation is dropped.',
         showInDialog: true,
+      },
+      goal: {
+        type: 'object',
+        label: 'OMP: Goal Mode',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: {},
+        description:
+          'The session goal, set with /goal. Off by default: a goal with a token budget is a hard cap the model is steered against, so it is opt-in.',
+        showInDialog: false,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'OMP: Enable Goal Mode',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description: 'Show /goal and register the goal tool.',
+            showInDialog: true,
+          },
+          continuation: {
+            type: 'boolean',
+            label: 'OMP: Auto-Continue Goals',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: false,
+            description:
+              'When the model stops with a goal still active, send it another turn instead of waiting for you. Off by default: it spends tokens without asking.',
+            showInDialog: true,
+          },
+        },
       },
       headlessHarness: {
         type: 'string',

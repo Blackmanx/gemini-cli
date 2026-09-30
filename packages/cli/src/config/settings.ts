@@ -1046,38 +1046,10 @@ export function migrateDeprecatedSettings(
     const settings = settingsFile.settings;
     const foundDeprecated: string[] = [];
 
-    // Migrate general settings
-    const generalSettings = settings.general as
-      | Record<string, unknown>
-      | undefined;
-    if (generalSettings) {
-      const newGeneral = { ...generalSettings };
-      let modified = false;
-
-      modified =
-        migrateBoolean(
-          newGeneral,
-          'disableAutoUpdate',
-          'enableAutoUpdate',
-          'general',
-          foundDeprecated,
-        ) || modified;
-      modified =
-        migrateBoolean(
-          newGeneral,
-          'disableUpdateNag',
-          'enableAutoUpdateNotification',
-          'general',
-          foundDeprecated,
-        ) || modified;
-
-      if (modified) {
-        loadedSettings.setValue(scope, 'general', newGeneral);
-        if (!settingsFile.readOnly) {
-          anyModified = true;
-        }
-      }
-    }
+    // No general-settings migration remains. The autoupdate keys that used to
+    // be migrated here (`enableAutoUpdate`, `enableAutoUpdateNotification`)
+    // were removed along with the updater; the deprecated keys are left alone
+    // so an old settings file round-trips without being silently rewritten.
 
     // Migrate ui settings
     const uiSettings = settings.ui as Record<string, unknown> | undefined;

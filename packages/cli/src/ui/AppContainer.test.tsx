@@ -217,7 +217,6 @@ import { useFocus } from './hooks/useFocus.js';
 
 // Mock external utilities
 vi.mock('../utils/events.js');
-vi.mock('../utils/handleAutoUpdate.js');
 vi.mock('./utils/ConsolePatcher.js');
 vi.mock('../utils/cleanup.js');
 

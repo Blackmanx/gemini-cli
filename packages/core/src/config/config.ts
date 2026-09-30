@@ -7,6 +7,13 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { SandboxPolicyManager } from '../policy/sandboxPolicyManager.js';
+import { GoalRuntime } from '../goals/runtime.js';
+import type {
+  GoalModeState,
+  GoalRuntimeEvent,
+  GoalTokenUsage,
+  PersistedGoalState,
+} from '../goals/types.js';
 import { inspect } from 'node:util';
 import process from 'node:process';
 import { z } from 'zod';
@@ -80,6 +87,7 @@ import { discoverRules } from '../discovery/registry.js';
 import type { DiscoveryResult } from '../discovery/types.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
+import { GoalTool } from '../tools/goal.js';
 import {
   ListBackgroundProcessesTool,
   ReadBackgroundOutputTool,
@@ -184,7 +192,7 @@ import {
 import type { ShellExecutionConfig } from '../services/shellExecutionService.js';
 import { FileExclusions } from '../utils/ignorePatterns.js';
 import { MessageBus } from '../confirmation-bus/message-bus.js';
-import type { EventEmitter } from 'node:events';
+import { EventEmitter } from 'node:events';
 import { PolicyEngine } from '../policy/policy-engine.js';
 import {
   ApprovalMode,
@@ -728,6 +736,8 @@ export interface ConfigParameters {
   skipNextSpeakerCheck?: boolean;
   shellExecutionConfig?: ShellExecutionConfig;
   extensionManagement?: boolean;
+  goalEnabled?: boolean;
+  goalContinuation?: boolean;
   extensionRegistryURI?: string;
   truncateToolOutputThreshold?: number;
   eventEmitter?: EventEmitter;
@@ -877,6 +887,13 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly modelCycleOrder: readonly string[] | undefined;
   private readonly useGithub: boolean;
   private readonly allowTaintedCommandsInYolo: boolean;
+  private goalRuntime: GoalRuntime | undefined;
+  private goalModeState: GoalModeState | undefined;
+  private goalEvents: EventEmitter | undefined;
+  private readonly goalEnabled: boolean;
+  private readonly goalContinuation: boolean;
+  /** Monotonic cumulative usage, the baseline the goal budget is measured from. */
+  private cumulativeUsage: GoalTokenUsage = { input: 0, output: 0 };
   private readonly headlessHarness: HeadlessHarness;
   private readonly appendSystem: string | undefined;
   private importedRules: DiscoveryResult | undefined;
@@ -1405,6 +1422,8 @@ export class Config implements McpContext, AgentLoopContext {
     this.headlessHarness = isHeadlessHarness(params.headlessHarness)
       ? params.headlessHarness
       : 'full';
+    this.goalEnabled = params.goalEnabled ?? true;
+    this.goalContinuation = params.goalContinuation ?? false;
     this.appendSystem = params.appendSystem;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
@@ -4174,6 +4193,98 @@ export class Config implements McpContext, AgentLoopContext {
   }
 
   /**
+   * Cumulative session usage, the thing goal budgets measure deltas from.
+   * Monotonic: the turn loop adds to it and nothing subtracts, so a snapshot
+   * taken at any moment is a valid baseline.
+   */
+  getGoalUsageBaseline(): GoalTokenUsage {
+    return { ...this.cumulativeUsage };
+  }
+
+  /** Folds one response's usage into the running total. */
+  addGoalUsage(input: number, output: number): void {
+    this.cumulativeUsage.input += input;
+    this.cumulativeUsage.output += output;
+  }
+
+  isGoalEnabled(): boolean {
+    return this.goalEnabled;
+  }
+
+  /** Whether a still-active goal should get another turn on its own. */
+  isGoalContinuationEnabled(): boolean {
+    return this.goalContinuation;
+  }
+
+  getGoalModeState(): GoalModeState | undefined {
+    return this.goalModeState ? { ...this.goalModeState } : undefined;
+  }
+
+  setGoalModeState(state: GoalModeState | undefined): void {
+    this.goalModeState = state;
+  }
+
+  getGoalRuntime(): GoalRuntime {
+    if (!this.goalRuntime) {
+      this.goalRuntime = new GoalRuntime({
+        getState: () => this.goalModeState,
+        setState: (state) => {
+          this.goalModeState = state;
+        },
+        getCurrentUsage: () => ({ ...this.cumulativeUsage }),
+        emit: (event) => this.goalEvents?.emit('goal', event),
+        persist: (mode, state) => this.persistGoalState(mode, state),
+        sendSteerMessage: (text) => {
+          this.injectionService.addInjection(text, 'goal_budget');
+        },
+      });
+    }
+    return this.goalRuntime;
+  }
+
+  /**
+   * Subscribe to goal changes. The runtime holds its own emitter, so the CLI
+   * can listen without a new MessageBusType going through the sanitized bus.
+   */
+  onGoalEvent(listener: (event: GoalRuntimeEvent) => void): () => void {
+    this.goalEvents ??= new EventEmitter();
+    this.goalEvents.on('goal', listener);
+    return () => {
+      this.goalEvents?.off('goal', listener);
+    };
+  }
+
+  /**
+   * Makes the goal durable so a resume finds it again. The recording service
+   * lives on the chat, which exists only once a turn has started; a goal set
+   * before that is held in memory and written by the first commit after it.
+   */
+  private persistGoalState(
+    mode: 'goal' | 'goal_paused' | 'none',
+    state?: GoalModeState,
+  ): void {
+    const client = this.geminiClient;
+    const recording = client?.isInitialized()
+      ? client.getChat().getChatRecordingService()
+      : undefined;
+    recording?.saveGoalState(
+      mode === 'none' || !state ? undefined : { mode, goal: state.goal },
+    );
+  }
+
+  /** Reads back a goal persisted by a previous session. */
+  restorePersistedGoal(persisted: PersistedGoalState | undefined): void {
+    if (!persisted) {
+      return;
+    }
+    this.getGoalRuntime().restore({
+      enabled: true,
+      mode: persisted.mode === 'goal_paused' ? 'exiting' : 'active',
+      goal: persisted.goal,
+    });
+  }
+
+  /**
    * Standing instructions appended to the system prompt.
    *
    * Additive on purpose: replacing the whole prompt is the only other
@@ -4512,6 +4623,15 @@ export class Config implements McpContext, AgentLoopContext {
       );
       maybeRegister(EnterPlanModeTool, () =>
         registry.registerTool(new EnterPlanModeTool(this, this.messageBus)),
+      );
+    }
+
+    // Registered whenever goal mode is on, like enter_plan_mode: the model
+    // needs the tool to complete or drop a goal, which only makes sense once
+    // one is active, and a tool appearing mid-session breaks the cached prefix.
+    if (this.isGoalEnabled()) {
+      maybeRegister(GoalTool, () =>
+        registry.registerTool(new GoalTool(this, this.messageBus)),
       );
     }
 

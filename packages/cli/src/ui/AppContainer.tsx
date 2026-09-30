@@ -136,8 +136,6 @@ import { useFolderTrust } from './hooks/useFolderTrust.js';
 import { useIdeTrustListener } from './hooks/useIdeTrustListener.js';
 import { type IdeIntegrationNudgeResult } from './IdeIntegrationNudge.js';
 import { appEvents, AppEvent, TransientMessageType } from '../utils/events.js';
-import { type UpdateObject } from './utils/updateCheck.js';
-import { setUpdateHandler } from '../utils/handleAutoUpdate.js';
 import {
   registerCleanup,
   removeCleanup,
@@ -317,7 +315,6 @@ export const AppContainer = (props: AppContainerProps) => {
   const [historyRemountKey, setHistoryRemountKey] = useState(0);
   const [settingsNonce, setSettingsNonce] = useState(0);
   const activeHooks = useHookDisplayState();
-  const [updateInfo, setUpdateInfo] = useState<UpdateObject | null>(null);
   const [isTrustedFolder, setIsTrustedFolder] = useState<boolean | undefined>(
     () => isWorkspaceTrusted(settings.merged).isTrusted,
   );
@@ -539,11 +536,6 @@ export const AppContainer = (props: AppContainerProps) => {
       );
     };
   }, [config, resumedSessionData]);
-
-  useEffect(
-    () => setUpdateHandler(historyManager.addItem, setUpdateInfo),
-    [historyManager.addItem],
-  );
 
   // Subscribe to fallback mode and model changes from core
   useEffect(() => {
@@ -2549,7 +2541,6 @@ Logging in with Google... Restarting Gemini CLI to continue.
       mainControlsRef,
       rootUiRef,
       currentIDE,
-      updateInfo,
       showIdeRestartPrompt,
       ideTrustRestartReason,
       isRestarting,
@@ -2662,7 +2653,6 @@ Logging in with Google... Restarting Gemini CLI to continue.
       mainControlsRef,
       rootUiRef,
       currentIDE,
-      updateInfo,
       showIdeRestartPrompt,
       ideTrustRestartReason,
       isRestarting,

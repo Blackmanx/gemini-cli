@@ -137,6 +137,12 @@ export const EXIT_PLAN_PARAM_PLAN_FILENAME = 'plan_filename';
 export const ENTER_PLAN_MODE_TOOL_NAME = 'enter_plan_mode';
 export const PLAN_MODE_PARAM_REASON = 'reason';
 
+// -- goal --
+export const GOAL_TOOL_NAME = 'goal';
+export const GOAL_PARAM_OP = 'op';
+export const GOAL_PARAM_OBJECTIVE = 'objective';
+export const GOAL_PARAM_TOKEN_BUDGET = 'token_budget';
+
 // -- sandbox --
 export const PARAM_ADDITIONAL_PERMISSIONS = 'additional_permissions';
 

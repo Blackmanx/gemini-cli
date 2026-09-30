@@ -141,16 +141,6 @@ their corresponding top-level category object in your `settings.json` file.
   - **Description:** Enable DevTools inspector on launch.
   - **Default:** `false`
 
-- **`general.enableAutoUpdate`** (boolean):
-
-  - **Description:** Enable automatic updates.
-  - **Default:** `true`
-
-- **`general.enableAutoUpdateNotification`** (boolean):
-
-  - **Description:** Enable update notification prompts.
-  - **Default:** `true`
-
 - **`general.enableNotifications`** (boolean):
 
   - **Description:** Enable terminal run-event notifications for action-required
@@ -2020,6 +2010,18 @@ their corresponding top-level category object in your `settings.json` file.
     instead of re-prompting on every one. The untrusted-context marking and the
     prompt-injection protection it feeds stay on; only the extra confirmation is
     dropped.
+  - **Default:** `false`
+
+- **`omp.goal.enabled`** (boolean):
+
+  - **Description:** Show /goal and register the goal tool.
+  - **Default:** `true`
+
+- **`omp.goal.continuation`** (boolean):
+
+  - **Description:** When the model stops with a goal still active, send it
+    another turn instead of waiting for you. Off by default: it spends tokens
+    without asking.
   - **Default:** `false`
 
 - **`omp.headlessHarness`** (string):

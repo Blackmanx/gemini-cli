@@ -15,6 +15,11 @@ export const settingsCommand: SlashCommand = {
   description: 'View and edit Gemini CLI settings',
   kind: CommandKind.BUILT_IN,
   autoExecute: true,
+  // Without this, a running task swallows the command: AppContainer only lets
+  // `isSafeConcurrent` commands through mid-stream. Editing settings is just
+  // config state -- it takes effect on the next turn, and the entries that
+  // need a restart already say so in the dialog.
+  isSafeConcurrent: true,
   action: (_context, _args): OpenDialogActionReturn => ({
     type: 'dialog',
     dialog: 'settings',

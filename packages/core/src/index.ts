@@ -183,6 +183,16 @@ export * from './tools/tools.js';
 export * from './tools/tool-error.js';
 export * from './tools/tool-registry.js';
 export * from './tools/tool-names.js';
+export * from './tools/goal.js';
+export * from './goals/types.js';
+export {
+  GoalRuntime,
+  completionBudgetReport,
+  goalTokenDelta,
+  renderGoalPrompt,
+  renderTrustedObjective,
+  remainingTokens,
+} from './goals/runtime.js';
 export * from './resources/resource-registry.js';
 
 // Export prompt logic

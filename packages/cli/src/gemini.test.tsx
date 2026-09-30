@@ -1638,9 +1638,6 @@ describe('startInteractiveUI', () => {
     geminiMdFileCount: 0,
   };
 
-  vi.mock('./ui/utils/updateCheck.js', () => ({
-    checkForUpdates: vi.fn(() => Promise.resolve(null)),
-  }));
   vi.mock('./utils/cleanup.js', () => ({
     cleanupCheckpoints: vi.fn(() => Promise.resolve()),
     registerCleanup: vi.fn(),
@@ -1743,7 +1740,6 @@ describe('startInteractiveUI', () => {
 
   it('should perform all startup tasks in correct order', async () => {
     const { getVersion } = await import('@google/gemini-cli-core');
-    const { checkForUpdates } = await import('./ui/utils/updateCheck.js');
     const { registerCleanup } = await import('./utils/cleanup.js');
 
     await startTestInteractiveUI(
@@ -1764,11 +1760,6 @@ describe('startInteractiveUI', () => {
     // Verify cleanup handler is registered with unmount function
     const cleanupFn = vi.mocked(registerCleanup).mock.calls[0][0];
     expect(typeof cleanupFn).toBe('function');
-
-    // checkForUpdates should be called asynchronously (not waited for)
-    // We need a small delay to let it execute
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(checkForUpdates).toHaveBeenCalledTimes(1);
   });
 
   it('should not recordSlowRender when less than threshold', async () => {

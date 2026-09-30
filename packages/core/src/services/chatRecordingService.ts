@@ -6,6 +6,7 @@
 
 import { type ThoughtSummary } from '../utils/thoughtUtils.js';
 import { getProjectHash } from '../utils/paths.js';
+import type { PersistedGoalState } from '../goals/types.js';
 import path from 'node:path';
 import * as fs from 'node:fs';
 import { sanitizeFilenamePart } from '../utils/fileUtils.js';
@@ -860,6 +861,22 @@ export class ChatRecordingService {
       this.updateMetadata({ directories: [...directories] });
     } catch (error) {
       debugLogger.error('Error saving directories to chat history.', error);
+    }
+  }
+
+  /**
+   * Stores the session's goal, or clears it by passing `undefined`.
+   *
+   * Written as metadata rather than as a message: a goal is session state, not
+   * something the user said, so it must not reach the model on resume and
+   * must not show up in the transcript.
+   */
+  saveGoalState(state: PersistedGoalState | undefined): void {
+    if (!this.conversationFile) return;
+    try {
+      this.updateMetadata({ goal: state });
+    } catch (error) {
+      debugLogger.error('Error saving goal state to chat history.', error);
     }
   }
 

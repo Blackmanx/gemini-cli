@@ -278,6 +278,17 @@ export class Turn {
     } = {},
   ): AsyncGenerator<ServerGeminiStreamEvent> {
     const { displayContent, role = LlmRole.MAIN, apiHistoryOverride } = options;
+    // Charge this model call to any active goal. The baseline is taken before
+    // the request goes out, so a goal only pays for the turns that ran while
+    // it was active, and the budget can steer the very turn that overspent.
+    const goalConfig = this.chat.context.config;
+    const goalRuntime = goalConfig.getGoalRuntime();
+    if (goalRuntime.isAccounting()) {
+      goalRuntime.onTurnStart(
+        this.prompt_id,
+        goalConfig.getGoalUsageBaseline(),
+      );
+    }
     try {
       // Note: This assumes `sendMessageStream` yields events like
       // { type: StreamEventType.RETRY } or { type: StreamEventType.CHUNK, value: GenerateContentResponse }
@@ -404,6 +415,15 @@ export class Turn {
           }
 
           this.finishReason = finishReason;
+
+          // Fold this response's usage into the running total, then charge
+          // whatever accrued to the goal. Awaited so a budget-limit steer is
+          // queued before the caller acts on the finished turn.
+          goalConfig.addGoalUsage(
+            resp.usageMetadata?.promptTokenCount ?? 0,
+            resp.usageMetadata?.candidatesTokenCount ?? 0,
+          );
+          await goalRuntime.onUsage(goalConfig.getGoalUsageBaseline());
           yield {
             type: GeminiEventType.Finished,
             value: {

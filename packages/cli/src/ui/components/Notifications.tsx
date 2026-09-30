@@ -10,7 +10,6 @@ import { useAppContext } from '../contexts/AppContext.js';
 import { useUIState } from '../contexts/UIStateContext.js';
 import { theme } from '../semantic-colors.js';
 import { StreamingState } from '../types.js';
-import { UpdateNotification } from './UpdateNotification.js';
 import { persistentState } from '../../utils/persistentState.js';
 import { useKeypress } from '../hooks/useKeypress.js';
 import { KeypressPriority } from '../contexts/KeypressContext.js';
@@ -36,7 +35,7 @@ const MAX_STARTUP_WARNING_SHOW_COUNT = 3;
 
 export const Notifications = () => {
   const { startupWarnings } = useAppContext();
-  const { initError, streamingState, updateInfo } = useUIState();
+  const { initError, streamingState } = useUIState();
 
   const isScreenReaderEnabled = useIsScreenReaderEnabled();
   const showInitError =
@@ -127,12 +126,7 @@ export const Notifications = () => {
     }
   }, [showScreenReaderNudge]);
 
-  if (
-    !showStartupWarnings &&
-    !showInitError &&
-    !updateInfo &&
-    !showScreenReaderNudge
-  ) {
+  if (!showStartupWarnings && !showInitError && !showScreenReaderNudge) {
     return null;
   }
 
@@ -145,7 +139,6 @@ export const Notifications = () => {
           disappear on next run.
         </Text>
       )}
-      {updateInfo && <UpdateNotification message={updateInfo.message} />}
       {showStartupWarnings && (
         <Box marginY={1} flexDirection="column">
           {visibleWarnings.map((warning, index) => (
