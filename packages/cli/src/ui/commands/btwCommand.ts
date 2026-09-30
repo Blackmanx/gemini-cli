@@ -6,7 +6,6 @@
 
 import { CommandKind, type SlashCommand } from './types.js';
 import {
-  coreEvents,
   debugLogger,
   getPromptIdWithFallback,
   getResponseText,
@@ -16,17 +15,24 @@ import {
 /**
  * `/btw` asks a side question without disturbing the conversation.
  *
- * The point is that a tangent -- "what does this flag do?", "why did it pick
+ * The point is that a tangent -- "what does that flag do?", "why did it pick
  * that file?" -- must not enter the main transcript. If it did, the model would
  * carry it into every later turn and would start answering questions nobody
- * asked. So this sends a request of its own, with no tools and no history, and
- * prints the answer separately.
+ * asked. So this sends a request of its own, with no tools, over a snapshot of
+ * the conversation, and prints the answer separately.
+ *
+ * The snapshot matters. A side question is almost always *about* the work in
+ * front of the user ("why did you just change that?"), so sending the question
+ * alone leaves the model with nothing to reason from, and it hedges instead of
+ * answering. The history goes in; the answer does not come back into it.
  */
-const BTW_SYSTEM_INSTRUCTION = `You are answering a side question about work already done in a terminal session.
+const BTW_SYSTEM_INSTRUCTION = `You are answering an ephemeral side question about the current interactive session.
 
-You cannot see the session and you have no tools. Answer from general knowledge and from the question itself. If the answer depends on something only the session knows, say exactly what you would need to know.
+The conversation so far is provided as context. Use it to answer precisely -- refer to what was actually done, by file and by name.
 
-Be brief and direct. No preamble.`;
+You have no tools and cannot run anything. If answering would require doing something, say what you would do instead, in one line.
+
+Answer briefly and directly. No preamble, no restating the question, and never ask a follow-up question.`;
 
 export const btwCommand: SlashCommand = {
   name: 'btw',
@@ -46,7 +52,8 @@ export const btwCommand: SlashCommand = {
       };
     }
 
-    const config = context.services.agentContext?.config;
+    const agentContext = context.services.agentContext;
+    const config = agentContext?.config;
     if (!config) {
       debugLogger.debug('btw command: config is not available in context');
       return {
@@ -56,6 +63,9 @@ export const btwCommand: SlashCommand = {
       };
     }
 
+    // The live pending region: the one place that renders below the agent's
+    // streaming output and keeps updating while it runs.
+    const { setPendingItem } = context.ui;
     // Deliberately not awaited. This command runs while a turn is in flight,
     // and blocking the command processor on a second model call interleaves
     // with the live one: the pending item gets clobbered, the earlier turn's
@@ -64,33 +74,45 @@ export const btwCommand: SlashCommand = {
     void config
       .getBaseLlmClient()
       .generateContent({
-        // A synthetic key: this request bypasses the main chat, so it must
-        // not resolve through the model-role cycle a normal turn would use.
+        // A synthetic key: this request bypasses the main chat, so it must not
+        // resolve through the model-role cycle a normal turn would use.
         modelConfigKey: { model: 'btw' },
+        // Its own controller. Sharing the turn's signal would kill the side
+        // question the moment the turn it was watching ended.
         abortSignal: new AbortController().signal,
-        contents: [{ role: 'user', parts: [{ text: question }] }],
+        // The conversation, as context for the question. Read live, so a
+        // question asked mid-turn sees what the agent has done so far rather
+        // than the transcript as of the last completed turn.
+        contents: [
+          ...agentContext.geminiClient.getHistory(),
+          { role: 'user', parts: [{ text: question }] },
+        ],
         systemInstruction: BTW_SYSTEM_INSTRUCTION,
         promptId: getPromptIdWithFallback('btw'),
         role: LlmRole.UTILITY_TOOL,
       })
       .then((response) => {
         const answer = getResponseText(response)?.trim();
-        coreEvents.emitFeedback(
-          'info',
-          `btw: ${question}\n\n${answer || '(no answer)'}`,
-        );
+        // The live pending region, not the history. History renders above the
+        // pending region, so an item pushed there lands on top of the agent's
+        // live output instead of under it -- while the agent keeps streaming.
+        setPendingItem({
+          type: 'info',
+          text: `btw: ${question}\n\n${answer || '(no answer)'}`,
+        });
       })
       .catch((error: unknown) => {
-        coreEvents.emitFeedback(
-          'error',
-          `btw failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
+        setPendingItem({
+          type: 'error',
+          text: `btw failed: ${error instanceof Error ? error.message : String(error)}`,
+        });
       });
 
-    return {
-      type: 'message',
-      messageType: 'info',
-      content: `btw: ${question}\n\n(answering in a moment -- the agent keeps working)`,
-    };
+    setPendingItem({ type: 'info', text: `btw: ${question}\n\n(thinking...)` });
+
+    // Nothing for the processor to add: the answer arrives asynchronously and
+    // goes to the pending region on its own. Returning a message here would
+    // put a second copy of the question into history on top of it.
+    return;
   },
 };
