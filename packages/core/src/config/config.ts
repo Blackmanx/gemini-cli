@@ -737,6 +737,7 @@ export interface ConfigParameters {
   shellExecutionConfig?: ShellExecutionConfig;
   extensionManagement?: boolean;
   goalEnabled?: boolean;
+  forceLatestFlashLite?: boolean;
   goalContinuation?: boolean;
   extensionRegistryURI?: string;
   truncateToolOutputThreshold?: number;
@@ -891,6 +892,7 @@ export class Config implements McpContext, AgentLoopContext {
   private goalModeState: GoalModeState | undefined;
   private goalEvents: EventEmitter | undefined;
   private readonly goalEnabled: boolean;
+  private readonly forceLatestFlashLite: boolean;
   private readonly goalContinuation: boolean;
   /** Monotonic cumulative usage, the baseline the goal budget is measured from. */
   private cumulativeUsage: GoalTokenUsage = { input: 0, output: 0 };
@@ -1423,6 +1425,7 @@ export class Config implements McpContext, AgentLoopContext {
       ? params.headlessHarness
       : 'full';
     this.goalEnabled = params.goalEnabled ?? true;
+    this.forceLatestFlashLite = params.forceLatestFlashLite ?? false;
     this.goalContinuation = params.goalContinuation ?? false;
     this.appendSystem = params.appendSystem;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
@@ -3937,8 +3940,10 @@ export class Config implements McpContext, AgentLoopContext {
         return true;
       }
       return (
-        this.experiments?.flags[ExperimentFlags.LATEST_FLASH_LITE_GA_LAUNCHED]
-          ?.boolValue ?? false
+        (this.experiments?.flags[ExperimentFlags.LATEST_FLASH_LITE_GA_LAUNCHED]
+          ?.boolValue ??
+          false) ||
+        this.forceLatestFlashLite
       );
     })();
 

@@ -3295,6 +3295,13 @@
           "default": false,
           "type": "boolean"
         },
+        "forceLatestFlashLite": {
+          "title": "OMP: Show gemini-3.5-flash-lite",
+          "description": "Offer gemini-3.5-flash-lite in /model even when the server has not sent its GA flag. Without this the Flash Lite entry silently shows the older 3.1 model instead. Only turn it on if your account is actually served that model.",
+          "markdownDescription": "Offer gemini-3.5-flash-lite in /model even when the server has not sent its GA flag. Without this the Flash Lite entry silently shows the older 3.1 model instead. Only turn it on if your account is actually served that model.\n\n- Category: `Model`\n- Requires restart: `no`\n- Default: `false`",
+          "default": false,
+          "type": "boolean"
+        },
         "goal": {
           "title": "OMP: Goal Mode",
           "description": "The session goal, set with /goal. Off by default: a goal with a token budget is a hard cap the model is steered against, so it is opt-in.",

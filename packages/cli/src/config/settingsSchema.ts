@@ -1980,6 +1980,16 @@ const SETTINGS_SCHEMA = {
           'In YOLO mode, run commands that reuse flags or arguments from untrusted tool output (web fetches, MCP results) without asking, instead of re-prompting on every one. The untrusted-context marking and the prompt-injection protection it feeds stay on; only the extra confirmation is dropped.',
         showInDialog: true,
       },
+      forceLatestFlashLite: {
+        type: 'boolean',
+        label: 'OMP: Show gemini-3.5-flash-lite',
+        category: 'Model',
+        requiresRestart: false,
+        default: false,
+        description:
+          'Offer gemini-3.5-flash-lite in /model even when the server has not sent its GA flag. Without this the Flash Lite entry silently shows the older 3.1 model instead. Only turn it on if your account is actually served that model.',
+        showInDialog: true,
+      },
       goal: {
         type: 'object',
         label: 'OMP: Goal Mode',

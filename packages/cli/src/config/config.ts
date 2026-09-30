@@ -1119,6 +1119,7 @@ export async function loadCliConfig(
     magicKeywords: settings.omp?.magicKeywords,
     allowTaintedCommandsInYolo: settings.omp?.allowTaintedCommandsInYolo,
     headlessHarness: settings.omp?.headlessHarness,
+    forceLatestFlashLite: settings.omp?.forceLatestFlashLite,
     goalEnabled: settings.omp?.goal?.enabled,
     goalContinuation: settings.omp?.goal?.continuation,
     modelRoles: settings.model?.roles,

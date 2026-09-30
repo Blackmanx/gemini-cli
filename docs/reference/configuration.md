@@ -2012,6 +2012,14 @@ their corresponding top-level category object in your `settings.json` file.
     dropped.
   - **Default:** `false`
 
+- **`omp.forceLatestFlashLite`** (boolean):
+
+  - **Description:** Offer gemini-3.5-flash-lite in /model even when the server
+    has not sent its GA flag. Without this the Flash Lite entry silently shows
+    the older 3.1 model instead. Only turn it on if your account is actually
+    served that model.
+  - **Default:** `false`
+
 - **`omp.goal.enabled`** (boolean):
 
   - **Description:** Show /goal and register the goal tool.

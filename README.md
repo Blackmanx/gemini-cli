@@ -192,16 +192,25 @@ behaviour is upstream's again.
 
 Sets an objective the model is expected to work toward for the rest of the
 session. It gets the objective in its system prompt and can be given a token
-budget it is held to.
 
 ```bash
-/goal set fix the flaky upload test 50000   # objective, optional token budget
-/goal show                                    # objective, status, tokens, time
-/goal pause                                   # stop accruing tokens
-/goal resume                                  # pick a paused goal back up
-/goal drop                                    # abandon it
-/goal clear                                   # end it without claiming it was met
+/goal Document CICD Orquestador thoroughly   # set a goal, no token limit
+/goal fix the flaky upload test 50000        # ...or with a limit, in tokens
+/goal                                         # show the current goal
+/goal pause                                    # stop accruing tokens
+/goal resume                                   # pick a paused goal back up
+/goal drop                                     # abandon it
+/goal clear                                    # end it without claiming it was met
 ```
+
+Any text that is not a subcommand is taken as the objective, so
+`/goal <what you want>` is the normal form. `/goal set <objective>` still works.
+
+**There is no token limit unless you give one.** A trailing bare integer sets
+it; anything else leaves the goal unbounded. A goal that is meant to get done
+should not be cut off by a ceiling nobody chose.
+
+````
 
 The model drives the same lifecycle through the `goal` tool (`op=create`, `get`,
 `complete`, `drop`), so it can mark its own work done without you intervening.
@@ -219,7 +228,7 @@ To have the model keep going on its own when it stops with a goal still open:
 
 ```json
 { "omp": { "goal": { "continuation": true } } }
-```
+````
 
 Off by default, because it spends tokens without asking. It also stops on its
 own after a few consecutive continuations, so a goal the model cannot advance

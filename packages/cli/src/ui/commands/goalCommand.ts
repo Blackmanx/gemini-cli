@@ -14,23 +14,10 @@ import {
   debugLogger,
   remainingTokens,
 } from '@google/gemini-cli-core';
-import { MessageType } from '../types.js';
 
 type GoalSubcommand = 'set' | 'show' | 'pause' | 'resume' | 'drop' | 'clear';
 
-const BUDGET_HINT = 'Use `/goal set <objective> [tokens]` to set one.';
-
-function goalConfig(context: CommandContext) {
-  const config = context.services.agentContext?.config;
-  if (!config) {
-    debugLogger.debug('Goal command: config is not available in context');
-  }
-  return config;
-}
-
-function report(context: CommandContext, text: string) {
-  context.ui.addItem({ type: MessageType.INFO, text });
-}
+const BUDGET_HINT = 'Use `/goal <objective>` to set one.';
 
 const GOAL_SUBCOMMANDS: Record<string, GoalSubcommand | undefined> = {
   set: 'set',
@@ -52,14 +39,36 @@ function normalizeSubcommand(
 }
 
 /**
+ * A command's output is returned, never pushed onto the UI directly. Adding
+ * history items from in here races the session's own pending item: the user's
+ * input gets dropped and the previous turn's output reappears. The processor
+ * owns that bookkeeping.
+ */
+function say(content: string, messageType: 'info' | 'error' = 'info') {
+  return { type: 'message', messageType, content } as const;
+}
+
+function goalConfig(context: CommandContext) {
+  const config = context.services.agentContext?.config;
+  if (!config) {
+    debugLogger.debug('Goal command: config is not available in context');
+  }
+  return config;
+}
+
+/**
  * `/goal` sets and inspects the session goal, which the model is then told to
- * work toward. A goal may carry a token budget; when it runs out the model is
- * steered to stop rather than left to keep spending.
+ * work toward. Any text that is not a subcommand is the objective, so
+ * `/goal fix the flaky test` is the normal form.
+ *
+ * `set` is deliberately not declared as a subCommand. `parseSlashCommand`
+ * walks the input path and consumes every subCommand it matches, so declaring
+ * it would strip it out of `args` before this function ever ran.
  */
 export const goalCommand: SlashCommand = {
   name: 'goal',
   description:
-    'Set a goal for this session, with an optional token budget the model is held to',
+    'Set a goal for this session, with an optional token limit the model is held to',
   kind: CommandKind.BUILT_IN,
   autoExecute: false,
   // Usable mid-task: changing the goal while the model works is the point.
@@ -67,109 +76,102 @@ export const goalCommand: SlashCommand = {
   action: async (context, args) => {
     const config = goalConfig(context);
     if (!config) {
-      return;
+      return say('No active session.', 'error');
     }
     const runtime = config.getGoalRuntime();
-    const [rawSubcommand, ...rest] = (args ?? '').trim().split(/\s+/);
-    const subcommand = normalizeSubcommand(rawSubcommand);
+
+    const trimmed = (args ?? '').trim();
+    const [firstWord, ...rest] = trimmed ? trimmed.split(/\s+/) : [];
+    const subcommand = normalizeSubcommand(firstWord);
+    const isGoalText = subcommand === 'unknown' && trimmed.length > 0;
+
+    if (subcommand === 'set' || isGoalText) {
+      const words = subcommand === 'set' ? rest : [trimmed];
+      // A trailing bare integer is a limit, so an objective that happens to
+      // end in a number is not mistaken for one.
+      const last = words[words.length - 1];
+      const hasLimit = words.length > 1 && /^\d+$/.test(last ?? '');
+      const objective = (hasLimit ? words.slice(0, -1) : words)
+        .join(' ')
+        .trim();
+
+      if (!objective) {
+        return say(`Usage: /goal <objective> [token limit]. ${BUDGET_HINT}`);
+      }
+
+      try {
+        // No limit unless one is asked for. A goal meant to get done should
+        // not be cut off by a ceiling nobody chose.
+        const goal = runtime.create(
+          objective,
+          hasLimit ? Number(last) : undefined,
+        );
+        // No follow-up turn is submitted: the objective reaches the model in
+        // the system prompt of whatever you send next, and firing a turn the
+        // user did not ask for is a surprising way to spend their tokens.
+        return say(
+          `Goal set: ${goal.objective}` +
+            (goal.tokenBudget === undefined
+              ? ' (no token limit)'
+              : ` (limit: ${goal.tokenBudget} tokens)`),
+        );
+      } catch (error) {
+        return say(
+          error instanceof Error ? error.message : String(error),
+          'error',
+        );
+      }
+    }
 
     try {
       switch (subcommand) {
-        case 'set': {
-          // The budget is the last argument and must be a bare integer, so an
-          // objective ending in a number is not mistaken for one.
-          const last = rest[rest.length - 1];
-          const hasBudget = rest.length > 0 && /^\d+$/.test(last ?? '');
-          const objective = (hasBudget ? rest.slice(0, -1) : rest)
-            .join(' ')
-            .trim();
-          if (!objective) {
-            report(
-              context,
-              'Usage: /goal set <objective> [token budget]. ' + BUDGET_HINT,
-            );
-            return;
-          }
-          const tokenBudget = hasBudget ? Number(last) : undefined;
-          const goal = runtime.create(objective, tokenBudget);
-          report(
-            context,
-            `Goal set: ${goal.objective}` +
-              (goal.tokenBudget === undefined
-                ? ' (no token budget)'
-                : ` (budget: ${goal.tokenBudget} tokens)`),
-          );
-          return { type: 'submit_prompt', content: 'Check your current goal.' };
-        }
         case 'show': {
           const goal = runtime.getGoal();
           if (!goal) {
-            report(context, `No goal is active. ${BUDGET_HINT}`);
-            return;
+            return say(`No goal is active. ${BUDGET_HINT}`);
           }
           const remaining = remainingTokens(goal);
-          report(
-            context,
+          return say(
             `${goal.objective}\n` +
               `Status: ${goal.status}\n` +
               `Tokens: ${goal.tokensUsed}` +
               (goal.tokenBudget === undefined
-                ? ' (no budget)\n'
+                ? ' (no limit)\n'
                 : ` of ${goal.tokenBudget} (${remaining} left)\n`) +
               `Time: ${goal.timeUsedSeconds}s`,
           );
-          return;
         }
-        case 'pause': {
-          report(context, `Goal paused: ${runtime.pause().objective}`);
-          return;
-        }
-        case 'resume': {
-          report(context, `Goal resumed: ${runtime.resume().objective}`);
-          return { type: 'submit_prompt', content: 'Continue with the goal.' };
-        }
-        case 'drop': {
-          report(context, `Goal dropped: ${runtime.drop().objective}`);
-          return;
-        }
+        case 'pause':
+          return say(`Goal paused: ${runtime.pause().objective}`);
+        case 'resume':
+          return say(`Goal resumed: ${runtime.resume().objective}`);
+        case 'drop':
+          return say(`Goal dropped: ${runtime.drop().objective}`);
         case 'clear': {
           // Completing and dropping both end the goal; `clear` is the
           // neutral word for a user who does not want to claim it was met.
           const goal = runtime.getGoal();
           if (!goal) {
-            report(context, `No goal is active. ${BUDGET_HINT}`);
-            return;
+            return say(`No goal is active. ${BUDGET_HINT}`);
           }
           runtime.drop();
-          report(context, `Goal cleared: ${goal.objective}`);
-          return;
+          return say(`Goal cleared: ${goal.objective}`);
         }
         default:
-          report(
-            context,
-            `Unknown subcommand "${subcommand}". Use set, show, pause, resume, drop or clear.`,
+          return say(
+            `Unknown subcommand "${firstWord}". Use show, pause, resume, drop, clear, or just type the objective.`,
+            'error',
           );
-          return;
       }
     } catch (error) {
-      report(context, error instanceof Error ? error.message : String(error));
-      coreEvents.emitFeedback(
-        'warning',
-        'Goal command failed. Run /goal show to see the current state.',
+      coreEvents.emitFeedback('warning', 'Goal command failed.');
+      return say(
+        error instanceof Error ? error.message : String(error),
+        'error',
       );
     }
-
-    return;
   },
   subCommands: [
-    {
-      name: 'set',
-      description:
-        'Set the goal for this session: /goal set <objective> [tokens]',
-      kind: CommandKind.BUILT_IN,
-      autoExecute: false,
-      takesArgs: true,
-    },
     {
       name: 'show',
       description: 'Show the current goal and its budget',

@@ -11,7 +11,6 @@ import {
   getResponseText,
   LlmRole,
 } from '@google/gemini-cli-core';
-import { MessageType } from '../types.js';
 
 /**
  * `/btw` asks a side question without disturbing the conversation.
@@ -39,24 +38,27 @@ export const btwCommand: SlashCommand = {
   action: async (context, args) => {
     const question = (args ?? '').trim();
     if (!question) {
-      context.ui.addItem({
-        type: MessageType.INFO,
-        text: 'Usage: /btw <question>',
-      });
-      return;
+      return {
+        type: 'message',
+        messageType: 'info',
+        content: 'Usage: /btw <question>',
+      };
     }
 
     const config = context.services.agentContext?.config;
     if (!config) {
       debugLogger.debug('btw command: config is not available in context');
-      return;
+      return {
+        type: 'message',
+        messageType: 'error',
+        content: 'btw: no active session.',
+      };
     }
 
-    context.ui.addItem({
-      type: MessageType.INFO,
-      text: `btw: ${question}`,
-    });
-
+    // Returned rather than pushed onto the UI directly. Poking history items
+    // in from here races whatever the session is doing with its own pending
+    // item: the user's input gets dropped and the previous turn's output
+    // reappears. The processor owns that bookkeeping.
     try {
       const response = await config.getBaseLlmClient().generateContent({
         // A synthetic key: this request bypasses the main chat, so it must not
@@ -68,18 +70,20 @@ export const btwCommand: SlashCommand = {
         promptId: getPromptIdWithFallback('btw'),
         role: LlmRole.UTILITY_TOOL,
       });
-      const text = getResponseText(response)?.trim();
-      context.ui.addItem({
-        type: MessageType.GEMINI,
-        text: text || '(no answer)',
-      });
+      const answer = getResponseText(response)?.trim();
+      return {
+        type: 'message',
+        messageType: 'info',
+        content: `btw: ${question}\n\n${answer || '(no answer)'}`,
+      };
     } catch (error) {
-      context.ui.addItem({
-        type: MessageType.ERROR,
-        text: `btw failed: ${
+      return {
+        type: 'message',
+        messageType: 'error',
+        content: `btw failed: ${
           error instanceof Error ? error.message : String(error)
         }`,
-      });
+      };
     }
   },
 };
