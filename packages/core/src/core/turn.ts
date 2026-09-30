@@ -422,6 +422,7 @@ export class Turn {
           goalConfig.addGoalUsage(
             resp.usageMetadata?.promptTokenCount ?? 0,
             resp.usageMetadata?.candidatesTokenCount ?? 0,
+            resp.usageMetadata?.cachedContentTokenCount ?? 0,
           );
           await goalRuntime.onUsage(goalConfig.getGoalUsageBaseline());
           yield {

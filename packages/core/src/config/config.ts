@@ -4201,10 +4201,23 @@ export class Config implements McpContext, AgentLoopContext {
     return { ...this.cumulativeUsage };
   }
 
-  /** Folds one response's usage into the running total. */
-  addGoalUsage(input: number, output: number): void {
-    this.cumulativeUsage.input += input;
-    this.cumulativeUsage.output += output;
+  /**
+   * Folds one response's usage into the running total, netting cached reads
+   * out of the input side.
+   *
+   * `promptTokenCount` includes the cached portion, so a goal would otherwise
+   * pay full price for a prefix the provider served from cache on every turn.
+   * Clamped at zero: a cache write can push the cached count above what this
+   * turn's prompt alone accounts for, and a turn that cost nothing must not
+   * make the cumulative counter go backwards.
+   */
+  addGoalUsage(
+    promptTokens: number,
+    outputTokens: number,
+    cachedTokens: number,
+  ): void {
+    this.cumulativeUsage.input += Math.max(0, promptTokens - cachedTokens);
+    this.cumulativeUsage.output += outputTokens;
   }
 
   isGoalEnabled(): boolean {

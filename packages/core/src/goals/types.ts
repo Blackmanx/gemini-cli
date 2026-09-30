@@ -40,12 +40,12 @@ export type GoalRuntimeEvent =
 /**
  * Cumulative token usage the goal budget is measured against.
  *
- * There is no `cacheWrite` field, unlike upstream oh-my-pi. Gemini's
- * `usageMetadata` reports `cachedContentTokenCount` (cache reads) and has no
- * cache-creation counter, so a term here would be a number the backend never
- * fills in. The budget counts input and output only. Upstream needs the term
- * because Anthropic and Bedrock bill cache writes separately, where rotating
- * a large ephemeral cache can write 100K+ tokens.
+ * `input` is *new* prompt tokens, with cached reads already subtracted. In
+ * Gemini's `usageMetadata`, `promptTokenCount` is the whole prompt and
+ * `cachedContentTokenCount` is the subset served from cache, so charging the
+ * full `promptTokenCount` would bill a re-read prefix as fresh work on every
+ * turn. Upstream oh-my-pi makes the same exclusion, and additionally counts
+ * `cacheWrite`, which this fork has no counter for.
  */
 export interface GoalTokenUsage {
   input: number;
