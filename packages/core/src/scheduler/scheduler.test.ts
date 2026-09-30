@@ -174,6 +174,7 @@ describe('Scheduler (Orchestrator)', () => {
       getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
       getHookSystem: vi.fn().mockReturnValue(undefined),
       isInteractive: vi.fn().mockReturnValue(true),
+      getAllowTaintedCommandsInYolo: vi.fn().mockReturnValue(false),
       getEnableHooks: vi.fn().mockReturnValue(true),
       setApprovalMode: vi.fn(),
       getApprovalMode: vi.fn().mockReturnValue(ApprovalMode.DEFAULT),
@@ -914,6 +915,97 @@ describe('Scheduler (Orchestrator)', () => {
       );
     });
 
+    it('should keep the ALLOW decision for a tainted command in YOLO when the setting is on', async () => {
+      vi.mocked(checkPolicy).mockResolvedValue({
+        decision: PolicyDecision.ALLOW,
+        rule: undefined,
+      });
+
+      mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
+      mockConfig.getAllowTaintedCommandsInYolo = vi.fn().mockReturnValue(true);
+
+      const taintInvocation = {
+        ...mockInvocation,
+        hasTaintedOrBuildFileRisk: vi.fn().mockReturnValue(true),
+      };
+      mockTool.build = vi.fn().mockReturnValue(taintInvocation);
+
+      mockExecutor.execute.mockResolvedValue({
+        status: CoreToolCallStatus.Success,
+      } as unknown as SuccessfulToolCall);
+
+      await scheduler.schedule(req1, signal);
+
+      expect(resolveConfirmation).not.toHaveBeenCalled();
+      expect(mockExecutor.execute).toHaveBeenCalled();
+    });
+
+    it('should still escalate a tainted command in YOLO when the setting is off', async () => {
+      vi.mocked(checkPolicy).mockResolvedValue({
+        decision: PolicyDecision.ALLOW,
+        rule: undefined,
+      });
+
+      mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
+      mockConfig.getAllowTaintedCommandsInYolo = vi.fn().mockReturnValue(false);
+
+      const taintInvocation = {
+        ...mockInvocation,
+        hasTaintedOrBuildFileRisk: vi.fn().mockReturnValue(true),
+      };
+      mockTool.build = vi.fn().mockReturnValue(taintInvocation);
+
+      vi.mocked(resolveConfirmation).mockResolvedValue({
+        outcome: ToolConfirmationOutcome.ProceedOnce,
+        lastDetails: undefined,
+      });
+      mockExecutor.execute.mockResolvedValue({
+        status: CoreToolCallStatus.Success,
+      } as unknown as SuccessfulToolCall);
+
+      await scheduler.schedule(req1, signal);
+
+      expect(resolveConfirmation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ forcedDecision: 'ask_user' }),
+      );
+    });
+
+    it('should not let the YOLO setting through outside YOLO mode', async () => {
+      vi.mocked(checkPolicy).mockResolvedValue({
+        decision: PolicyDecision.ALLOW,
+        rule: undefined,
+      });
+
+      mockConfig.getApprovalMode = vi
+        .fn()
+        .mockReturnValue(ApprovalMode.AUTO_EDIT);
+      mockConfig.getAllowTaintedCommandsInYolo = vi.fn().mockReturnValue(true);
+
+      const taintInvocation = {
+        ...mockInvocation,
+        hasTaintedOrBuildFileRisk: vi.fn().mockReturnValue(true),
+      };
+      mockTool.build = vi.fn().mockReturnValue(taintInvocation);
+
+      vi.mocked(resolveConfirmation).mockResolvedValue({
+        outcome: ToolConfirmationOutcome.ProceedOnce,
+        lastDetails: undefined,
+      });
+      mockExecutor.execute.mockResolvedValue({
+        status: CoreToolCallStatus.Success,
+      } as unknown as SuccessfulToolCall);
+
+      await scheduler.schedule(req1, signal);
+
+      expect(resolveConfirmation).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({ forcedDecision: 'ask_user' }),
+      );
+    });
+
     it('should auto-approve remaining identical tools in batch after ProceedAlways', async () => {
       // First call requires confirmation, second is auto-approved (simulating policy update)
       vi.mocked(checkPolicy)
@@ -1619,6 +1711,7 @@ describe('Scheduler MCP Progress', () => {
       getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
       getHookSystem: vi.fn().mockReturnValue(undefined),
       isInteractive: vi.fn().mockReturnValue(true),
+      getAllowTaintedCommandsInYolo: vi.fn().mockReturnValue(false),
       getEnableHooks: vi.fn().mockReturnValue(true),
       setApprovalMode: vi.fn(),
       getApprovalMode: vi.fn().mockReturnValue(ApprovalMode.DEFAULT),

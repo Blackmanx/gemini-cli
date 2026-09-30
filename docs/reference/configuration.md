@@ -2008,8 +2008,17 @@ their corresponding top-level category object in your `settings.json` file.
   - **Default:** `false`
 
 - **`omp.memory`** (boolean):
+
   - **Description:** Enable the local memory bank and its
     retain/recall/reflect/memory_edit tools.
+  - **Default:** `false`
+
+- **`omp.allowTaintedCommandsInYolo`** (boolean):
+  - **Description:** In YOLO mode, run commands that reuse flags or arguments
+    from untrusted tool output (web fetches, MCP results) without asking,
+    instead of re-prompting on every one. The untrusted-context marking and the
+    prompt-injection protection it feeds stay on; only the extra confirmation is
+    dropped.
   - **Default:** `false`
 
 #### `security`

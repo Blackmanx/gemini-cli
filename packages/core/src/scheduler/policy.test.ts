@@ -902,6 +902,7 @@ describe('Plan Mode Denial Consistency', () => {
       getMessageBus: vi.fn().mockReturnValue(mockMessageBus),
       getHookSystem: vi.fn().mockReturnValue(undefined),
       isInteractive: vi.fn().mockReturnValue(true),
+      getAllowTaintedCommandsInYolo: vi.fn().mockReturnValue(false),
       getEnableHooks: vi.fn().mockReturnValue(false),
       getApprovalMode: vi.fn().mockReturnValue(ApprovalMode.PLAN), // Key: Plan Mode
       getTelemetryLogPromptsEnabled: vi.fn().mockReturnValue(false),

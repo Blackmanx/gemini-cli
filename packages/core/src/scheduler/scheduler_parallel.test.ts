@@ -238,6 +238,7 @@ describe('Scheduler Parallel Execution', () => {
       getToolRegistry: vi.fn().mockReturnValue(mockToolRegistry),
       getHookSystem: vi.fn().mockReturnValue(undefined),
       isInteractive: vi.fn().mockReturnValue(true),
+      getAllowTaintedCommandsInYolo: vi.fn().mockReturnValue(false),
       getEnableHooks: vi.fn().mockReturnValue(true),
       setApprovalMode: vi.fn(),
       getApprovalMode: vi.fn().mockReturnValue(ApprovalMode.DEFAULT),

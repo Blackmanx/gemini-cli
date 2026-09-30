@@ -721,6 +721,7 @@ export interface ConfigParameters {
   useMemory?: boolean;
   useGithub?: boolean;
   appendSystem?: string;
+  allowTaintedCommandsInYolo?: boolean;
   magicKeywords?: MagicKeywordSettings;
   modelRoles?: Record<string, string>;
   modelCycleOrder?: string[];
@@ -858,6 +859,7 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly modelRoles: Readonly<Record<string, string>>;
   private readonly modelCycleOrder: readonly string[] | undefined;
   private readonly useGithub: boolean;
+  private readonly allowTaintedCommandsInYolo: boolean;
   private readonly appendSystem: string | undefined;
   private importedRules: DiscoveryResult | undefined;
   private readonly mainAgentTools: string[] | undefined;
@@ -1377,6 +1379,8 @@ export class Config implements McpContext, AgentLoopContext {
     this.modelRoles = params.modelRoles ?? {};
     this.modelCycleOrder = params.modelCycleOrder;
     this.useGithub = params.useGithub ?? false;
+    this.allowTaintedCommandsInYolo =
+      params.allowTaintedCommandsInYolo ?? false;
     this.appendSystem = params.appendSystem;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
@@ -4127,6 +4131,14 @@ export class Config implements McpContext, AgentLoopContext {
   /** Whether the GitHub tool, which reaches the network, is available. */
   getUseGithub(): boolean {
     return this.useGithub;
+  }
+
+  /**
+   * Whether YOLO mode runs commands that reuse flags or arguments from
+   * untrusted tool output without asking for confirmation.
+   */
+  getAllowTaintedCommandsInYolo(): boolean {
+    return this.allowTaintedCommandsInYolo;
   }
 
   /**

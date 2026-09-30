@@ -41,6 +41,7 @@ function createMockConfig(overrides: Partial<Config> = {}): Config {
     getUsageStatisticsEnabled: () => true,
     getDebugMode: () => false,
     isInteractive: () => true,
+    getAllowTaintedCommandsInYolo: () => false,
     getApprovalMode: () => ApprovalMode.DEFAULT,
     setApprovalMode: () => {},
     getAllowedTools: () => [],

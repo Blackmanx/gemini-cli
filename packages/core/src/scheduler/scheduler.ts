@@ -30,7 +30,7 @@ import {
   UPDATE_TOPIC_TOOL_NAME,
   EDIT_TOOL_NAMES,
 } from '../tools/tool-names.js';
-import { PolicyDecision, type ApprovalMode } from '../policy/types.js';
+import { PolicyDecision, ApprovalMode } from '../policy/types.js';
 import {
   ToolConfirmationOutcome,
   type AnyDeclarativeTool,
@@ -672,7 +672,16 @@ export class Scheduler {
       decision = PolicyDecision.ASK_USER;
     }
 
+    // A tainted command normally outranks an ALLOW policy: the user is asked
+    // (or, headless, the call is denied) even though policy trusted it. YOLO
+    // is the user saying they will answer for that themselves, so when they
+    // opt in the escalation is dropped and the policy decision stands.
+    const yoloTrustsTainted =
+      this.config.getApprovalMode() === ApprovalMode.YOLO &&
+      this.config.getAllowTaintedCommandsInYolo();
+
     const hasTaintRisk =
+      !yoloTrustsTainted &&
       isTaintRiskDetectable(toolCall.invocation) &&
       toolCall.invocation.hasTaintedOrBuildFileRisk();
 

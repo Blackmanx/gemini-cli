@@ -1117,6 +1117,7 @@ export async function loadCliConfig(
     useGithub: settings.omp?.github,
     appendSystem: settings.omp?.appendSystem,
     magicKeywords: settings.omp?.magicKeywords,
+    allowTaintedCommandsInYolo: settings.omp?.allowTaintedCommandsInYolo,
     modelRoles: settings.model?.roles,
     modelCycleOrder: settings.model?.cycleOrder,
     output: {
