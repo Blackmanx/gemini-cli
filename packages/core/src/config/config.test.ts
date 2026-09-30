@@ -1578,6 +1578,40 @@ describe('Server Config (config.ts)', () => {
       expect(registeredTools).toContain('ExitPlanModeTool');
     });
 
+    // The headless policy denies ask_user outright, so shipping its schema
+    // spends tokens on every request for a call that is always refused.
+    it('should not register AskUserTool when non-interactive', async () => {
+      const config = new Config({ ...baseParams, interactive: false });
+      await config.initialize();
+
+      const registerToolMock = (
+        (await vi.importMock('../tools/tool-registry')) as {
+          ToolRegistry: { prototype: { registerTool: Mock } };
+        }
+      ).ToolRegistry.prototype.registerTool;
+
+      const registeredTools = registerToolMock.mock.calls.map(
+        (call) => call[0].constructor.name,
+      );
+      expect(registeredTools).not.toContain('AskUserTool');
+    });
+
+    it('should register AskUserTool when interactive', async () => {
+      const config = new Config({ ...baseParams, interactive: true });
+      await config.initialize();
+
+      const registerToolMock = (
+        (await vi.importMock('../tools/tool-registry')) as {
+          ToolRegistry: { prototype: { registerTool: Mock } };
+        }
+      ).ToolRegistry.prototype.registerTool;
+
+      const registeredTools = registerToolMock.mock.calls.map(
+        (call) => call[0].constructor.name,
+      );
+      expect(registeredTools).toContain('AskUserTool');
+    });
+
     describe('with minified tool class names', () => {
       beforeEach(() => {
         Object.defineProperty(

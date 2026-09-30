@@ -399,9 +399,16 @@ export class GeminiClient {
     this.hasFailedCompressionAttempt = false;
     this.lastUsedModelId = undefined;
 
+    // `omp.headlessHarness: "api"` is a plain one-shot text call. Sending the
+    // tool schemas would be ~9k tokens per request for tools the prompt tells
+    // the model it does not have.
+    const apiMode =
+      !this.config.isInteractive() &&
+      this.config.getHeadlessHarness?.() === 'api';
     const toolRegistry = this.context.toolRegistry;
-    const toolDeclarations = toolRegistry.getFunctionDeclarations();
-    const tools: Tool[] = [{ functionDeclarations: toolDeclarations }];
+    const tools: Tool[] = apiMode
+      ? []
+      : [{ functionDeclarations: toolRegistry.getFunctionDeclarations() }];
 
     const history = await getInitialChatHistory(this.config, extraHistory);
 

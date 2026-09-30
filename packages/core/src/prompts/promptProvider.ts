@@ -38,6 +38,38 @@ import {
 import type { AgentLoopContext } from '../config/agent-loop-context.js';
 
 /**
+ * System prompt for a non-interactive run that still has to do real work.
+ *
+ * Deliberately short. The tool schemas already tell the model what it can
+ * call and what each call needs; the composed prompt mostly restates that in
+ * prose, along with sections describing a UI this run has no access to.
+ * What is kept is the part the model cannot recover from the schemas: that it
+ * is an agent with a workspace, and that it must finish the task rather than
+ * narrate it.
+ */
+function renderSlimHeadlessPrompt(): string {
+  return `You are Gemini CLI, a non-interactive coding agent operating on a user's workspace.
+
+You have tools to read, search and edit files and to run shell commands. Use them to complete the task; do not ask the user questions, because there is nobody to answer them in this mode.
+
+- Finish the task. Report the outcome in your final message, including what you changed and anything you could not do.
+- Do not describe what you are about to do instead of doing it.
+- Do not print file contents back to the user unless asked; reference files by path.`;
+}
+
+/**
+ * System prompt for a plain one-shot text call, with no tools.
+ *
+ * `omp.headlessHarness: "api"` sends no tool schemas and no session context,
+ * so the model cannot touch the filesystem and nothing tells it about one.
+ * Saying so is not a nicety: a model that believes it has tools will ask for
+ * them, and it will be right to, since they are not coming.
+ */
+function renderApiPrompt(): string {
+  return `You are a text assistant. You have no tools and no access to the filesystem, so you cannot read, search or modify files. Answer from the conversation alone, and say plainly when a request needs something you cannot reach.`;
+}
+
+/**
  * Orchestrates prompt generation by gathering context and building options.
  */
 export class PromptProvider {
@@ -107,11 +139,27 @@ export class PromptProvider {
 
     let basePrompt: string;
 
+    // A non-interactive run is a fresh process on every invocation, so the
+    // composed prompt is paid for again each time, with no cache to amortize
+    // it. When the user opts in, send a short prompt instead.
+    //
+    // GEMINI_SYSTEM_MD still wins: someone who wrote their own prompt is not
+    // the one paying for this, and they have already made the same call.
+    const harness = context.config.getHeadlessHarness?.() ?? 'full';
+    const systemMdPathValue = systemMdResolution.value;
+    const hasSystemMdOverride =
+      !!systemMdPathValue && !systemMdResolution.isDisabled;
+    const useMinimalPrompt =
+      !hasSystemMdOverride && !interactiveMode && harness !== 'full';
+
     // --- Template File Override ---
-    if (systemMdResolution.value && !systemMdResolution.isDisabled) {
+    if (useMinimalPrompt) {
+      basePrompt =
+        harness === 'api' ? renderApiPrompt() : renderSlimHeadlessPrompt();
+    } else if (hasSystemMdOverride) {
       let systemMdPath = path.resolve(path.join(GEMINI_DIR, 'system.md'));
-      if (!systemMdResolution.isSwitch) {
-        systemMdPath = systemMdResolution.value;
+      if (!systemMdResolution.isSwitch && systemMdPathValue) {
+        systemMdPath = systemMdPathValue;
       }
       if (!fs.existsSync(systemMdPath)) {
         throw new Error(`missing system prompt file '${systemMdPath}'`);

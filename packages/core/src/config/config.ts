@@ -629,6 +629,22 @@ export interface WorktreeSettings {
   baseSha: string;
 }
 
+/**
+ * How much harness a non-interactive run sends on every model request.
+ *
+ * - `full`: the composed system prompt, the session context and every tool
+ *   schema. What the CLI has always sent.
+ * - `slim`: a short system prompt and no schemas for tools that cannot run
+ * headless. Still a working agent.
+ * - `api`: no tool schemas and no session context either. A one-shot text
+ *   call with no file access.
+ */
+export type HeadlessHarness = 'full' | 'slim' | 'api';
+
+function isHeadlessHarness(value: unknown): value is HeadlessHarness {
+  return value === 'full' || value === 'slim' || value === 'api';
+}
+
 export interface ConfigParameters {
   sessionId: string;
   clientName?: string;
@@ -722,6 +738,7 @@ export interface ConfigParameters {
   useGithub?: boolean;
   appendSystem?: string;
   allowTaintedCommandsInYolo?: boolean;
+  headlessHarness?: string;
   magicKeywords?: MagicKeywordSettings;
   modelRoles?: Record<string, string>;
   modelCycleOrder?: string[];
@@ -860,6 +877,7 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly modelCycleOrder: readonly string[] | undefined;
   private readonly useGithub: boolean;
   private readonly allowTaintedCommandsInYolo: boolean;
+  private readonly headlessHarness: HeadlessHarness;
   private readonly appendSystem: string | undefined;
   private importedRules: DiscoveryResult | undefined;
   private readonly mainAgentTools: string[] | undefined;
@@ -1381,6 +1399,12 @@ export class Config implements McpContext, AgentLoopContext {
     this.useGithub = params.useGithub ?? false;
     this.allowTaintedCommandsInYolo =
       params.allowTaintedCommandsInYolo ?? false;
+    // Validated rather than asserted: this arrives from a user-editable
+    // settings file, so a typo should fall back to the shipped default
+    // instead of quietly behaving as some other level.
+    this.headlessHarness = isHeadlessHarness(params.headlessHarness)
+      ? params.headlessHarness
+      : 'full';
     this.appendSystem = params.appendSystem;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
@@ -4142,6 +4166,14 @@ export class Config implements McpContext, AgentLoopContext {
   }
 
   /**
+   * How much harness non-interactive runs send. Interactive runs always send
+   * the full harness; this only describes what `gemini -p` may omit.
+   */
+  getHeadlessHarness(): HeadlessHarness {
+    return this.headlessHarness;
+  }
+
+  /**
    * Standing instructions appended to the system prompt.
    *
    * Additive on purpose: replacing the whole prompt is the only other
@@ -4461,9 +4493,14 @@ export class Config implements McpContext, AgentLoopContext {
     maybeRegister(WebSearchTool, () =>
       registry.registerTool(new WebSearchTool(this, this.messageBus)),
     );
-    maybeRegister(AskUserTool, () =>
-      registry.registerTool(new AskUserTool(this.messageBus)),
-    );
+    // Headless has no user to answer, and non-interactive.toml denies this
+    // tool outright, so advertising its schema costs tokens on every request
+    // for a call that is always refused.
+    if (this.isInteractive()) {
+      maybeRegister(AskUserTool, () =>
+        registry.registerTool(new AskUserTool(this.messageBus)),
+      );
+    }
     if (this.getUseWriteTodos()) {
       maybeRegister(WriteTodosTool, () =>
         registry.registerTool(new WriteTodosTool(this.messageBus)),

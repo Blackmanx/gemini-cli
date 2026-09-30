@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
 import { PromptProvider } from './promptProvider.js';
 import type { Config } from '../config/config.js';
 import { makeRelative } from '../utils/paths.js';
@@ -86,6 +87,7 @@ describe('PromptProvider', () => {
       }),
       getApprovedPlanPath: vi.fn().mockReturnValue(undefined),
       getApprovalMode: vi.fn(),
+      getHeadlessHarness: vi.fn().mockReturnValue('full'),
       isTrackerEnabled: vi.fn().mockReturnValue(false),
       getHasAccessToPreviewModel: vi.fn().mockReturnValue(true),
       getGemini31LaunchedSync: vi.fn().mockReturnValue(true),
@@ -422,6 +424,76 @@ describe('PromptProvider', () => {
       expect(prompt).toContain(UPDATE_TOPIC_TOOL_NAME);
       expect(prompt).toContain('No Chitchat');
       expect(prompt).toContain('Topic Model');
+    });
+  });
+
+  describe('headless harness', () => {
+    // The full prompt announces a UI this run has no access to and restates
+    // what the tool schemas already say, so these tests pin the branches that
+    // stop shipping it.
+    function asHeadless(harness: 'full' | 'slim' | 'api') {
+      vi.mocked(mockConfig.isInteractive).mockReturnValue(false);
+      vi.mocked(mockConfig.getHeadlessHarness).mockReturnValue(harness);
+    }
+
+    it('sends the composed prompt when the harness is full', () => {
+      asHeadless('full');
+
+      const prompt = new PromptProvider().getCoreSystemPrompt(mockConfig);
+
+      expect(prompt).toContain('# Core Mandates');
+      expect(prompt.length).toBeGreaterThan(2000);
+    });
+
+    it('sends a short prompt when the harness is slim', () => {
+      asHeadless('slim');
+
+      const prompt = new PromptProvider().getCoreSystemPrompt(mockConfig);
+
+      expect(prompt).toContain('non-interactive coding agent');
+      expect(prompt).not.toContain('# Core Mandates');
+      // Still an agent: it must know it can act, or it will only describe.
+      expect(prompt).toContain('run shell commands');
+    });
+
+    it('tells the model it has no tools in api mode', () => {
+      asHeadless('api');
+
+      const prompt = new PromptProvider().getCoreSystemPrompt(mockConfig);
+
+      expect(prompt).toContain('no tools');
+      expect(prompt).not.toContain('# Core Mandates');
+    });
+
+    it('ignores the harness setting when interactive', () => {
+      vi.mocked(mockConfig.isInteractive).mockReturnValue(true);
+      vi.mocked(mockConfig.getHeadlessHarness).mockReturnValue('api');
+
+      const prompt = new PromptProvider().getCoreSystemPrompt(mockConfig);
+
+      expect(prompt).toContain('# Core Mandates');
+    });
+
+    it('lets a GEMINI_SYSTEM_MD override win over the slim prompt', () => {
+      vi.stubEnv('GEMINI_SYSTEM_MD', '/tmp/promptProvider-override.md');
+      vi.spyOn(fs, 'existsSync').mockReturnValue(true);
+      vi.spyOn(fs, 'readFileSync').mockReturnValue('MY OWN PROMPT');
+      asHeadless('slim');
+
+      const prompt = new PromptProvider().getCoreSystemPrompt(mockConfig);
+
+      expect(prompt).toContain('MY OWN PROMPT');
+    });
+
+    it('falls back to the composed prompt when getHeadlessHarness is absent', () => {
+      vi.mocked(mockConfig.isInteractive).mockReturnValue(false);
+      vi.mocked(mockConfig.getHeadlessHarness).mockReturnValue(
+        undefined as unknown as 'full',
+      );
+
+      const prompt = new PromptProvider().getCoreSystemPrompt(mockConfig);
+
+      expect(prompt).toContain('# Core Mandates');
     });
   });
 });

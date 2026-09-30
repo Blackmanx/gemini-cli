@@ -1998,6 +1998,21 @@ const SETTINGS_SCHEMA = {
           'In YOLO mode, run commands that reuse flags or arguments from untrusted tool output (web fetches, MCP results) without asking, instead of re-prompting on every one. The untrusted-context marking and the prompt-injection protection it feeds stay on; only the extra confirmation is dropped.',
         showInDialog: true,
       },
+      headlessHarness: {
+        type: 'string',
+        label: 'OMP: Headless Harness',
+        category: 'Performance',
+        requiresRestart: false,
+        default: 'full',
+        options: [
+          { value: 'full', label: 'Full (default)' },
+          { value: 'slim', label: 'Slim agent' },
+          { value: 'api', label: 'API (text only, no tools)' },
+        ],
+        description:
+          'How much harness a non-interactive run (gemini -p) sends on every request. "full" sends the composed system prompt, the session context and every tool schema. "slim" replaces the composed prompt with a short one and drops tool schemas that cannot run headless, but stays a working agent. "api" also drops the working tool schemas and the session context, leaving a plain one-shot text call with no file access. Only affects non-interactive runs; interactive is always "full".',
+        showInDialog: true,
+      },
     },
   },
 

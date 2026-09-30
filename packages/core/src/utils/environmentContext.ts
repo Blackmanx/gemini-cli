@@ -95,6 +95,13 @@ export async function getInitialChatHistory(
     }
   }
 
+  // `omp.headlessHarness: "api"` sends no tools, so there is no workspace for
+  // the model to be told about. The context is ~3k tokens describing a cwd and
+  // a directory tree it cannot act on.
+  if (!config.isInteractive() && config.getHeadlessHarness?.() === 'api') {
+    return [...(extraHistory ?? [])];
+  }
+
   const envParts = await getEnvironmentContext(config);
   const envContextString = envParts.map((part) => part.text || '').join('\n\n');
 

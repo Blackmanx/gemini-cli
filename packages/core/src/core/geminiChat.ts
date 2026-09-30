@@ -1037,7 +1037,9 @@ export class GeminiChat {
         // TODO(12622): Ensure we don't overrwrite these when they are
         // passed via config.
         systemInstruction: this.systemInstruction,
-        tools: this.tools,
+        // An empty `tools` array is rejected by some providers, so an
+        // api-mode chat (no schemas at all) omits the field instead.
+        tools: this.tools.length > 0 ? this.tools : undefined,
         abortSignal,
       };
 
