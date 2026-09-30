@@ -3312,6 +3312,13 @@
             "type": "string"
           }
         },
+        "btwModel": {
+          "title": "OMP: /btw Model",
+          "description": "Model used to answer /btw side questions. Flash Lite by default, since a side question is a glance and should not spend the budget of the main turn. Raise it only when the question needs real reasoning about the work in progress.",
+          "markdownDescription": "Model used to answer /btw side questions. Flash Lite by default, since a side question is a glance and should not spend the budget of the main turn. Raise it only when the question needs real reasoning about the work in progress.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `gemini-3.1-flash-lite`",
+          "default": "gemini-3.1-flash-lite",
+          "type": "string"
+        },
         "goal": {
           "title": "OMP: Goal Mode",
           "description": "The session goal, set with /goal. Off by default: a goal with a token budget is a hard cap the model is steered against, so it is opt-in.",

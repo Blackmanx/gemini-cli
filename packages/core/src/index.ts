@@ -10,6 +10,7 @@ export * from './config/agent-loop-context.js';
 export * from './config/memory.js';
 export * from './config/defaultModelConfigs.js';
 export * from './config/models.js';
+export { modelStringToModelConfigAlias } from './context/chatCompressionService.js';
 export * from './config/constants.js';
 export * from './output/types.js';
 export * from './output/json-formatter.js';

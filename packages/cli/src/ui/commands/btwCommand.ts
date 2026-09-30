@@ -7,10 +7,12 @@
 import type { Content } from '@google/genai';
 import { CommandKind, type SlashCommand } from './types.js';
 import {
+  DEFAULT_GEMINI_FLASH_LITE_MODEL,
   debugLogger,
   getPromptIdWithFallback,
   getResponseText,
   LlmRole,
+  modelStringToModelConfigAlias,
 } from '@google/gemini-cli-core';
 
 /**
@@ -38,9 +40,8 @@ Answer briefly and directly. No preamble, no restating the question, and never a
 /**
  * How long to wait for the side answer before giving up.
  *
- * Without this the placeholder below can sit there forever: the turn this was
- * asked during can be cancelled underneath it, and a request that never settles
- * leaves the user staring at "(thinking...)" with no way to tell what happened.
+ * Without this the placeholder below can sit there forever, with no way for the
+ * user to tell a slow answer from a dead one.
  */
 const BTW_TIMEOUT_MS = 90_000;
 
@@ -105,8 +106,17 @@ export const btwCommand: SlashCommand = {
       });
     };
 
+    // A side question is a glance, not a task. It runs on flash-lite by
+    // default so it cannot spend the budget of the main turn, and the model is
+    // overridable because the right answer depends on the question.
+    const btwModel =
+      context.services.settings.merged.omp?.btwModel ??
+      DEFAULT_GEMINI_FLASH_LITE_MODEL;
+
     const controller = new AbortController();
+    let timedOut = false;
     const timer = setTimeout(() => {
+      timedOut = true;
       answered('(timed out)', true);
       controller.abort();
     }, BTW_TIMEOUT_MS);
@@ -119,9 +129,13 @@ export const btwCommand: SlashCommand = {
     void config
       .getBaseLlmClient()
       .generateContent({
-        // A synthetic key: this request bypasses the main chat, so it must not
-        // resolve through the model-role cycle a normal turn would use.
-        modelConfigKey: { model: 'btw' },
+        // A real model, not a synthetic key. The key is looked up in the model
+        // config service, so an invented name resolves to nothing and the
+        // request never comes back -- which is what left the placeholder
+        // spinning at "(thinking...)" with no error anywhere.
+        modelConfigKey: {
+          model: modelStringToModelConfigAlias(btwModel),
+        },
         // Its own controller, so cancelling this answer never cancels the turn
         // it was watching, and never the other way round.
         abortSignal: controller.signal,
@@ -139,9 +153,12 @@ export const btwCommand: SlashCommand = {
       })
       .catch((error: unknown) => {
         clearTimeout(timer);
-        const message = error instanceof Error ? error.message : String(error);
-        // An abort we raised is the timeout above, which already spoke.
-        if (!message.includes('aborted')) {
+        // Only the timeout above has already spoken. Every other failure --
+        // including any abort raised elsewhere -- gets reported, because a
+        // silently swallowed error here is indistinguishable from a hang.
+        if (!timedOut) {
+          const message =
+            error instanceof Error ? error.message : String(error);
           answered(`failed: ${message}`, true);
         }
       });

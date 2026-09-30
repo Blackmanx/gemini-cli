@@ -11,6 +11,7 @@
 
 import {
   DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD,
+  DEFAULT_GEMINI_FLASH_LITE_MODEL,
   DEFAULT_MODEL_CONFIGS,
   EDITOR_OPTIONS,
   AuthProviderType,
@@ -2000,6 +2001,16 @@ const SETTINGS_SCHEMA = {
         mergeStrategy: MergeStrategy.REPLACE,
         description:
           "Which context file to load, in order of preference. Only the first one that exists is read, so a repo is never described twice over. AGENTS.md comes first because it is the cross-agent convention: if the repo has one, that is the file the project means for any agent. GEMINI.md is next for this CLI's own file, and CLAUDE.md covers Claude Code.",
+        showInDialog: true,
+      },
+      btwModel: {
+        type: 'string',
+        label: 'OMP: /btw Model',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: DEFAULT_GEMINI_FLASH_LITE_MODEL,
+        description:
+          'Model used to answer /btw side questions. Flash Lite by default, since a side question is a glance and should not spend the budget of the main turn. Raise it only when the question needs real reasoning about the work in progress.',
         showInDialog: true,
       },
       goal: {

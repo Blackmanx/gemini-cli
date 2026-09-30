@@ -2033,6 +2033,14 @@ their corresponding top-level category object in your `settings.json` file.
     ["AGENTS.md", "GEMINI.md", "CLAUDE.md"]
     ```
 
+- **`omp.btwModel`** (string):
+
+  - **Description:** Model used to answer /btw side questions. Flash Lite by
+    default, since a side question is a glance and should not spend the budget
+    of the main turn. Raise it only when the question needs real reasoning about
+    the work in progress.
+  - **Default:** `"gemini-3.1-flash-lite"`
+
 - **`omp.goal.enabled`** (boolean):
 
   - **Description:** Show /goal and register the goal tool.

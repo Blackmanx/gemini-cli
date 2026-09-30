@@ -21,6 +21,7 @@ function makeContext(history: unknown[]) {
         config: { getBaseLlmClient: () => ({ generateContent }) },
         geminiClient: { getHistory: () => history },
       },
+      settings: { merged: { omp: {} } },
     },
     ui: { setPendingItem },
   };
@@ -87,8 +88,12 @@ describe('btwCommand', () => {
   it('gives up rather than sitting on the placeholder forever', async () => {
     vi.useFakeTimers();
     try {
-      const never = Promise.withResolvers<never>();
-      const generateContent = vi.fn().mockReturnValue(never.promise);
+      const pending: { resolve: (value: unknown) => void } = {
+        resolve: () => {},
+      };
+      const generateContent = vi
+        .fn()
+        .mockReturnValue(new Promise((resolve) => (pending.resolve = resolve)));
       const setPendingItem = vi.fn();
       const context = {
         services: {
@@ -96,6 +101,7 @@ describe('btwCommand', () => {
             config: { getBaseLlmClient: () => ({ generateContent }) },
             geminiClient: { getHistory: () => [] },
           },
+          settings: { merged: { omp: {} } },
         },
         ui: { setPendingItem },
       };
