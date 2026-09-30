@@ -73,83 +73,114 @@ npm install -g @google/gemini-cli
 
 #### Install globally from source (this repo, `feature/omp-port`)
 
-This fork is not published to npm. To install it globally on your machine so you
-can launch it with `gemini` from any directory:
+This fork is not published to npm, so a global install means building the bundle
+and installing it like any other package. The result is a real install: `gemini`
+keeps working even if you delete or move the clone.
 
 ```bash
 git clone --branch feature/omp-port https://github.com/Blackmanx/gemini-cli.git
 cd gemini-cli-omp
 npm install
-npm run build
-cd packages/cli
-npm link
+npm run bundle
 ```
 
-`npm link` registers the `gemini` binary in your global npm prefix (same place
-`npm install -g` puts it), so `gemini` is now on your `PATH`:
+`npm run bundle` is the step that matters. `npm install -g` straight from
+`packages/cli` does not work: its `@google/gemini-cli-core` dependency is a
+`file:../core` path that breaks once the package is packed. The bundle is a
+single self-contained build, the same artifact the official package ships.
+
+Wrap it in a package and install it:
 
 ```bash
-gemini --version   # 0.63.0-nightly... (the version in package.json)
+mkdir -p /tmp/gemini-omp-global
+cp -r bundle /tmp/gemini-omp-global/
+cd /tmp/gemini-omp-global
+cat > package.json <<'EOF'
+{
+  "name": "@google/gemini-cli",
+  "version": "0.63.0-nightly.20260930.gd03dad668",
+  "bin": { "gemini": "bundle/gemini.js" },
+  "files": ["bundle"],
+  "license": "Apache-2.0"
+}
+EOF
+npm pack
+npm install -g ./google-gemini-cli-*.tgz
+```
+
+From any directory:
+
+```bash
+gemini --version   # the version in package.json
 gemini            # launch the interactive CLI
 ```
 
-##### If the global npm prefix is not on your PATH
-
-`npm link` writes the `gemini` symlink into the global npm prefix
-(`npm config get prefix`/bin), the same directory `npm install -g` uses. If you
-have never installed anything globally, that directory may not exist or may not
-be on your `PATH`. You have two options:
-
-Fix the `PATH` (recommended, keeps `npm link` working for later updates):
-
-```bash
-npm config get prefix      # e.g. /home/you/.nvm/versions/node/v24.16.0
-echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-Or skip `npm link` entirely and put a symlink yourself in a directory that is
-already on your `PATH`:
-
-```bash
-ln -sf "$PWD/packages/cli/dist/index.js" ~/.local/bin/gemini
-```
-
-Either way, from any directory:
-
-```bash
-gemini --version
-gemini
-```
-
-The symlink points at `dist/index.js` directly, so after `git pull` you only
-need `npm run build` — no re-linking. `dist/index.js` has a
-`#!/usr/bin/env node` shebang, so it is executable on its own; this requires
-only Node >= 20 on the `PATH`, not a global npm install.
-
-To update later, pull the latest changes and rebuild:
+To update after a `git pull`, re-bundle and reinstall — a global install does
+not pick up source changes on its own:
 
 ```bash
 cd gemini-cli-omp
 git pull
-npm run build
+npm run bundle
+cd /tmp/gemini-omp-global && cp -r ~/projects/gemini-cli-omp/gemini-cli/bundle . \
+  && npm pack && npm install -g ./google-gemini-cli-*.tgz
 ```
 
 To uninstall:
 
 ```bash
-cd gemini-cli-omp/packages/cli
-npm unlink -g @google/gemini-cli
+npm uninstall -g @google/gemini-cli
 ```
 
-Or, if you used the manual symlink:
+##### If the global npm prefix is not on your PATH
+
+Every `npm install -g` above honours `npm config get prefix`, which may be the
+Node install directory rather than a persistent one. If `gemini` installs but is
+not found, either fix the `PATH`:
 
 ```bash
+echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+or install into a prefix you already have on the `PATH`:
+
+```bash
+npm_config_prefix="$HOME/.npm-global" npm install -g ./google-gemini-cli-*.tgz
+```
+
+##### For development: link the working tree instead
+
+When you want `gemini` to run the code you are editing, skip the bundle and link
+`packages/cli` directly:
+
+```bash
+cd gemini-cli-omp
+npm run build
+cd packages/cli
+npm link
+```
+
+This puts `gemini` on your `PATH` via a symlink. The trade-off is that it breaks
+if you move or delete the clone, and every source change needs `npm run build`
+before it takes effect. Use it while developing; use the bundle above for a
+machine you actually work on.
+
+```bash
+cd gemini-cli-omp
+npm run build   # after every change
+```
+
+To undo a link, either of these:
+
+```bash
+cd gemini-cli-omp/packages/cli && npm unlink -g @google/gemini-cli
+# or, if you linked the file by hand:
 rm ~/.local/bin/gemini
 ```
 
-Requirements: Node.js >= 20 (see `.nvmrc`), and a writable directory on your
-`PATH` (`npm config get prefix`/bin, or `~/.local/bin`).
+Either install path needs only Node >= 20 (see `.nvmrc`); the bundle is
+self-contained and has no runtime dependency on the clone.
 
 ## Release Channels
 
