@@ -3304,9 +3304,9 @@
         },
         "contextFilePriority": {
           "title": "OMP: Context File Priority",
-          "description": "Which context file to load, in order of preference. Only the first one that exists is read, so listing several never duplicates their content into every request. AGENTS.md is the cross-agent convention and CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file in charge.",
-          "markdownDescription": "Which context file to load, in order of preference. Only the first one that exists is read, so listing several never duplicates their content into every request. AGENTS.md is the cross-agent convention and CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file in charge.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `[\n  \"GEMINI.md\",\n  \"AGENTS.md\",\n  \"CLAUDE.md\"\n]`",
-          "default": ["GEMINI.md", "AGENTS.md", "CLAUDE.md"],
+          "description": "Which context file to load, in order of preference. Only the first one that exists is read, so a repo is never described twice over. AGENTS.md comes first because it is the cross-agent convention: if the repo has one, that is the file the project means for any agent. GEMINI.md is next for this CLI's own file, and CLAUDE.md covers Claude Code.",
+          "markdownDescription": "Which context file to load, in order of preference. Only the first one that exists is read, so a repo is never described twice over. AGENTS.md comes first because it is the cross-agent convention: if the repo has one, that is the file the project means for any agent. GEMINI.md is next for this CLI's own file, and CLAUDE.md covers Claude Code.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `[\n  \"AGENTS.md\",\n  \"GEMINI.md\",\n  \"CLAUDE.md\"\n]`",
+          "default": ["AGENTS.md", "GEMINI.md", "CLAUDE.md"],
           "type": "array",
           "items": {
             "type": "string"

@@ -1995,11 +1995,11 @@ const SETTINGS_SCHEMA = {
         label: 'OMP: Context File Priority',
         category: 'Context',
         requiresRestart: false,
-        default: ['GEMINI.md', 'AGENTS.md', 'CLAUDE.md'] as string[],
+        default: ['AGENTS.md', 'GEMINI.md', 'CLAUDE.md'] as string[],
         items: { type: 'string' },
-        mergeStrategy: MergeStrategy.UNION,
+        mergeStrategy: MergeStrategy.REPLACE,
         description:
-          "Which context file to load, in order of preference. Only the first one that exists is read, so listing several never duplicates their content into every request. AGENTS.md is the cross-agent convention and CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file in charge.",
+          "Which context file to load, in order of preference. Only the first one that exists is read, so a repo is never described twice over. AGENTS.md comes first because it is the cross-agent convention: if the repo has one, that is the file the project means for any agent. GEMINI.md is next for this CLI's own file, and CLAUDE.md covers Claude Code.",
         showInDialog: true,
       },
       goal: {

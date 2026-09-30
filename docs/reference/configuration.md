@@ -2023,14 +2023,14 @@ their corresponding top-level category object in your `settings.json` file.
 - **`omp.contextFilePriority`** (array):
 
   - **Description:** Which context file to load, in order of preference. Only
-    the first one that exists is read, so listing several never duplicates their
-    content into every request. AGENTS.md is the cross-agent convention and
-    CLAUDE.md is Claude Code. Keeping GEMINI.md first leaves this CLI's own file
-    in charge.
+    the first one that exists is read, so a repo is never described twice over.
+    AGENTS.md comes first because it is the cross-agent convention: if the repo
+    has one, that is the file the project means for any agent. GEMINI.md is next
+    for this CLI's own file, and CLAUDE.md covers Claude Code.
   - **Default:**
 
     ```json
-    ["GEMINI.md", "AGENTS.md", "CLAUDE.md"]
+    ["AGENTS.md", "GEMINI.md", "CLAUDE.md"]
     ```
 
 - **`omp.goal.enabled`** (boolean):
