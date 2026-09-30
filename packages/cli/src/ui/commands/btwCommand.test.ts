@@ -58,6 +58,63 @@ describe('btwCommand', () => {
     expect(generateContent.mock.calls[0][0].config).toBeUndefined();
   });
 
+  it('strips tool traffic so a mid-flight history cannot replay a tool loop', async () => {
+    const history = [
+      { role: 'user', parts: [{ text: 'refactor auth.ts' }] },
+      {
+        role: 'model',
+        parts: [
+          { functionCall: { name: 'read_file', args: {} } },
+          { text: 'reading it now' },
+        ],
+      },
+      {
+        role: 'user',
+        parts: [{ functionResponse: { name: 'read_file', response: {} } }],
+      },
+    ];
+    const { context, generateContent } = makeContext(history);
+
+    await btwCommand.action?.(context as unknown as CommandContext, 'why?');
+
+    expect(generateContent.mock.calls[0][0].contents).toEqual([
+      { role: 'user', parts: [{ text: 'refactor auth.ts' }] },
+      { role: 'model', parts: [{ text: 'reading it now' }] },
+      { role: 'user', parts: [{ text: 'why?' }] },
+    ]);
+  });
+
+  it('gives up rather than sitting on the placeholder forever', async () => {
+    vi.useFakeTimers();
+    try {
+      const never = Promise.withResolvers<never>();
+      const generateContent = vi.fn().mockReturnValue(never.promise);
+      const setPendingItem = vi.fn();
+      const context = {
+        services: {
+          agentContext: {
+            config: { getBaseLlmClient: () => ({ generateContent }) },
+            geminiClient: { getHistory: () => [] },
+          },
+        },
+        ui: { setPendingItem },
+      };
+
+      await btwCommand.action?.(context as unknown as CommandContext, 'hi');
+      setPendingItem.mockClear();
+      await vi.advanceTimersByTimeAsync(90_000);
+
+      expect(setPendingItem).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'error',
+          text: expect.stringContaining('timed out'),
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not write the answer into history', async () => {
     const { context } = makeContext([]);
     const addItem = vi.fn();

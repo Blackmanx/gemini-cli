@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { Content } from '@google/genai';
 import { CommandKind, type SlashCommand } from './types.js';
 import {
   debugLogger,
@@ -33,6 +34,37 @@ The conversation so far is provided as context. Use it to answer precisely -- re
 You have no tools and cannot run anything. If answering would require doing something, say what you would do instead, in one line.
 
 Answer briefly and directly. No preamble, no restating the question, and never ask a follow-up question.`;
+
+/**
+ * How long to wait for the side answer before giving up.
+ *
+ * Without this the placeholder below can sit there forever: the turn this was
+ * asked during can be cancelled underneath it, and a request that never settles
+ * leaves the user staring at "(thinking...)" with no way to tell what happened.
+ */
+const BTW_TIMEOUT_MS = 90_000;
+
+/**
+ * The conversation with tool traffic removed.
+ *
+ * This runs while a turn is in flight, so the live history can be mid-flight
+ * too: a function call whose response has not arrived yet, or a tool result
+ * whose call was only just emitted. Replaying that against a request carrying
+ * no tools is a malformed conversation -- the model sees a pattern of tool
+ * calls it is not allowed to continue and starts reproducing it, which is what
+ * tripped loop detection. The narration around those calls is what actually
+ * answers the question, so keep the text and drop the rest.
+ */
+function conversationAsText(history: readonly Content[]): Content[] {
+  return history
+    .map((content): Content | null => {
+      const parts = (content.parts ?? []).filter(
+        (part) => typeof part.text === 'string' && part.text.length > 0,
+      );
+      return parts.length === 0 ? null : { role: content.role, parts };
+    })
+    .filter((content): content is Content => content !== null);
+}
 
 export const btwCommand: SlashCommand = {
   name: 'btw',
@@ -66,6 +98,19 @@ export const btwCommand: SlashCommand = {
     // The live pending region: the one place that renders below the agent's
     // streaming output and keeps updating while it runs.
     const { setPendingItem } = context.ui;
+    const answered = (text: string, isError: boolean) => {
+      setPendingItem({
+        type: isError ? 'error' : 'info',
+        text: `btw: ${question}\n\n${text}`,
+      });
+    };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      answered('(timed out)', true);
+      controller.abort();
+    }, BTW_TIMEOUT_MS);
+
     // Deliberately not awaited. This command runs while a turn is in flight,
     // and blocking the command processor on a second model call interleaves
     // with the live one: the pending item gets clobbered, the earlier turn's
@@ -77,14 +122,11 @@ export const btwCommand: SlashCommand = {
         // A synthetic key: this request bypasses the main chat, so it must not
         // resolve through the model-role cycle a normal turn would use.
         modelConfigKey: { model: 'btw' },
-        // Its own controller. Sharing the turn's signal would kill the side
-        // question the moment the turn it was watching ended.
-        abortSignal: new AbortController().signal,
-        // The conversation, as context for the question. Read live, so a
-        // question asked mid-turn sees what the agent has done so far rather
-        // than the transcript as of the last completed turn.
+        // Its own controller, so cancelling this answer never cancels the turn
+        // it was watching, and never the other way round.
+        abortSignal: controller.signal,
         contents: [
-          ...agentContext.geminiClient.getHistory(),
+          ...conversationAsText(agentContext.geminiClient.getHistory()),
           { role: 'user', parts: [{ text: question }] },
         ],
         systemInstruction: BTW_SYSTEM_INSTRUCTION,
@@ -92,20 +134,16 @@ export const btwCommand: SlashCommand = {
         role: LlmRole.UTILITY_TOOL,
       })
       .then((response) => {
-        const answer = getResponseText(response)?.trim();
-        // The live pending region, not the history. History renders above the
-        // pending region, so an item pushed there lands on top of the agent's
-        // live output instead of under it -- while the agent keeps streaming.
-        setPendingItem({
-          type: 'info',
-          text: `btw: ${question}\n\n${answer || '(no answer)'}`,
-        });
+        clearTimeout(timer);
+        answered(getResponseText(response)?.trim() || '(no answer)', false);
       })
       .catch((error: unknown) => {
-        setPendingItem({
-          type: 'error',
-          text: `btw failed: ${error instanceof Error ? error.message : String(error)}`,
-        });
+        clearTimeout(timer);
+        const message = error instanceof Error ? error.message : String(error);
+        // An abort we raised is the timeout above, which already spoke.
+        if (!message.includes('aborted')) {
+          answered(`failed: ${message}`, true);
+        }
       });
 
     setPendingItem({ type: 'info', text: `btw: ${question}\n\n(thinking...)` });
