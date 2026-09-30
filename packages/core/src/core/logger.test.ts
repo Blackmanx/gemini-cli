@@ -26,26 +26,43 @@ import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import type { Content } from '@google/genai';
 import os from 'node:os';
-import { GEMINI_DIR } from '../utils/paths.js';
 import { debugLogger } from '../utils/debugLogger.js';
 
 const PROJECT_SLUG = 'project-slug';
-const TMP_DIR_NAME = 'tmp';
 const LOG_FILE_NAME = 'logs.json';
 const CHECKPOINT_FILE_NAME = 'checkpoint.json';
 
-const TEST_GEMINI_DIR = path.join(
-  os.homedir(),
-  GEMINI_DIR,
-  TMP_DIR_NAME,
-  PROJECT_SLUG,
-);
+// The directory the Logger writes to, decided in beforeEach by stubbing the
+// same Storage accessor the Logger reads. It used to be hardcoded as
+// `~/.gemini/tmp/project-slug`, but Storage derives that name from the
+// project rather than using a literal slug, so the test was asserting against
+// a directory the Logger never wrote to.
+let TEST_GEMINI_DIR: string;
+let TEST_LOG_FILE_PATH: string;
+let TEST_CHECKPOINT_FILE_PATH: string;
 
-const TEST_LOG_FILE_PATH = path.join(TEST_GEMINI_DIR, LOG_FILE_NAME);
-const TEST_CHECKPOINT_FILE_PATH = path.join(
-  TEST_GEMINI_DIR,
-  CHECKPOINT_FILE_NAME,
-);
+/**
+ * A Storage pointed at this test's scratch directory.
+ *
+ * The Logger asks Storage where to write; several tests build their own
+ * Storage, and an unstubbed one derives the real per-project directory rather
+ * than the scratch dir, so the Logger wrote somewhere the assertions never
+ * looked.
+ */
+function makeStorage(): Storage {
+  const storage = new Storage(process.cwd());
+  vi.spyOn(storage, 'getProjectTempDir').mockReturnValue(TEST_GEMINI_DIR);
+  return storage;
+}
+
+async function useTempDirForLogger(): Promise<void> {
+  const dir = await fs.mkdtemp(
+    path.join(os.tmpdir(), `gemini-logger-${PROJECT_SLUG}-`),
+  );
+  TEST_GEMINI_DIR = dir;
+  TEST_LOG_FILE_PATH = path.join(dir, LOG_FILE_NAME);
+  TEST_CHECKPOINT_FILE_PATH = path.join(dir, CHECKPOINT_FILE_NAME);
+}
 
 async function cleanupLogAndCheckpointFiles() {
   try {
@@ -81,9 +98,10 @@ describe('Logger', () => {
     vi.setSystemTime(new Date('2025-01-01T12:00:00.000Z'));
     // Clean up before the test
     await cleanupLogAndCheckpointFiles();
-    // Ensure the directory exists for the test
-    await fs.mkdir(TEST_GEMINI_DIR, { recursive: true });
-    logger = new Logger(testSessionId, new Storage(process.cwd()));
+    // The Logger asks Storage where to write; point it at a scratch dir and
+    // read the assertions' paths back from the same place.
+    await useTempDirForLogger();
+    logger = new Logger(testSessionId, makeStorage());
     await logger.initialize();
   });
 
@@ -150,10 +168,7 @@ describe('Logger', () => {
         TEST_LOG_FILE_PATH,
         JSON.stringify(existingLogs, null, 2),
       );
-      const newLogger = new Logger(
-        currentSessionId,
-        new Storage(process.cwd()),
-      );
+      const newLogger = new Logger(currentSessionId, makeStorage());
       await newLogger.initialize();
       expect(newLogger['messageId']).toBe(2);
       expect(newLogger['logs']).toEqual(existingLogs);
@@ -174,7 +189,7 @@ describe('Logger', () => {
         TEST_LOG_FILE_PATH,
         JSON.stringify(existingLogs, null, 2),
       );
-      const newLogger = new Logger('a-new-session', new Storage(process.cwd()));
+      const newLogger = new Logger('a-new-session', makeStorage());
       await newLogger.initialize();
       expect(newLogger['messageId']).toBe(0);
       newLogger.close();
@@ -199,7 +214,7 @@ describe('Logger', () => {
         .spyOn(debugLogger, 'debug')
         .mockImplementation(() => {});
 
-      const newLogger = new Logger(testSessionId, new Storage(process.cwd()));
+      const newLogger = new Logger(testSessionId, makeStorage());
       await newLogger.initialize();
 
       expect(consoleDebugSpy).toHaveBeenCalledWith(
@@ -227,7 +242,7 @@ describe('Logger', () => {
         .spyOn(debugLogger, 'debug')
         .mockImplementation(() => {});
 
-      const newLogger = new Logger(testSessionId, new Storage(process.cwd()));
+      const newLogger = new Logger(testSessionId, makeStorage());
       await newLogger.initialize();
 
       expect(consoleDebugSpy).toHaveBeenCalledWith(
@@ -277,10 +292,7 @@ describe('Logger', () => {
     });
 
     it('should handle logger not initialized', async () => {
-      const uninitializedLogger = new Logger(
-        testSessionId,
-        new Storage(process.cwd()),
-      );
+      const uninitializedLogger = new Logger(testSessionId, makeStorage());
       uninitializedLogger.close(); // Ensure it's treated as uninitialized
       const consoleDebugSpy = vi
         .spyOn(debugLogger, 'debug')
@@ -295,16 +307,10 @@ describe('Logger', () => {
 
     it('should simulate concurrent writes from different logger instances to the same file', async () => {
       const concurrentSessionId = 'concurrent-session';
-      const logger1 = new Logger(
-        concurrentSessionId,
-        new Storage(process.cwd()),
-      );
+      const logger1 = new Logger(concurrentSessionId, makeStorage());
       await logger1.initialize();
 
-      const logger2 = new Logger(
-        concurrentSessionId,
-        new Storage(process.cwd()),
-      );
+      const logger2 = new Logger(concurrentSessionId, makeStorage());
       await logger2.initialize();
       expect(logger2['sessionId']).toEqual(logger1['sessionId']);
 
@@ -357,14 +363,14 @@ describe('Logger', () => {
 
   describe('getPreviousUserMessages', () => {
     it('should retrieve all user messages from logs, sorted newest first', async () => {
-      const loggerSort = new Logger('session-1', new Storage(process.cwd()));
+      const loggerSort = new Logger('session-1', makeStorage());
       await loggerSort.initialize();
       await loggerSort.logMessage(MessageSenderType.USER, 'S1M0_ts100000');
       vi.advanceTimersByTime(1000);
       await loggerSort.logMessage(MessageSenderType.USER, 'S1M1_ts101000');
       vi.advanceTimersByTime(1000);
       // Switch to a different session to log
-      const loggerSort2 = new Logger('session-2', new Storage(process.cwd()));
+      const loggerSort2 = new Logger('session-2', makeStorage());
       await loggerSort2.initialize();
       await loggerSort2.logMessage(MessageSenderType.USER, 'S2M0_ts102000');
       vi.advanceTimersByTime(1000);
@@ -377,10 +383,7 @@ describe('Logger', () => {
       loggerSort.close();
       loggerSort2.close();
 
-      const finalLogger = new Logger(
-        'final-session',
-        new Storage(process.cwd()),
-      );
+      const finalLogger = new Logger('final-session', makeStorage());
       await finalLogger.initialize();
 
       const messages = await finalLogger.getPreviousUserMessages();
@@ -400,10 +403,7 @@ describe('Logger', () => {
     });
 
     it('should return empty array if logger not initialized', async () => {
-      const uninitializedLogger = new Logger(
-        testSessionId,
-        new Storage(process.cwd()),
-      );
+      const uninitializedLogger = new Logger(testSessionId, makeStorage());
       uninitializedLogger.close();
       const messages = await uninitializedLogger.getPreviousUserMessages();
       expect(messages).toEqual([]);
@@ -452,10 +452,7 @@ describe('Logger', () => {
     });
 
     it('should not throw if logger is not initialized', async () => {
-      const uninitializedLogger = new Logger(
-        testSessionId,
-        new Storage(process.cwd()),
-      );
+      const uninitializedLogger = new Logger(testSessionId, makeStorage());
       uninitializedLogger.close();
       const consoleErrorSpy = vi
         .spyOn(debugLogger, 'error')
@@ -568,10 +565,7 @@ describe('Logger', () => {
     });
 
     it('should return an empty history if logger is not initialized', async () => {
-      const uninitializedLogger = new Logger(
-        testSessionId,
-        new Storage(process.cwd()),
-      );
+      const uninitializedLogger = new Logger(testSessionId, makeStorage());
       uninitializedLogger.close();
       const consoleErrorSpy = vi
         .spyOn(debugLogger, 'error')
@@ -659,10 +653,7 @@ describe('Logger', () => {
     });
 
     it('should return false if logger is not initialized', async () => {
-      const uninitializedLogger = new Logger(
-        testSessionId,
-        new Storage(process.cwd()),
-      );
+      const uninitializedLogger = new Logger(testSessionId, makeStorage());
       uninitializedLogger.close();
       const consoleErrorSpy = vi
         .spyOn(debugLogger, 'error')
@@ -700,10 +691,7 @@ describe('Logger', () => {
     });
 
     it('should throw an error if logger is not initialized', async () => {
-      const uninitializedLogger = new Logger(
-        testSessionId,
-        new Storage(process.cwd()),
-      );
+      const uninitializedLogger = new Logger(testSessionId, makeStorage());
       uninitializedLogger.close();
 
       await expect(uninitializedLogger.checkpointExists(tag)).rejects.toThrow(

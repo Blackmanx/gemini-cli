@@ -14,7 +14,10 @@ vi.mock('../utils/security.js', () => ({
   isDirectorySecure: vi.fn().mockResolvedValue({ secure: true }),
 }));
 
-describe('Workspace-Level Policies', () => {
+// Each test resets the module registry and re-imports the policy engine, which
+// drags in the OpenTelemetry SDK on the way. That import dominates the runtime
+// and outlasts the 5s default on a cold cache, with nothing actually failing.
+describe('Workspace-Level Policies', { timeout: 60_000 }, () => {
   beforeEach(async () => {
     vi.resetModules();
     const { Storage } = await import('../config/storage.js');

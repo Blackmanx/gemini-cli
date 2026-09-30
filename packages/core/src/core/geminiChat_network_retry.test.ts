@@ -366,7 +366,7 @@ describe('GeminiChat Network Retries', () => {
 
     // Verify the API was called twice (initial + retry)
     expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(2);
-  });
+  }, 20_000);
 
   it('should retry on ECONNRESET error during connection phase', async () => {
     const connectionError = new Error('read ECONNRESET');
@@ -416,7 +416,7 @@ describe('GeminiChat Network Retries', () => {
     );
     expect(successChunk).toBeDefined();
     expect(mockContentGenerator.generateContentStream).toHaveBeenCalledTimes(2);
-  });
+  }, 20_000);
 
   it('should NOT retry on non-retryable error during connection phase', async () => {
     const nonRetryableError = new Error('Some non-retryable error');

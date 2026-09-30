@@ -6,6 +6,7 @@
 
 import { describe, it, expect } from 'vitest';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadPoliciesFromToml } from './toml-loader.js';
 import { PolicyEngine } from './policy-engine.js';
 import { ApprovalMode, PolicyDecision } from './types.js';
@@ -13,8 +14,14 @@ import { UPDATE_TOPIC_TOOL_NAME } from '../tools/tool-names.js';
 
 describe('Topic Tool Policy', () => {
   async function loadDefaultPolicies() {
-    // Path relative to packages/core root
-    const policiesDir = path.resolve(process.cwd(), 'src/policy/policies');
+    // Resolved from this module, not from process.cwd(): the test runner's
+    // cwd is the repo root, so a cwd-relative path silently resolved to
+    // nothing and the engine fell back to its default of asking for every
+    // tool - which is how this test came to expect `allow` and get `ask_user`.
+    const policiesDir = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      'policies',
+    );
     const getPolicyTier = () => 1; // Default tier
     const result = await loadPoliciesFromToml([policiesDir], getPolicyTier);
     return result.rules;

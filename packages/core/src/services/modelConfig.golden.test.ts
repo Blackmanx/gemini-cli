@@ -7,22 +7,25 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ModelConfigService } from './modelConfigService.js';
 import { DEFAULT_MODEL_CONFIGS } from '../config/defaultModelConfigs.js';
 
-const GOLDEN_FILE_PATH = path.resolve(
-  process.cwd(),
-  'src',
-  'services',
+// Resolved from this module rather than process.cwd(): the runner's cwd is
+// the repo root, so a cwd-relative path pointed at a directory that does not
+// exist and the test failed with "Golden file not found" every time.
+const TEST_DATA_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
   'test-data',
+);
+
+const GOLDEN_FILE_PATH = path.join(
+  TEST_DATA_DIR,
   'resolved-aliases.golden.json',
 );
 
-const RETRY_GOLDEN_FILE_PATH = path.resolve(
-  process.cwd(),
-  'src',
-  'services',
-  'test-data',
+const RETRY_GOLDEN_FILE_PATH = path.join(
+  TEST_DATA_DIR,
   'resolved-aliases-retry.golden.json',
 );
 

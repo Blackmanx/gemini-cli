@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HookSystem } from './hookSystem.js';
 import { Config } from '../config/config.js';
+import type { Storage } from '../config/storage.js';
 import { HookType } from './types.js';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -52,6 +53,25 @@ const mockConsole = {
 
 vi.stubGlobal('console', mockConsole);
 
+/**
+ * Name the directories the hook path reads out of Storage.
+ *
+ * Firing an event builds its input from the config, which reads the project
+ * temp dir out of Storage - and Storage cannot name that before
+ * initialize(). Initializing the real Storage is not an option here: its
+ * registry work runs against the real filesystem, which these unit tests have
+ * no business performing. Without this the handler threw, the error was
+ * swallowed, and the event came back as a refusal (success: false) with no
+ * hooks having run at all.
+ */
+function stubStorageDirs(cfg: Config, dir: string): void {
+  const storage = (cfg as unknown as { storage: Storage }).storage;
+  vi.spyOn(storage, 'getProjectTempDir').mockReturnValue(dir);
+  vi.spyOn(storage, 'getProjectMemoryTempDir').mockReturnValue(
+    path.join(dir, 'memory'),
+  );
+}
+
 describe('HookSystem Integration', () => {
   let hookSystem: HookSystem;
   let config: Config;
@@ -89,6 +109,8 @@ describe('HookSystem Integration', () => {
     // Provide getMessageBus mock for MessageBus integration tests
     (config as unknown as { getMessageBus: () => unknown }).getMessageBus =
       () => undefined;
+
+    stubStorageDirs(config, testDir);
 
     hookSystem = new HookSystem(config);
 
@@ -208,6 +230,7 @@ describe('HookSystem Integration', () => {
       const result = await eventBus.fireBeforeToolEvent('TestTool', {
         test: 'data',
       });
+      // TEMP DIAGNOSTIC
       expect(result.success).toBe(true);
     });
   });
@@ -299,6 +322,7 @@ describe('HookSystem Integration', () => {
         configWithDisabled as unknown as { getMessageBus: () => unknown }
       ).getMessageBus = () => undefined;
 
+      stubStorageDirs(configWithDisabled, disabledDir);
       const systemWithDisabled = new HookSystem(configWithDisabled);
       await systemWithDisabled.initialize();
 
@@ -364,6 +388,7 @@ describe('HookSystem Integration', () => {
         configForDisabling as unknown as { getMessageBus: () => unknown }
       ).getMessageBus = () => undefined;
 
+      stubStorageDirs(configForDisabling, setEnabledDir);
       const systemForDisabling = new HookSystem(configForDisabling);
       await systemForDisabling.initialize();
 

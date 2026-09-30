@@ -25,7 +25,11 @@ vi.mock('../../utils/shell-utils.js', async (importOriginal) => {
   };
 });
 
-describe('WindowsSandboxManager', () => {
+// The suite mocks os.platform() to 'win32', so every prepareCommand walks the
+// csc.exe candidate list looking for a compiler that does not exist here.
+// That is ~5s of real process spawning per test on a non-Windows host, which
+// outlasts the 5s default without indicating anything is wrong.
+describe('WindowsSandboxManager', { timeout: 60_000 }, () => {
   let manager: WindowsSandboxManager;
   let testCwd: string;
 

@@ -14,6 +14,7 @@ import {
   getWorkspaceContextOverride,
 } from './scoped-config.js';
 import { Config } from './config.js';
+import type { Storage } from './storage.js';
 
 vi.mock('../utils/paths.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../utils/paths.js')>();
@@ -119,6 +120,19 @@ describe('runWithScopedWorkspaceContext', () => {
       cwd: tempDir,
       model: 'test-model',
     });
+
+    // isPathAllowed consults the auto-memory inbox and the project temp dir
+    // under Storage, which cannot name either before initialize() - and
+    // initialize() runs registry work against the real filesystem, which
+    // these scoped-context tests have no business performing. Name the two
+    // directories the predicate needs.
+    const storage = (config as unknown as { storage: Storage }).storage;
+    vi.spyOn(storage, 'getProjectMemoryTempDir').mockReturnValue(
+      path.join(tempDir, '.gemini', 'tmp', 'memory'),
+    );
+    vi.spyOn(storage, 'getProjectTempDir').mockReturnValue(
+      path.join(tempDir, '.gemini', 'tmp'),
+    );
   });
 
   afterEach(() => {

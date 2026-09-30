@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Config } from './config.js';
+import type { Storage } from './storage.js';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
@@ -35,7 +36,7 @@ describe('Config Path Validation', () => {
   const targetDir = '/mock/workspace';
   const globalGeminiDir = path.join(os.homedir(), '.gemini');
 
-  beforeEach(() => {
+  beforeEach(async () => {
     config = new Config({
       targetDir,
       sessionId: 'test-session',
@@ -43,6 +44,20 @@ describe('Config Path Validation', () => {
       cwd: targetDir,
       model: 'test-model',
     });
+    // isPathAllowed consults the auto-memory inbox under the project temp
+    // dir, and Storage cannot name that until it is initialized - so the
+    // predicate threw "Storage must be initialized before use" instead of
+    // answering. Initializing the real Storage is not an option here: its
+    // registry work runs against a mocked `node:fs` and never settles. The
+    // test is about workspace path allowance, so name the one directory the
+    // predicate needs and leave the rest alone.
+    const storage = (config as unknown as { storage: Storage }).storage;
+    vi.spyOn(storage, 'getProjectMemoryTempDir').mockReturnValue(
+      path.join(targetDir, '.gemini', 'tmp', 'memory'),
+    );
+    vi.spyOn(storage, 'getProjectTempDir').mockReturnValue(
+      path.join(targetDir, '.gemini', 'tmp'),
+    );
   });
 
   it('should allow access to a file under ~/.gemini once that directory is added to the workspace', () => {
