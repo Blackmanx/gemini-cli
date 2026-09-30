@@ -1858,122 +1858,139 @@ const SETTINGS_SCHEMA = {
     showInDialog: true,
   },
 
-  magicKeywords: {
+  /**
+   * Everything the omp port added, in one namespace.
+   *
+   * Grouping these means the port can be identified and removed as a
+   * unit, and that no port key can collide with an upstream one. Upstream
+   * settings are deliberately left outside: `general`, `security` and the
+   * rest still work if this block is deleted, which is what makes dropping
+   * the port back to upstream a deletion rather than a merge conflict.
+   */
+  omp: {
     type: 'object',
-    label: 'Magic Keywords',
-    category: 'Interaction',
+    label: 'OMP',
+    category: 'Advanced',
     requiresRestart: false,
     default: {},
     description:
-      'Standalone words in a prompt that add a hidden instruction for that turn.',
-    showInDialog: true,
+      'Settings for the features the omp port added. Remove this block to drop them.',
+    showInDialog: false,
     properties: {
-      enabled: {
-        type: 'boolean',
-        label: 'Enable Magic Keywords',
-        category: 'Interaction',
+      appendSystem: {
+        type: 'string',
+        label: 'OMP: Append System Prompt',
+        category: 'Advanced',
         requiresRestart: false,
-        default: true,
-        description: 'Master switch for every magic keyword.',
+        default: '',
+        description:
+          'Standing instructions appended to the system prompt under a "User instructions" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.',
         showInDialog: true,
       },
-      ultrathink: {
-        type: 'boolean',
-        label: 'Ultrathink',
+      magicKeywords: {
+        type: 'object',
+        label: 'OMP: Magic Keywords',
         category: 'Interaction',
         requiresRestart: false,
-        default: true,
+        default: {},
         description:
-          'A standalone "ultrathink" asks for careful multi-step reasoning on that turn.',
+          'Standalone words in a prompt that add a hidden instruction for that turn.',
+        showInDialog: true,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'Enable Magic Keywords',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description: 'Master switch for every magic keyword.',
+            showInDialog: true,
+          },
+          ultrathink: {
+            type: 'boolean',
+            label: 'Ultrathink',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description:
+              'A standalone "ultrathink" asks for careful multi-step reasoning on that turn.',
+            showInDialog: true,
+          },
+          orchestrate: {
+            type: 'boolean',
+            label: 'Orchestrate',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description:
+              'A standalone "orchestrate" asks for parallel delegation and verification.',
+            showInDialog: true,
+          },
+          workflowz: {
+            type: 'boolean',
+            label: 'Workflowz',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description:
+              'A standalone "workflowz" asks for a deterministic multi-subagent workflow.',
+            showInDialog: true,
+          },
+          jevify: {
+            type: 'boolean',
+            label: 'Jevify',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description:
+              'A standalone "jevify" asks for bulk classification against a frozen rule.',
+            showInDialog: true,
+          },
+        },
+      },
+      github: {
+        type: 'boolean',
+        label: 'OMP: Use GitHub',
+        category: 'Advanced',
+        requiresRestart: false,
+        default: false,
+        description:
+          'Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.',
         showInDialog: true,
       },
-      orchestrate: {
+      generateImage: {
         type: 'boolean',
-        label: 'Orchestrate',
-        category: 'Interaction',
+        label: 'OMP: Use Generate Image',
+        category: 'Advanced',
         requiresRestart: false,
-        default: true,
+        default: false,
         description:
-          'A standalone "orchestrate" asks for parallel delegation and verification.',
+          'Enable the generate_image tool. Calls a paid image model, so it is off until asked for.',
         showInDialog: true,
       },
-      workflowz: {
+      tts: {
         type: 'boolean',
-        label: 'Workflowz',
-        category: 'Interaction',
+        label: 'OMP: Use Text to Speech',
+        category: 'Advanced',
         requiresRestart: false,
-        default: true,
+        default: false,
         description:
-          'A standalone "workflowz" asks for a deterministic multi-subagent workflow.',
+          'Enable the tts tool. Calls a paid speech model, so it is off until asked for.',
         showInDialog: true,
       },
-      jevify: {
+      memory: {
         type: 'boolean',
-        label: 'Jevify',
-        category: 'Interaction',
+        label: 'OMP: Use Memory Bank',
+        category: 'Advanced',
         requiresRestart: false,
-        default: true,
+        default: false,
         description:
-          'A standalone "jevify" asks for bulk classification against a frozen rule.',
+          'Enable the local memory bank and its retain/recall/reflect/memory_edit tools.',
         showInDialog: true,
       },
     },
   },
 
-  appendSystem: {
-    type: 'string',
-    label: 'Append System Prompt',
-    category: 'Advanced',
-    requiresRestart: false,
-    default: '',
-    description:
-      'Standing instructions appended to the system prompt under a "User instructions" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.',
-    showInDialog: true,
-  },
-
-  useGithub: {
-    type: 'boolean',
-    label: 'Use GitHub',
-    category: 'Advanced',
-    requiresRestart: false,
-    default: false,
-    description:
-      'Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.',
-    showInDialog: true,
-  },
-
-  useGenerateImage: {
-    type: 'boolean',
-    label: 'Use Generate Image',
-    category: 'Advanced',
-    requiresRestart: false,
-    default: false,
-    description:
-      'Enable the generate_image tool. Calls a paid image model, so it is off until asked for.',
-    showInDialog: true,
-  },
-
-  useTts: {
-    type: 'boolean',
-    label: 'Use Text to Speech',
-    category: 'Advanced',
-    requiresRestart: false,
-    default: false,
-    description:
-      'Enable the tts tool. Calls a paid speech model, so it is off until asked for.',
-    showInDialog: true,
-  },
-
-  useMemory: {
-    type: 'boolean',
-    label: 'Use Memory Bank',
-    category: 'Advanced',
-    requiresRestart: false,
-    default: false,
-    description:
-      'Enable the local memory bank and its retain/recall/reflect/memory_edit tools.',
-    showInDialog: true,
-  },
   security: {
     type: 'object',
     label: 'Security',

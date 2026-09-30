@@ -7,7 +7,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { writeFileSync } from 'node:fs';
+import { rmSync, writeFileSync } from 'node:fs';
 import { wasmLoader } from 'esbuild-plugin-wasm';
 
 let esbuild;
@@ -160,6 +160,14 @@ const a2aServerConfig = {
   plugins: createWasmPlugins(),
   alias: commonAliases,
 };
+
+// Start from an empty output directory. esbuild gives chunks content-hashed
+// names, so without this every rebuild leaves the previous build's chunks
+// behind: `bundle/` grew to nine `gemini-*.js` entries where only one is
+// reachable from `gemini.js`, and the orphans shipped in the install. They
+// also made it look - to a grep, and to a reader - like the bundle still
+// contained code it had been moved away from.
+rmSync(path.join(__dirname, 'bundle'), { recursive: true, force: true });
 
 Promise.allSettled([
   esbuild.build(cliConfig).then(({ metafile }) => {

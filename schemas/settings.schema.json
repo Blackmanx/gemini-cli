@@ -89,11 +89,11 @@
         },
         "defaultApprovalMode": {
           "title": "Default Approval Mode",
-          "description": "The default approval mode for tool execution. 'default' prompts for approval, 'auto_edit' auto-approves edit tools, and 'plan' is read-only mode. YOLO mode (auto-approve all actions) can only be enabled via command line (--yolo or --approval-mode=yolo).",
-          "markdownDescription": "The default approval mode for tool execution. 'default' prompts for approval, 'auto_edit' auto-approves edit tools, and 'plan' is read-only mode. YOLO mode (auto-approve all actions) can only be enabled via command line (--yolo or --approval-mode=yolo).\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `default`",
+          "description": "The default approval mode for tool execution. 'default' prompts for approval, 'auto_edit' auto-approves edit tools, 'plan' is read-only mode, and 'yolo' auto-approves all actions. YOLO can also be enabled for a single run with --yolo. Note that security.disableYoloMode and admin.secureModeEnabled still override this setting.",
+          "markdownDescription": "The default approval mode for tool execution. 'default' prompts for approval, 'auto_edit' auto-approves edit tools, 'plan' is read-only mode, and 'yolo' auto-approves all actions. YOLO can also be enabled for a single run with --yolo. Note that security.disableYoloMode and admin.secureModeEnabled still override this setting.\n\n- Category: `General`\n- Requires restart: `no`\n- Default: `default`",
           "default": "default",
           "type": "string",
-          "enum": ["default", "auto_edit", "plan"]
+          "enum": ["default", "auto_edit", "plan", "yolo"]
         },
         "devtools": {
           "title": "DevTools",
@@ -3215,85 +3215,95 @@
       "default": true,
       "type": "boolean"
     },
-    "magicKeywords": {
-      "title": "Magic Keywords",
-      "description": "Standalone words in a prompt that add a hidden instruction for that turn.",
-      "markdownDescription": "Standalone words in a prompt that add a hidden instruction for that turn.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `{}`",
+    "omp": {
+      "title": "OMP",
+      "description": "Settings for the features the omp port added. Remove this block to drop them.",
+      "markdownDescription": "Settings for the features the omp port added. Remove this block to drop them.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `{}`",
       "default": {},
       "type": "object",
       "properties": {
-        "enabled": {
-          "title": "Enable Magic Keywords",
-          "description": "Master switch for every magic keyword.",
-          "markdownDescription": "Master switch for every magic keyword.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
-          "default": true,
+        "appendSystem": {
+          "title": "OMP: Append System Prompt",
+          "description": "Standing instructions appended to the system prompt under a \"User instructions\" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.",
+          "markdownDescription": "Standing instructions appended to the system prompt under a \"User instructions\" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: ``",
+          "default": "",
+          "type": "string"
+        },
+        "magicKeywords": {
+          "title": "OMP: Magic Keywords",
+          "description": "Standalone words in a prompt that add a hidden instruction for that turn.",
+          "markdownDescription": "Standalone words in a prompt that add a hidden instruction for that turn.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `{}`",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "title": "Enable Magic Keywords",
+              "description": "Master switch for every magic keyword.",
+              "markdownDescription": "Master switch for every magic keyword.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "ultrathink": {
+              "title": "Ultrathink",
+              "description": "A standalone \"ultrathink\" asks for careful multi-step reasoning on that turn.",
+              "markdownDescription": "A standalone \"ultrathink\" asks for careful multi-step reasoning on that turn.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "orchestrate": {
+              "title": "Orchestrate",
+              "description": "A standalone \"orchestrate\" asks for parallel delegation and verification.",
+              "markdownDescription": "A standalone \"orchestrate\" asks for parallel delegation and verification.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "workflowz": {
+              "title": "Workflowz",
+              "description": "A standalone \"workflowz\" asks for a deterministic multi-subagent workflow.",
+              "markdownDescription": "A standalone \"workflowz\" asks for a deterministic multi-subagent workflow.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "jevify": {
+              "title": "Jevify",
+              "description": "A standalone \"jevify\" asks for bulk classification against a frozen rule.",
+              "markdownDescription": "A standalone \"jevify\" asks for bulk classification against a frozen rule.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "github": {
+          "title": "OMP: Use GitHub",
+          "description": "Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.",
+          "markdownDescription": "Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+          "default": false,
           "type": "boolean"
         },
-        "ultrathink": {
-          "title": "Ultrathink",
-          "description": "A standalone \"ultrathink\" asks for careful multi-step reasoning on that turn.",
-          "markdownDescription": "A standalone \"ultrathink\" asks for careful multi-step reasoning on that turn.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
-          "default": true,
+        "generateImage": {
+          "title": "OMP: Use Generate Image",
+          "description": "Enable the generate_image tool. Calls a paid image model, so it is off until asked for.",
+          "markdownDescription": "Enable the generate_image tool. Calls a paid image model, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+          "default": false,
           "type": "boolean"
         },
-        "orchestrate": {
-          "title": "Orchestrate",
-          "description": "A standalone \"orchestrate\" asks for parallel delegation and verification.",
-          "markdownDescription": "A standalone \"orchestrate\" asks for parallel delegation and verification.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
-          "default": true,
+        "tts": {
+          "title": "OMP: Use Text to Speech",
+          "description": "Enable the tts tool. Calls a paid speech model, so it is off until asked for.",
+          "markdownDescription": "Enable the tts tool. Calls a paid speech model, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+          "default": false,
           "type": "boolean"
         },
-        "workflowz": {
-          "title": "Workflowz",
-          "description": "A standalone \"workflowz\" asks for a deterministic multi-subagent workflow.",
-          "markdownDescription": "A standalone \"workflowz\" asks for a deterministic multi-subagent workflow.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
-          "default": true,
-          "type": "boolean"
-        },
-        "jevify": {
-          "title": "Jevify",
-          "description": "A standalone \"jevify\" asks for bulk classification against a frozen rule.",
-          "markdownDescription": "A standalone \"jevify\" asks for bulk classification against a frozen rule.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
-          "default": true,
+        "memory": {
+          "title": "OMP: Use Memory Bank",
+          "description": "Enable the local memory bank and its retain/recall/reflect/memory_edit tools.",
+          "markdownDescription": "Enable the local memory bank and its retain/recall/reflect/memory_edit tools.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
+          "default": false,
           "type": "boolean"
         }
       },
       "additionalProperties": false
-    },
-    "appendSystem": {
-      "title": "Append System Prompt",
-      "description": "Standing instructions appended to the system prompt under a \"User instructions\" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.",
-      "markdownDescription": "Standing instructions appended to the system prompt under a \"User instructions\" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: ``",
-      "default": "",
-      "type": "string"
-    },
-    "useGithub": {
-      "title": "Use GitHub",
-      "description": "Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.",
-      "markdownDescription": "Enable the github tool, which drives the `gh` CLI. It can reach the network and publish pull requests and issues, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
-      "default": false,
-      "type": "boolean"
-    },
-    "useGenerateImage": {
-      "title": "Use Generate Image",
-      "description": "Enable the generate_image tool. Calls a paid image model, so it is off until asked for.",
-      "markdownDescription": "Enable the generate_image tool. Calls a paid image model, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
-      "default": false,
-      "type": "boolean"
-    },
-    "useTts": {
-      "title": "Use Text to Speech",
-      "description": "Enable the tts tool. Calls a paid speech model, so it is off until asked for.",
-      "markdownDescription": "Enable the tts tool. Calls a paid speech model, so it is off until asked for.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
-      "default": false,
-      "type": "boolean"
-    },
-    "useMemory": {
-      "title": "Use Memory Bank",
-      "description": "Enable the local memory bank and its retain/recall/reflect/memory_edit tools.",
-      "markdownDescription": "Enable the local memory bank and its retain/recall/reflect/memory_edit tools.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `false`",
-      "default": false,
-      "type": "boolean"
     },
     "security": {
       "title": "Security",

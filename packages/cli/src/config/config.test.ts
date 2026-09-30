@@ -2891,6 +2891,46 @@ describe('loadCliConfig approval mode', () => {
     });
   });
 
+  describe('omp settings namespace', () => {
+    // Everything the port added lives under `omp`. If this block is dropped
+    // the port goes with it, and no port key can collide with an upstream one.
+    it('should read the port feature toggles from the omp namespace', async () => {
+      process.argv = ['node', 'script.js'];
+      const settings = createTestMergedSettings({
+        omp: {
+          memory: true,
+          github: true,
+          generateImage: true,
+          tts: true,
+          appendSystem: 'be terse',
+        },
+      });
+      const argv = await parseArguments(settings);
+      const config = await loadCliConfig(settings, 'test-session', argv);
+
+      expect(config.getUseMemory()).toBe(true);
+      expect(config.getUseGithub()).toBe(true);
+      expect(config.getUseGenerateImage()).toBe(true);
+      expect(config.getUseTts()).toBe(true);
+      expect(config.getAppendSystemPrompt()).toBe('be terse');
+    });
+
+    it('should leave the port toggles off when the namespace is absent', async () => {
+      process.argv = ['node', 'script.js'];
+      const settings = createTestMergedSettings({});
+      const argv = await parseArguments(settings);
+      const config = await loadCliConfig(settings, 'test-session', argv);
+
+      expect(config.getUseMemory()).toBe(false);
+      expect(config.getUseGithub()).toBe(false);
+      expect(config.getUseGenerateImage()).toBe(false);
+      expect(config.getUseTts()).toBe(false);
+      // The schema default is the empty string, not undefined; both mean
+      // "no standing instructions" to the prompt builder.
+      expect(config.getAppendSystemPrompt()).toBe('');
+    });
+  });
+
   describe('Persistent approvalMode setting', () => {
     it('should use approvalMode from settings when no CLI flags are set', async () => {
       process.argv = ['node', 'script.js'];

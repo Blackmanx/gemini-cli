@@ -1107,12 +1107,16 @@ export async function loadCliConfig(
     truncateToolOutputThreshold: settings.tools?.truncateToolOutputThreshold,
     eventEmitter: coreEvents,
     useWriteTodos: argv.useWriteTodos ?? settings.useWriteTodos,
-    useGenerateImage: settings.useGenerateImage,
-    useTts: settings.useTts,
-    useMemory: settings.useMemory,
-    useGithub: settings.useGithub,
-    appendSystem: settings.appendSystem,
-    magicKeywords: settings.magicKeywords,
+    // Port-added settings live under the `omp` namespace. Read them once
+    // here so the rest of the config layer keeps working with flat
+    // ConfigParameters, and so there is exactly one place that knows where
+    // the namespace lives.
+    useGenerateImage: settings.omp?.generateImage,
+    useTts: settings.omp?.tts,
+    useMemory: settings.omp?.memory,
+    useGithub: settings.omp?.github,
+    appendSystem: settings.omp?.appendSystem,
+    magicKeywords: settings.omp?.magicKeywords,
     modelRoles: settings.model?.roles,
     modelCycleOrder: settings.model?.cycleOrder,
     output: {

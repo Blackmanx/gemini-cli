@@ -129,11 +129,12 @@ their corresponding top-level category object in your `settings.json` file.
 - **`general.defaultApprovalMode`** (enum):
 
   - **Description:** The default approval mode for tool execution. 'default'
-    prompts for approval, 'auto_edit' auto-approves edit tools, and 'plan' is
-    read-only mode. YOLO mode (auto-approve all actions) can only be enabled via
-    command line (--yolo or --approval-mode=yolo).
+    prompts for approval, 'auto_edit' auto-approves edit tools, 'plan' is
+    read-only mode, and 'yolo' auto-approves all actions. YOLO can also be
+    enabled for a single run with --yolo. Note that security.disableYoloMode and
+    admin.secureModeEnabled still override this setting.
   - **Default:** `"default"`
-  - **Values:** `"default"`, `"auto_edit"`, `"plan"`
+  - **Values:** `"default"`, `"auto_edit"`, `"plan"`, `"yolo"`
 
 - **`general.devtools`** (boolean):
 
@@ -1949,69 +1950,64 @@ their corresponding top-level category object in your `settings.json` file.
   - **Description:** Enable the write_todos tool.
   - **Default:** `true`
 
-#### `magicKeywords`
+#### `omp`
 
-- **`magicKeywords.enabled`** (boolean):
+- **`omp.appendSystem`** (string):
 
-  - **Description:** Master switch for every magic keyword.
-  - **Default:** `true`
-
-- **`magicKeywords.ultrathink`** (boolean):
-
-  - **Description:** A standalone "ultrathink" asks for careful multi-step
-    reasoning on that turn.
-  - **Default:** `true`
-
-- **`magicKeywords.orchestrate`** (boolean):
-
-  - **Description:** A standalone "orchestrate" asks for parallel delegation and
-    verification.
-  - **Default:** `true`
-
-- **`magicKeywords.workflowz`** (boolean):
-
-  - **Description:** A standalone "workflowz" asks for a deterministic
-    multi-subagent workflow.
-  - **Default:** `true`
-
-- **`magicKeywords.jevify`** (boolean):
-  - **Description:** A standalone "jevify" asks for bulk classification against
-    a frozen rule.
-  - **Default:** `true`
-
-#### `appendSystem`
-
-- **`appendSystem`** (string):
   - **Description:** Standing instructions appended to the system prompt under a
     "User instructions" heading. The generated prompt is kept intact. A project
     APPEND_SYSTEM.md, when present, takes precedence over this.
   - **Default:** `""`
 
-#### `useGithub`
+- **`omp.magicKeywords.enabled`** (boolean):
 
-- **`useGithub`** (boolean):
+  - **Description:** Master switch for every magic keyword.
+  - **Default:** `true`
+
+- **`omp.magicKeywords.ultrathink`** (boolean):
+
+  - **Description:** A standalone "ultrathink" asks for careful multi-step
+    reasoning on that turn.
+  - **Default:** `true`
+
+- **`omp.magicKeywords.orchestrate`** (boolean):
+
+  - **Description:** A standalone "orchestrate" asks for parallel delegation and
+    verification.
+  - **Default:** `true`
+
+- **`omp.magicKeywords.workflowz`** (boolean):
+
+  - **Description:** A standalone "workflowz" asks for a deterministic
+    multi-subagent workflow.
+  - **Default:** `true`
+
+- **`omp.magicKeywords.jevify`** (boolean):
+
+  - **Description:** A standalone "jevify" asks for bulk classification against
+    a frozen rule.
+  - **Default:** `true`
+
+- **`omp.github`** (boolean):
+
   - **Description:** Enable the github tool, which drives the `gh` CLI. It can
     reach the network and publish pull requests and issues, so it is off until
     asked for.
   - **Default:** `false`
 
-#### `useGenerateImage`
+- **`omp.generateImage`** (boolean):
 
-- **`useGenerateImage`** (boolean):
   - **Description:** Enable the generate_image tool. Calls a paid image model,
     so it is off until asked for.
   - **Default:** `false`
 
-#### `useTts`
+- **`omp.tts`** (boolean):
 
-- **`useTts`** (boolean):
   - **Description:** Enable the tts tool. Calls a paid speech model, so it is
     off until asked for.
   - **Default:** `false`
 
-#### `useMemory`
-
-- **`useMemory`** (boolean):
+- **`omp.memory`** (boolean):
   - **Description:** Enable the local memory bank and its
     retain/recall/reflect/memory_edit tools.
   - **Default:** `false`
