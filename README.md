@@ -71,8 +71,44 @@ conda activate gemini_env
 npm install -g @google/gemini-cli
 ```
 
+#### Install from a release (recommended, no build required)
+
+Every tagged build is published with a ready-to-use bundle attached to the
+[releases page](https://github.com/Blackmanx/gemini-cli/releases).
+Download `gemini-cli-bundle.zip` and unpack it wherever you want to keep it:
+
+```bash
+unzip gemini-cli-bundle.zip -d ~/opt/gemini-cli
+chmod +x ~/opt/gemini-cli/bundle/gemini.js
+mkdir -p ~/.local/bin
+ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
+
+gemini --version   # -> 0.63.0-d0dd796bf
+gemini            # launch
+```
+
+`chmod +x` is not optional if you unpack with a tool that drops permissions
+(Python's `zipfile.extractall` does); the archive stores mode `0755`, but not
+every extractor honours it.
+
+If `gemini` is not found afterwards, `~/.local/bin` is not on your `PATH`:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # macOS: ~/.zshrc
+source ~/.bashrc
+```
+
+To move to a later release, replace the unpacked directory and re-run the
+symlink; there is nothing to reinstall. If an older npm-installed `gemini` still
+wins on your `PATH`, remove it with `npm uninstall -g @google/gemini-cli` and
+check `which -a gemini`.
+
+This never touches `~/.gemini`, which holds your settings, managed skills and
+OAuth credentials.
+
 #### Install globally from source (this repo, `feature/omp-port`)
 
+Prefer the release bundle above — this section is only for building from source.
 This fork is not published to npm, so a global install means building the bundle
 and installing it like any other package. The result is a real install: `gemini`
 keeps working even if you delete or move the clone.
