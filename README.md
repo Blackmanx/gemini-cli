@@ -71,11 +71,11 @@ conda activate gemini_env
 npm install -g @google/gemini-cli
 ```
 
-#### Install from a release (recommended, no build required)
+#### Install this fork (`feature/omp-port`)
 
-Every tagged build is published with a ready-to-use bundle attached to the
-[releases page](https://github.com/Blackmanx/gemini-cli/releases).
-Download `gemini-cli-bundle.zip` and unpack it wherever you want to keep it:
+Every release ships `gemini-cli-bundle.zip`, a self-contained build with no
+runtime dependencies. Unpack it and symlink — this needs no npm permissions at
+all:
 
 ```bash
 unzip gemini-cli-bundle.zip -d ~/opt/gemini-cli
@@ -83,89 +83,51 @@ chmod +x ~/opt/gemini-cli/bundle/gemini.js
 mkdir -p ~/.local/bin
 ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
 
-gemini --version   # -> 0.63.0-d0dd796bf
-gemini            # launch
+gemini --version   # -> 0.63.0-0adc74b84
+gemini             # launch
 ```
 
-`chmod +x` is not optional if you unpack with a tool that drops permissions
-(Python's `zipfile.extractall` does); the archive stores mode `0755`, but not
-every extractor honours it.
+`chmod +x` is only a safety net: the archive stores mode `0755` on `gemini.js`,
+but not every extractor honours it (Python's `zipfile` does not).
 
-If `gemini` is not found afterwards, `~/.local/bin` is not on your `PATH`:
+If `gemini` is not found, `~/.local/bin` is not on your `PATH`:
 
 ```bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # macOS: ~/.zshrc
 source ~/.bashrc
 ```
 
-To move to a later release, replace the unpacked directory and re-run the
-symlink; there is nothing to reinstall. If an older npm-installed `gemini` still
-wins on your `PATH`, remove it with `npm uninstall -g @google/gemini-cli` and
-check `which -a gemini`.
+To move to a later release, download the new zip, replace the unpacked directory
+and re-run the symlink. If an older npm-installed `gemini` still wins on your
+`PATH`, remove it with `npm uninstall -g gemini-cli` and check
+`which -a gemini`.
 
 This never touches `~/.gemini`, which holds your settings, managed skills and
 OAuth credentials.
 
-#### Install globally from source (this repo, `feature/omp-port`)
+##### Or install it as an npm package
 
-Prefer the release bundle above — this section is only for building from source.
-This fork is not published to npm, so a global install means building the bundle
-and installing it like any other package. The result is a real install: `gemini`
-keeps working even if you delete or move the clone.
+The same bundle is a valid npm package, if you would rather have npm manage it:
 
 ```bash
 git clone --branch feature/omp-port https://github.com/Blackmanx/gemini-cli.git
 cd gemini-cli-omp
 npm install
-npm run bundle
+npm run release:bundle     # writes release/gemini-cli-bundle.zip and release/*.tgz
+cd bundle && npm install -g .
 ```
 
-`npm run bundle` is the step that matters. `npm install -g` straight from
-`packages/cli` does not work: its `@google/gemini-cli-core` dependency is a
-`file:../core` path that breaks once the package is packed. The bundle is a
-single self-contained build, the same artifact the official package ships.
+Run that last command from `bundle/`, not the repository root: a root package
+with `workspaces` cannot be installed globally, and npm rejects it with
+_"Workspaces not supported for global packages"_.
 
-Wrap it in a package and install it:
+To update: `git pull`, `npm run release:bundle`, and repeat the
+`npm install -g`. A global install does not pick up source changes on its own.
 
-```bash
-mkdir -p /tmp/gemini-omp-global
-cp -r bundle /tmp/gemini-omp-global/
-cd /tmp/gemini-omp-global
-cat > package.json <<'EOF'
-{
-  "name": "@google/gemini-cli",
-  "version": "0.63.0-nightly.20260930.gd03dad668",
-  "bin": { "gemini": "bundle/gemini.js" },
-  "files": ["bundle"],
-  "license": "Apache-2.0"
-}
-EOF
-npm pack
-npm install -g ./google-gemini-cli-*.tgz
-```
-
-From any directory:
+To uninstall an npm-installed copy:
 
 ```bash
-gemini --version   # the version in package.json
-gemini            # launch the interactive CLI
-```
-
-To update after a `git pull`, re-bundle and reinstall — a global install does
-not pick up source changes on its own:
-
-```bash
-cd gemini-cli-omp
-git pull
-npm run bundle
-cd /tmp/gemini-omp-global && cp -r ~/projects/gemini-cli-omp/gemini-cli/bundle . \
-  && npm pack && npm install -g ./google-gemini-cli-*.tgz
-```
-
-To uninstall:
-
-```bash
-npm uninstall -g @google/gemini-cli
+npm uninstall -g gemini-cli
 ```
 
 ##### If the global npm prefix is not on your PATH
@@ -202,7 +164,7 @@ To undo a machine-global `npm link`, note that the link lives in the _prefix_,
 not in your home directory:
 
 ```bash
-cd gemini-cli-omp/packages/cli && npm unlink -g @google/gemini-cli
+cd gemini-cli-omp/packages/cli && npm unlink -g @google/gemini-cli   # the linked package's own name
 rm -f "$(npm config get prefix)/bin/gemini"
 ```
 

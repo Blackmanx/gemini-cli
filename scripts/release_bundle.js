@@ -19,6 +19,7 @@
  *
  * Usage:
  *   node scripts/release_bundle.js                 build and pack only
+
  *   node scripts/release_bundle.js --release       also create the GitHub release
  *   node scripts/release_bundle.js --clobber       replace assets on an existing tag
  *   node scripts/release_bundle.js --tag v1.2.3    override the release tag
@@ -31,6 +32,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  rmSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -131,12 +133,53 @@ const packed = execFileSync(
 const tarball = join(outDir, packed);
 console.log(`packed ${tarball}`);
 
+// The zip is the other half of the install story: `npm install -g` needs the
+// tarball, but unzipping to ~/opt and symlinking needs no npm global write
+// permission at all, which is what people without a writable prefix use.
+// Both ship on the release.
+const zipName = 'gemini-cli-bundle.zip';
+const zipPath = join(outDir, zipName);
+const bundleFiles = [];
+for (const entry of readdirSync(bundleDir, {
+  recursive: true,
+  withFileTypes: true,
+})) {
+  if (entry.isFile()) {
+    bundleFiles.push(join(entry.parentPath ?? entry.path, entry.name));
+  }
+}
+rmSync(zipPath, { force: true });
+execFileSync(
+  'python3',
+  [
+    '-c',
+    // Arcnames are made relative to the repo root so entries keep their
+    // `bundle/...` prefix and directory structure. Flattening to a basename
+    // silently drops files that share a name in different directories.
+    'import sys,zipfile,os\n' +
+      'zf=zipfile.ZipFile(sys.argv[1],"w",zipfile.ZIP_DEFLATED)\n' +
+      'for p in sys.argv[3:]:\n' +
+      '    arc=os.path.relpath(p, sys.argv[2]).replace(os.sep,"/")\n' +
+      '    zi=zipfile.ZipInfo(arc, (1980,1,1,0,0,0))\n' +
+      '    zi.compress_type=zipfile.ZIP_DEFLATED\n' +
+      '    zi.external_attr=(0o755 if os.path.basename(arc)=="gemini.js" else 0o644)<<16\n' +
+      '    with open(p,"rb") as fh, zf.open(zi,"w") as out: out.write(fh.read())\n' +
+      'zf.close()',
+    zipPath,
+    root,
+    ...bundleFiles,
+  ],
+  { cwd: root },
+);
+console.log(`zipped ${zipPath} (${bundleFiles.length} files, mode 0755)`);
+
 // 4. Optionally publish to a GitHub release.
 const repo = execSync('gh repo view --json nameWithOwner -q .nameWithOwner', {
   cwd: root,
   encoding: 'utf-8',
 }).trim();
 const url = `https://github.com/${repo}/releases/download/${tag}/${packed}`;
+const zipUrl = `https://github.com/${repo}/releases/download/${tag}/${zipName}`;
 
 if (shouldRelease) {
   const releaseExists = (() => {
@@ -158,58 +201,73 @@ if (shouldRelease) {
     process.exit(1);
   }
 
+  const assets = [tarball, zipPath];
+  const notes = `Gemini CLI (omp port) ${version}.
+
+Unzip and symlink (no npm permissions needed):
+
+\`\`\`sh
+unzip ${zipName} -d ~/opt/gemini-cli
+chmod +x ~/opt/gemini-cli/bundle/gemini.js
+mkdir -p ~/.local/bin
+ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
+\`\`\`
+
+Or install as a package:
+
+\`\`\`sh
+npm install -g ${url}
+\`\`\``;
+
   if (releaseExists) {
-    run('gh', ['release', 'upload', tag, tarball, '--clobber']);
+    // --clobber only replaces assets; the notes are set separately so a
+    // re-release cannot leave stale install instructions behind.
+    run('gh', ['release', 'upload', tag, ...assets, '--clobber']);
+    run('gh', ['release', 'edit', tag, '--notes', notes]);
   } else {
     run('gh', [
       'release',
       'create',
       tag,
-      tarball,
+      ...assets,
       '--title',
       tag,
       '--notes',
-      `Gemini CLI (omp port) ${version}. Install:\n\n\`\`\`sh\nnpm install -g ${url}\n\`\`\``,
+      notes,
     ]);
   }
 }
 
-// 5. Report the install path, and be honest about which one actually works.
-//
-// A release asset on a non-public repository is not downloadable by URL, so
-// printing the https command unconditionally would hand out something that
-// 404s. The tarball on disk is always installable; the URL only is when the
-// repository is public.
+// 5. Report both install paths. The unzip route is listed first because it
+// needs no writable npm prefix at all, which is the common case here.
 const visibility = execSync('gh repo view --json visibility -q .visibility', {
   cwd: root,
   encoding: 'utf-8',
 }).trim();
-const urlIsPublic = visibility === 'PUBLIC';
-const localInstall = `npm install -g ${tarball}`;
 
+console.log('\n--- release bundle ready ---');
 console.log(`version  : ${version}`);
 console.log(`tag      : ${tag}`);
 console.log(`tarball  : ${tarball}`);
-console.log(`contents : ${readdirSync(bundleDir).length} files in bundle/`);
+console.log(`zip      : ${zipPath}`);
+console.log(`contents : ${bundleFiles.length} files in bundle/`);
 console.log(`repo     : ${visibility}`);
 
-console.log('\ninstall from this checkout (fastest):');
-console.log(`  cd ${bundleDir} && npm install -g .`);
-console.log('\nor from the packed tarball:');
-console.log(`  ${localInstall}`);
+console.log('\ninstall by unzipping (no npm permissions needed):');
+console.log(`  unzip ${zipName} -d ~/opt/gemini-cli`);
+console.log(`  chmod +x ~/opt/gemini-cli/bundle/gemini.js`);
+console.log('  mkdir -p ~/.local/bin');
+console.log('  ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini');
 
-if (urlIsPublic) {
-  const remoteInstall = `npm install -g ${url}`;
-  console.log('\ninstall (any machine, public repo):');
-  console.log(`  ${remoteInstall}`);
-  console.log('\nupdate: release a new version, then re-run the same command.');
-} else {
-  console.log(
-    `\nNote: the repository is ${visibility}, so release assets are not` +
-      '\ndownloadable by URL. `npm install -g <url>` will 404. To get a' +
-      '\nURL-installable package, either make the repository public or' +
-      '\npublish the same tarball to an npm registry and install from there.',
-  );
+console.log('\ninstall as an npm package instead:');
+console.log(`  cd ${bundleDir} && npm install -g .`);
+console.log(`  npm install -g ${tarball}`);
+
+if (shouldRelease) {
+  console.log(`\nfrom the release (org members):`);
+  console.log(`  ${zipUrl}`);
+  console.log(`  ${url}`);
+  console.log('\nupdate: release a new version, then repeat the same install.');
 }
 
 if (!shouldRelease) {
