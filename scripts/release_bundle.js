@@ -44,6 +44,7 @@ const outDir = join(root, 'release');
 const argv = new Set(process.argv.slice(2));
 const shouldRelease = argv.has('--release');
 const shouldClobber = argv.has('--clobber');
+const shouldStamp = !argv.has('--no-stamp-version');
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf-8'));
@@ -58,8 +59,54 @@ function run(command, args, opts = {}) {
   });
 }
 
-const rootPkg = readJson(join(root, 'package.json'));
-const version = rootPkg.version;
+// Stamp the version from HEAD before anything reads it.
+//
+// The tag is derived from the version, so a version left pointing at an older
+// commit silently produces a release that claims to be something it is not -
+// which is exactly how `0.63.0-d0dd796bf` outlived the commit it named.
+// Stamp across every workspace so version, tag and build always agree.
+//
+// `npm version` cannot do this: with an explicit version it updates only the
+// root manifest and leaves the workspaces behind, and scripts/version.js only
+// accepts patch/minor/major, which cannot express the `<base>-<sha>` scheme.
+function stampVersion() {
+  const sha = execSync('git rev-parse --short HEAD', {
+    cwd: root,
+    encoding: 'utf-8',
+  }).trim();
+  const current = readJson(join(root, 'package.json')).version;
+  const next = `${current.split('-')[0]}-${sha}`;
+  if (current === next) {
+    console.log(`version  : ${next} (already stamped)`);
+    return next;
+  }
+
+  const manifests = execSync(
+    'grep -rl \'"version"\' --include=package.json . ' +
+      '--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=release --exclude-dir=bundle',
+    { cwd: root, encoding: 'utf-8' },
+  )
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+
+  let stamped = 0;
+  for (const relative of manifests) {
+    const path = join(root, relative);
+    const json = readJson(path);
+    if (json.version === current) {
+      json.version = next;
+      writeFileSync(path, JSON.stringify(json, null, 2) + '\n');
+      stamped++;
+    }
+  }
+  console.log(`version  : ${current} -> ${next} (${stamped} manifests)`);
+  return next;
+}
+
+const version = shouldStamp
+  ? stampVersion()
+  : readJson(join(root, 'package.json')).version;
 // The repository enforces a tag protection rule,
 // ^v(\d*)(\.(\d*)?\.(\d*)?)?-?(?:[a-zA-Z0-9]*)?$ - dots are allowed only in
 // the numeric core, and the suffix permits a single dash followed by

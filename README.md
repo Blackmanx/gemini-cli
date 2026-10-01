@@ -130,6 +130,60 @@ To uninstall an npm-installed copy:
 npm uninstall -g gemini-cli
 ```
 
+##### Cutting a new release (maintainers)
+
+One command builds, stamps the version, packs both artifacts and publishes:
+
+```bash
+npm run release:bundle -- --release
+```
+
+It works in this order:
+
+1. **Stamps the version** to `<base>-<short-sha>` from
+   `git rev-parse --short HEAD`, across all eight workspace manifests. The base
+   (`0.63.0` here) is whatever the root manifest already had; only the suffix
+   moves.
+2. **Builds** with `npm run bundle`, which emits a self-contained ESM program.
+3. **Writes `bundle/package.json`** so npm can install the bundle directly.
+4. **Packs** `release/*.tgz` (for `npm install -g`) and
+   `release/gemini-cli-bundle.zip` (for the unzip-and-symlink route).
+5. **Creates a GitHub release** whose tag is derived from the version, and
+   prints the install commands for both routes.
+
+Commit the version change the stamp produced. It is a real edit to tracked
+files, and the next run will re-stamp it if you release from a different commit.
+
+```bash
+git add package.json packages/*/package.json
+git commit -m "chore: version 0.63.0-$(git rev-parse --short HEAD)"
+```
+
+Useful flags:
+
+| Flag                 | Effect                                                                   |
+| -------------------- | ------------------------------------------------------------------------ |
+| `--skip-build`       | Pack whatever is already in `bundle/` — for re-tagging without a rebuild |
+| `--clobber`          | Replace assets _and_ notes on an existing tag                            |
+| `--no-stamp-version` | Leave the version alone and derive the tag from it as-is                 |
+| `--tag v1.2.3`       | Override the derived tag                                                 |
+
+Two constraints worth knowing before you tag by hand:
+
+- The repository enforces a tag protection rule,
+  `^v(\d*)(\.(\d*)?\.(\d*)?)?-?(?:[a-zA-Z0-9]*)?$`. Dots are allowed only in the
+  numeric core, and the suffix takes a **single** dash before alphanumerics. So
+  `0.63.0-0adc74b84` must be tagged `v0.63.0-0adc74b84`; the script
+  flattens it. Anything else is HTTP 422.
+- The release pipeline in `.github/workflows/release-*.yml` is gated on
+  `github.repository == 'google-gemini/gemini-cli'`, so it does nothing here.
+  That is why this script exists rather than the stock release job.
+
+The tag is a function of the version, so a version left pointing at an older
+commit yields a release that claims to be something it is not. Stamping is
+therefore on by default; `--no-stamp-version` opts out when you deliberately
+want that.
+
 ##### If the global npm prefix is not on your PATH
 
 Every `npm install -g` and `npm link` above honours `npm config get prefix`.
