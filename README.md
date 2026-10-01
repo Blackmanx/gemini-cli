@@ -134,19 +134,40 @@ npm uninstall -g @google/gemini-cli
 
 ##### If the global npm prefix is not on your PATH
 
-Every `npm install -g` above honours `npm config get prefix`, which may be the
-Node install directory rather than a persistent one. If `gemini` installs but is
-not found, either fix the `PATH`:
+Every `npm install -g` and `npm link` above honours `npm config get prefix`.
+Check where that points before anything else:
 
 ```bash
-echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.bashrc
+npm config get prefix
+```
+
+If the printed directory has a `bin` you can write to without `sudo`, and that
+`bin` is already on your `PATH`, there is nothing to do — this is the normal
+case under `nvm`, `fnm`, `volta` and `asdf`.
+
+If it needs `sudo`, or the `bin` is not on your `PATH`, move npm to a prefix you
+own. Do this **once**, and it applies to every later install:
+
+```bash
+mkdir -p ~/.npm-global
+npm config set prefix ~/.npm-global
+echo 'export PATH="$HOME/.npm-global/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-or install into a prefix you already have on the `PATH`:
+On macOS use `~/.zshrc` instead of `~/.bashrc`. Verify before installing:
 
 ```bash
-npm_config_prefix="$HOME/.npm-global" npm install -g ./google-gemini-cli-*.tgz
+npm config get prefix          # -> /home/you/.npm-global
+which gemini                   # not found yet is expected
+```
+
+To undo a machine-global `npm link`, note that the link lives in the _prefix_,
+not in your home directory:
+
+```bash
+cd gemini-cli-omp/packages/cli && npm unlink -g @google/gemini-cli
+rm -f "$(npm config get prefix)/bin/gemini"
 ```
 
 ##### For development: link the working tree instead
@@ -171,13 +192,8 @@ cd gemini-cli-omp
 npm run build   # after every change
 ```
 
-To undo a link, either of these:
-
-```bash
-cd gemini-cli-omp/packages/cli && npm unlink -g @google/gemini-cli
-# or, if you linked the file by hand:
-rm ~/.local/bin/gemini
-```
+To undo a link, see the prefix note above; the symlink lives in
+`$(npm config get prefix)/bin`.
 
 Either install path needs only Node >= 20 (see `.nvmrc`); the bundle is
 self-contained and has no runtime dependency on the clone.
