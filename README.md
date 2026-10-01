@@ -71,24 +71,50 @@ conda activate gemini_env
 npm install -g @google/gemini-cli
 ```
 
-#### Install this fork (`feature/omp-port`)
+#### Install this fork (`feature/omp-port`) — from the release zip
 
-Every release ships `gemini-cli-bundle.zip`, a self-contained build with no
-runtime dependencies. Unpack it and symlink — this needs no npm permissions at
-all:
+Every release ships `gemini-cli-bundle.zip`: a self-contained build with no
+runtime dependencies, no clone, and no npm permissions required. This is the
+recommended route.
+
+**1. Get the zip.** From the [releases page][releases] in a browser, or with the
+GitHub CLI:
 
 ```bash
-unzip gemini-cli-bundle.zip -d ~/opt/gemini-cli
-chmod +x ~/opt/gemini-cli/bundle/gemini.js
-mkdir -p ~/.local/bin
-ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
-
-gemini --version   # -> 0.63.0-0adc74b84
-gemini             # launch
+gh release list                       # find the latest tag
+gh release download <tag> --pattern '*.zip'
 ```
 
-`chmod +x` is only a safety net: the archive stores mode `0755` on `gemini.js`,
-but not every extractor honours it (Python's `zipfile` does not).
+[releases]: https://github.com/Blackmanx/gemini-cli/releases
+
+**2. Unpack it somewhere stable.** The bundle is self-contained, so the location
+only has to survive; it does not need to be the source tree.
+
+```bash
+mkdir -p ~/opt/gemini-cli
+unzip gemini-cli-bundle.zip -d ~/opt/gemini-cli
+chmod +x ~/opt/gemini-cli/bundle/gemini.js
+```
+
+`chmod +x` is a safety net: the archive stores mode `0755` on `gemini.js`, but
+not every extractor honours it (Python's `zipfile` does not). It must be the
+`bundle/gemini.js` inside — the archive has a top-level `bundle/` directory.
+
+**3. Put it on your `PATH` via a symlink**, so updating later is a one-line swap
+rather than editing your shell profile:
+
+```bash
+mkdir -p ~/.local/bin
+ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
+```
+
+**4. Verify**, from any directory:
+
+```bash
+gemini --version   # e.g. 0.63.0-184cf92c5
+gemini --help
+gemini             # launch the interactive CLI
+```
 
 If `gemini` is not found, `~/.local/bin` is not on your `PATH`:
 
@@ -97,13 +123,36 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # macOS: ~/.zshrc
 source ~/.bashrc
 ```
 
-To move to a later release, download the new zip, replace the unpacked directory
-and re-run the symlink. If an older npm-installed `gemini` still wins on your
-`PATH`, remove it with `npm uninstall -g gemini-cli` and check
-`which -a gemini`.
+**To update:** download the new zip, replace the unpacked directory, re-run the
+symlink. The symlink target does not move, so that is all.
+
+```bash
+rm -rf ~/opt/gemini-cli
+mkdir -p ~/opt/gemini-cli
+unzip gemini-cli-bundle.zip -d ~/opt/gemini-cli
+```
+
+**To uninstall:** remove the symlink and the directory. Nothing else was
+touched.
+
+```bash
+rm -f ~/.local/bin/gemini
+rm -rf ~/opt/gemini-cli
+```
 
 This never touches `~/.gemini`, which holds your settings, managed skills and
-OAuth credentials.
+OAuth credentials, so uninstalling and reinstalling is safe at any time.
+
+##### If `gemini` resolves to the wrong thing
+
+More than one install can put a `gemini` on your `PATH`. Check which one wins:
+
+```bash
+which -a gemini
+```
+
+An older npm-installed copy is the usual culprit; remove it with
+`npm uninstall -g gemini-cli` and check `which -a gemini` again.
 
 ##### Or install it as an npm package
 
