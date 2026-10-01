@@ -1119,6 +1119,14 @@ export class GeminiClient {
     contents: Content[],
     abortSignal: AbortSignal,
     role: LlmRole,
+    /**
+     * Per-call overrides applied on top of the resolved model config.
+     *
+     * For request-scoped values a static model config cannot express, such
+     * as a grounding time range that depends on the user's search window.
+     * Omitting it leaves every existing caller unchanged.
+     */
+    configOverride?: Partial<GenerateContentConfig>,
   ): Promise<GenerateContentResponse> {
     const desiredModelConfig =
       this.config.modelConfigService.getResolvedConfig(modelConfigKey);
@@ -1166,6 +1174,7 @@ export class GeminiClient {
 
         const requestConfig: GenerateContentConfig = {
           ...currentAttemptGenerateContentConfig,
+          ...configOverride,
           abortSignal,
           systemInstruction,
         };

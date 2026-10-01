@@ -798,6 +798,26 @@ ${uris.join('\n')}
         [{ role: 'user', parts: [{ text: instruction }] }],
         attemptSignal,
         LlmRole.UTILITY_TOOL,
+        // Recency as a real server-side filter rather than only a sentence
+        // in the prompt. GoogleSearch.timeRangeFilter is a Gemini API field
+        // (the SDK marks it unsupported on Vertex), and grounding otherwise
+        // decides which dated pages to consult on its own.
+        this.params.recency
+          ? {
+              tools: [
+                {
+                  googleSearch: {
+                    timeRangeFilter: {
+                      startTime: new Date(
+                        recencyCutoff(this.params.recency, Date.now()),
+                      ).toISOString(),
+                      endTime: new Date().toISOString(),
+                    },
+                  },
+                },
+              ],
+            }
+          : undefined,
       );
 
       const responseText = getResponseText(response);

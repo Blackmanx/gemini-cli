@@ -129,6 +129,48 @@ describe('WebSearchTool', () => {
       expect(result.sources).toEqual([]);
     });
 
+    it('sends recency to grounding as a server-side time range', async () => {
+      (mockGeminiClient.generateContent as Mock).mockResolvedValue({
+        candidates: [
+          {
+            content: { role: 'model', parts: [{ text: 'Recent answer.' }] },
+          },
+        ],
+      });
+
+      const invocation = tool.build({
+        query: 'recent query',
+        recency: 'week',
+      });
+      await invocation.execute({ abortSignal });
+
+      const override = (mockGeminiClient.generateContent as Mock).mock
+        .calls[0][4] as
+        | { tools: Array<{ googleSearch: { timeRangeFilter: unknown } }> }
+        | undefined;
+      expect(override?.tools[0].googleSearch.timeRangeFilter).toEqual({
+        startTime: expect.any(String),
+        endTime: expect.any(String),
+      });
+    });
+
+    it('sends no override when no recency window was asked for', async () => {
+      (mockGeminiClient.generateContent as Mock).mockResolvedValue({
+        candidates: [
+          {
+            content: { role: 'model', parts: [{ text: 'Any answer.' }] },
+          },
+        ],
+      });
+
+      const invocation = tool.build({ query: 'no recency' });
+      await invocation.execute({ abortSignal });
+
+      expect((mockGeminiClient.generateContent as Mock).mock.calls[0][4]).toBe(
+        undefined,
+      );
+    });
+
     it('does not read source pages unless asked', async () => {
       const params: WebSearchToolParams = { query: 'titles only' };
       (mockGeminiClient.generateContent as Mock).mockResolvedValue({
