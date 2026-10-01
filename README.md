@@ -165,6 +165,38 @@ which -a gemini
 An older npm-installed copy is the usual culprit; remove it with
 `npm uninstall -g gemini-cli` and check `which -a gemini` again.
 
+##### If file search fails with "Permission denied" or "EACCES"
+
+You skipped the `chmod +x` on `bundle/vendor/ripgrep/*`. The vendored `ripgrep`
+binary is then present but cannot be executed, and the CLI selects it and fails
+at spawn time rather than falling back to its own grep:
+
+```
+error: failed to execute command '.../vendor/ripgrep/rg-linux-x64':
+Permission denied (os error 13)
+```
+
+Fix it by running the missing `chmod`:
+
+```bash
+chmod +x ~/opt/gemini-cli/bundle/vendor/ripgrep/* 2>/dev/null
+```
+
+Or, if you would rather not rely on the bundled binary at all, turn ripgrep off
+in `~/.gemini/settings.json` and let the CLI use its own (slower) grep:
+
+```json
+{ "tools": { "useRipgrep": false } }
+```
+
+Setting `tools.useRipgrep` to `false` is also the workaround on hosts where your
+system `rg` is not in a trusted directory — a version manager, a home directory
+or a workspace root. In that case the CLI logs
+`Ripgrep is not available. Falling back to GrepTool.` and search still works.
+
+Do not run the bundle from a read-only or `noexec` mount. The same chmod that
+fixes the warning is what makes the binary runnable at all.
+
 ##### Or install it as an npm package
 
 The same bundle is a valid npm package, if you would rather have npm manage it:
