@@ -222,6 +222,72 @@ To uninstall an npm-installed copy:
 npm uninstall -g gemini-cli
 ```
 
+##### Migrating from an older `gemini`
+
+Safe to run on a machine that has any previous install. Nothing here touches
+`~/.gemini`, so settings, managed skills and OAuth credentials survive.
+
+**1. See what is currently installed.** More than one `gemini` can be on the
+`PATH`; the first one wins and it may not be the one you expect.
+
+```bash
+which -a gemini
+```
+
+**2. Remove every old copy.** Run all three lines; the ones that do not apply
+report an error you can ignore.
+
+```bash
+npm uninstall -g @google/gemini-cli 2>/dev/null   # upstream, via npm
+npm uninstall -g gemini-cli 2>/dev/null      # this fork, via npm
+rm -f "$(npm config get prefix)/bin/gemini" 2>/dev/null   # any npm install
+rm -f ~/.local/bin/gemini                        # the symlink route
+rm -rf ~/opt/gemini-cli                          # the unpacked bundle
+```
+
+If a clone was linked with `npm link`, drop the link too:
+
+```bash
+cd /path/to/gemini-cli-omp/packages/cli 2>/dev/null && npm unlink -g @google/gemini-cli
+```
+
+Check that nothing is left:
+
+```bash
+which -a gemini    # should print nothing
+```
+
+**3. Install the new bundle.** From the [releases page][releases]:
+
+```bash
+REPO=Blackmanx/gemini-cli
+gh release download <tag> -R "$REPO" --pattern '*.zip'    # or download it in a browser
+
+mkdir -p ~/opt/gemini-cli
+unzip gemini-cli-bundle.zip -d ~/opt/gemini-cli
+chmod +x ~/opt/gemini-cli/bundle/gemini.js
+chmod +x ~/opt/gemini-cli/bundle/vendor/ripgrep/* 2>/dev/null
+mkdir -p ~/.local/bin
+ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
+```
+
+**4. Verify.** The version must end in `-<base>-<sha>`, which is how you know you
+are running this fork and not the upstream package:
+
+```bash
+gemini --version
+```
+
+If `gemini` is not found afterwards, `~/.local/bin` is not on your `PATH`:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc   # macOS: ~/.zshrc
+source ~/.bashrc
+```
+
+Nothing above re-authenticates: your existing credentials in `~/.gemini` are
+reused, so the CLI is usable as soon as `gemini --version` works.
+
 ##### Cutting a new release (maintainers)
 
 One command builds, stamps the version, packs both artifacts and publishes:
