@@ -161,12 +161,18 @@ git commit -m "chore: version 0.63.0-$(git rev-parse --short HEAD)"
 
 Useful flags:
 
-| Flag                 | Effect                                                                   |
-| -------------------- | ------------------------------------------------------------------------ |
-| `--skip-build`       | Pack whatever is already in `bundle/` — for re-tagging without a rebuild |
-| `--clobber`          | Replace assets _and_ notes on an existing tag                            |
-| `--no-stamp-version` | Leave the version alone and derive the tag from it as-is                 |
-| `--tag v1.2.3`       | Override the derived tag                                                 |
+| Flag                 | Effect                                                                           |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `--skip-build`       | Pack whatever is already in `bundle/`. Refused if the version changed, see below |
+| `--clobber`          | Replace assets _and_ notes on an existing tag                                    |
+| `--no-stamp-version` | Leave the version alone and derive the tag from it as-is                         |
+| `--tag v1.2.3`       | Override the derived tag                                                         |
+
+`--skip-build` is only valid when the version did not move. The bundle bakes the
+version in at build time, so packing a stale bundle after a version change ships
+a package whose `package.json` and whose `gemini --version` disagree — the
+script refuses that combination rather than publish it. It is safe for
+re-uploading the same build, e.g. after fixing release notes.
 
 Two constraints worth knowing before you tag by hand:
 

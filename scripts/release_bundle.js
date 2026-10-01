@@ -104,9 +104,16 @@ function stampVersion() {
   return next;
 }
 
+let versionChanged = false;
 const version = shouldStamp
-  ? stampVersion()
+  ? (() => {
+      const before = readJson(join(root, 'package.json')).version;
+      const after = stampVersion();
+      versionChanged = before !== after;
+      return after;
+    })()
   : readJson(join(root, 'package.json')).version;
+
 // The repository enforces a tag protection rule,
 // ^v(\d*)(\.(\d*)?\.(\d*)?)?-?(?:[a-zA-Z0-9]*)?$ - dots are allowed only in
 // the numeric core, and the suffix permits a single dash followed by
@@ -128,6 +135,19 @@ const tag =
 const packageName = 'gemini-cli';
 
 // 1. Build. `npm run bundle` is the same command release CI uses.
+//
+// The bundle bakes the version in at build time, so reusing a stale bundle
+// after the version moved produces an artifact whose package.json and whose
+// `gemini --version` disagree. That is the exact failure stamping exists to
+// prevent, so it is refused rather than shipped.
+if (argv.has('--skip-build') && versionChanged) {
+  console.error(
+    'Refusing to package: --skip-build with a changed version would ship a ' +
+      'bundle that reports the previous version. Rebuild, or pass ' +
+      '--no-stamp-version if the version is correct as-is.',
+  );
+  process.exit(1);
+}
 if (!argv.has('--skip-build')) {
   run('npm', ['run', 'bundle']);
 }
