@@ -184,6 +184,21 @@ commit yields a release that claims to be something it is not. Stamping is
 therefore on by default; `--no-stamp-version` opts out when you deliberately
 want that.
 
+The stamped sha is the commit the bundle was **built from**, not the commit that
+records the version. Those are necessarily different: stamping edits the
+manifests, so committing that edit creates a child of the sha just stamped. This
+is inherent to putting a commit hash in a version, and every project that does
+it has the same property. The property that does hold is the useful one — the
+sha identifies the source the artifact was produced from.
+
+To keep it exact, commit your code changes first and release from that commit:
+
+```bash
+git commit -am "..."                        # HEAD = X
+npm run release:bundle -- --release         # stamps 0.63.0-X
+git add package.json packages/*/package.json   # optional: record the bump
+```
+
 ##### If the global npm prefix is not on your PATH
 
 Every `npm install -g` and `npm link` above honours `npm config get prefix`.
