@@ -81,9 +81,13 @@ recommended route.
 GitHub CLI:
 
 ```bash
-gh release list                       # find the latest tag
-gh release download <tag> --pattern '*.zip'
+REPO=Blackmanx/gemini-cli
+gh release list -R "$REPO"                       # find the latest tag
+gh release download <tag> -R "$REPO" --pattern '*.zip'
 ```
+
+`-R` is what lets these run from any directory; without it `gh` needs to be
+inside a git repository and fails with _"not a git repository"_.
 
 [releases]: https://github.com/Blackmanx/gemini-cli/releases
 

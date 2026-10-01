@@ -17,7 +17,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { copyFileSync, existsSync, mkdirSync, cpSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  cpSync,
+  chmodSync,
+  readdirSync,
+} from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { glob } from 'glob';
@@ -115,4 +122,30 @@ if (existsSync(extensionExamplesSrc)) {
   console.log('Copied extension examples to bundle/examples/');
 }
 
+// 7. Vendor ripgrep.
+//
+// resolveRipgrepPath() looks for `rg-<platform>-<arch>` next to the bundled
+// code before falling back to a system binary, and it only accepts a system
+// binary from a trusted directory. Without this copy the bundle has neither,
+// so it silently drops to the slower GrepTool on any machine whose `rg` lives
+// somewhere untrusted — a version manager, a home directory, a workspace root.
+const ripgrepSrc = join(root, 'packages/core/vendor/ripgrep');
+const ripgrepDest = join(bundleDir, 'vendor', 'ripgrep');
+
+if (!existsSync(ripgrepSrc)) {
+  console.error(
+    `Error: ripgrep binaries not found at ${ripgrepSrc}.\n` +
+      'Run "npx tsx scripts/download-ripgrep-binaries.ts" first.',
+  );
+  process.exit(1);
+}
+cpSync(ripgrepSrc, ripgrepDest, { recursive: true });
+// The .exe ships 0644 from the download; the rest are already executable, but
+// set it unconditionally so an umask or a re-extract cannot strip it.
+for (const file of readdirSync(ripgrepDest)) {
+  chmodSync(join(ripgrepDest, file), 0o755);
+}
+console.log(
+  `Copied ripgrep binaries to bundle/vendor/ripgrep/ (${readdirSync(ripgrepDest).length})`,
+);
 console.log('Assets copied to bundle/');
