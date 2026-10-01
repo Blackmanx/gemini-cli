@@ -47,7 +47,14 @@ describe('Turn', () => {
     sendMessageStream: typeof mockSendMessageStream;
     getHistory: typeof mockGetHistory;
     maybeIncludeSchemaDepthContext: typeof mockMaybeIncludeSchemaDepthContext;
-    context: { config: { isContextManagementEnabled: () => boolean } };
+    context: {
+      config: {
+        isContextManagementEnabled: () => boolean;
+        getGoalRuntime: () => unknown;
+        getGoalUsageBaseline: () => unknown;
+        addGoalUsage: () => void;
+      };
+    };
     loopContext?: {
       toolRegistry: {
         getTool: (name: string) => unknown;
@@ -65,6 +72,16 @@ describe('Turn', () => {
       context: {
         config: {
           isContextManagementEnabled: () => false,
+          // Turn folds each response's usage into any active goal. No goal
+          // is active here, so accounting stays off but the call still
+          // happens and must not throw.
+          getGoalRuntime: () => ({
+            isAccounting: () => false,
+            onTurnStart: vi.fn(),
+            onUsage: vi.fn().mockResolvedValue(undefined),
+          }),
+          getGoalUsageBaseline: () => ({ prompt: 0, candidates: 0 }),
+          addGoalUsage: vi.fn(),
         },
       },
       loopContext: {

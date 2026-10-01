@@ -294,7 +294,11 @@
         {
           "googleSearch": {}
         }
-      ]
+      ],
+      "maxOutputTokens": 8192,
+      "thinkingConfig": {
+        "thinkingBudget": 512
+      }
     }
   },
   "web-fetch": {

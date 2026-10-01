@@ -2292,7 +2292,9 @@ describe('GeminiChat', () => {
           ],
           config: {
             systemInstruction: '',
-            tools: [],
+            // With no tools registered the request omits the key rather
+            // than sending an empty array.
+            tools: undefined,
             temperature: 0,
             thinkingConfig: {
               thinkingBudget: DEFAULT_THINKING_MODE,
