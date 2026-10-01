@@ -12,14 +12,13 @@ import {
   metrics,
   propagation,
 } from '@opentelemetry/api';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
-import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-grpc';
-import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-grpc';
+import type { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-grpc';
+import type { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-grpc';
 import { OTLPTraceExporter as OTLPTraceExporterHttp } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPLogExporter as OTLPLogExporterHttp } from '@opentelemetry/exporter-logs-otlp-http';
 import { OTLPMetricExporter as OTLPMetricExporterHttp } from '@opentelemetry/exporter-metrics-otlp-http';
 import { CompressionAlgorithm } from '@opentelemetry/otlp-exporter-base';
-import { NodeSDK } from '@opentelemetry/sdk-node';
+import type { NodeSDK } from '@opentelemetry/sdk-node';
 import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import {
@@ -45,11 +44,9 @@ import {
   FileMetricExporter,
   FileSpanExporter,
 } from './file-exporters.js';
-import {
-  GcpTraceExporter,
-  GcpMetricExporter,
-  GcpLogExporter,
-} from './gcp-exporters.js';
+// Type-only: see the note in ./index.ts. The implementations are imported
+// dynamically inside the opt-in GCP branch of initializeTelemetry().
+import type { GcpTraceExporter, GcpLogExporter } from './gcp-exporters.js';
 import { TelemetryTarget } from './index.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import {
@@ -272,6 +269,15 @@ export async function initializeTelemetry(
       'using',
       credentials ? 'provided credentials' : 'ADC',
     );
+    // Static import is not an option here: gcp-exporters extends the Google
+    // Cloud exporter classes at module scope, so importing it for its values
+    // at the top of this file is what drags @google-cloud/logging -- and the
+    // gRPC, protobuf and google-gax trees behind it -- into the startup path of
+    // every process that touches the telemetry barrel. This branch is the only
+    // place that needs the implementations, and it only runs when someone has
+    // explicitly selected the GCP target.
+    const { GcpTraceExporter, GcpMetricExporter, GcpLogExporter } =
+      await import('./gcp-exporters.js');
     spanExporter = new GcpTraceExporter(gcpProjectId, credentials);
     logExporter = new GcpLogExporter(gcpProjectId, credentials);
     metricReader = new PeriodicExportingMetricReader({
@@ -300,6 +306,20 @@ export async function initializeTelemetry(
       });
     } else {
       // grpc
+      // Loaded here rather than at module scope: these three packages carry
+      // @grpc/grpc-js and the protobuf loader behind them, which is one of the
+      // heaviest subtrees in the lockfile. This branch runs only when someone
+      // has configured an OTLP collector over gRPC; the default HTTP path and
+      // the no-telemetry path should never pay for it.
+      const [
+        { OTLPTraceExporter },
+        { OTLPLogExporter },
+        { OTLPMetricExporter },
+      ] = await Promise.all([
+        import('@opentelemetry/exporter-trace-otlp-grpc'),
+        import('@opentelemetry/exporter-logs-otlp-grpc'),
+        import('@opentelemetry/exporter-metrics-otlp-grpc'),
+      ]);
       spanExporter = new OTLPTraceExporter({
         url: parsedEndpoint,
         compression: CompressionAlgorithm.GZIP,
@@ -335,6 +355,12 @@ export async function initializeTelemetry(
   // Store processor references for manual flushing
   spanProcessor = new BatchSpanProcessor(spanExporter);
   logRecordProcessor = new BatchLogRecordProcessor(logExporter);
+
+  // Loaded here rather than at module scope: sdk-node statically pulls every
+  // OTLP gRPC exporter, which is what drags @grpc/grpc-js and the protobuf
+  // loader into the startup path of a process whose telemetry points at a local
+  // file, or is off entirely.
+  const { NodeSDK } = await import('@opentelemetry/sdk-node');
 
   sdk = new NodeSDK({
     resource,

@@ -24,7 +24,13 @@ export {
   parseBooleanEnvFlag,
   parseTelemetryTargetValue,
 } from './config.js';
-export {
+// Type-only on purpose. These extend Google Cloud exporter classes at module
+// scope, so a value re-export would pull the whole @google-cloud/logging stack
+// -- gRPC, protobuf, google-gax, several megabytes of generated protos -- into
+// every process that touches the telemetry barrel, including ones that never
+// export a single event. The implementations load on demand inside
+// initializeTelemetry(), which only runs for the opt-in GCP target.
+export type {
   GcpTraceExporter,
   GcpMetricExporter,
   GcpLogExporter,

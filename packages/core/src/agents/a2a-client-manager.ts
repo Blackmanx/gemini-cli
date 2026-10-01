@@ -21,8 +21,6 @@ import {
   RestTransportFactory,
   createAuthenticatingFetchWithRetry,
 } from '@a2a-js/sdk/client';
-import { GrpcTransportFactory } from '@a2a-js/sdk/client/grpc';
-import * as grpc from '@grpc/grpc-js';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent as UndiciAgent, ProxyAgent } from 'undici';
 import { normalizeAgentCard } from './a2aUtils.js';
@@ -146,6 +144,17 @@ export class A2AClientManager {
     const grpcUrl =
       agentCard.additionalInterfaces?.find((i) => i.transport === 'GRPC')
         ?.url ?? agentCard.url;
+
+    // Loaded here rather than at module scope, because this is the only place
+    // that needs them and @grpc/grpc-js -- with the protobuf loader behind it --
+    // is one of the heaviest things in the dependency tree. Importing them from
+    // the top of this file put them in the startup path of every process that
+    // builds a Config, since the manager itself is constructed during
+    // initialize() even when no A2A agent is ever contacted.
+    const [{ GrpcTransportFactory }, grpc] = await Promise.all([
+      import('@a2a-js/sdk/client/grpc'),
+      import('@grpc/grpc-js'),
+    ]);
 
     const clientOptions = ClientFactoryOptions.createFrom(
       ClientFactoryOptions.default,
