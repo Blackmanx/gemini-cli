@@ -117,6 +117,71 @@ describe('WebSearchTool', () => {
       expect(result.sources).toEqual([]);
     });
 
+    it('warns the model when sources carry no attribution', async () => {
+      const params: WebSearchToolParams = { query: 'unattributed query' };
+      (mockGeminiClient.generateContent as Mock).mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [{ text: 'A claim with no citation.' }],
+            },
+            groundingMetadata: {
+              webSearchQueries: ['unattributed query'],
+              groundingChunks: [
+                { web: { title: 'Doc', uri: 'https://example.com/a' } },
+              ],
+              // No groundingSupports: sources exist but nothing is attributed.
+              groundingSupports: [],
+            },
+          },
+        ],
+      });
+
+      const invocation = tool.build(params);
+      const result = await invocation.execute({ abortSignal });
+
+      expect(result.sources).toHaveLength(1);
+      expect(result.llmContent).toContain(
+        'came back without per-claim citations',
+      );
+      expect(result.llmContent).toContain('https://example.com/a');
+    });
+
+    it('omits the attribution warning when supports are present', async () => {
+      const params: WebSearchToolParams = { query: 'attributed query' };
+      (mockGeminiClient.generateContent as Mock).mockResolvedValue({
+        candidates: [
+          {
+            content: {
+              role: 'model',
+              parts: [{ text: 'A cited claim[1].' }],
+            },
+            groundingMetadata: {
+              webSearchQueries: ['attributed query'],
+              groundingChunks: [
+                { web: { title: 'Doc', uri: 'https://example.com/a' } },
+              ],
+              groundingSupports: [
+                {
+                  segment: { startIndex: 0, endIndex: 13 },
+                  groundingChunkIndices: [0],
+                },
+              ],
+            },
+          },
+        ],
+      });
+
+      const invocation = tool.build(params);
+      const result = await invocation.execute({ abortSignal });
+
+      expect(result.llmContent).not.toContain(
+        'came back without per-claim citations',
+      );
+      expect(result.llmContent).toContain('https://example.com/a');
+    });
+
     it('should handle no search results found', async () => {
       const params: WebSearchToolParams = { query: 'no results query' };
       (mockGeminiClient.generateContent as Mock).mockResolvedValue({

@@ -242,6 +242,14 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
       modelConfig: {
         generateContentConfig: {
           tools: [{ googleSearch: {} }],
+          // Web search runs on every research turn and its answer is injected
+          // into the transcript verbatim, so an unbounded reply is paid for
+          // again on every later request. Utility roles elsewhere in this file
+          // (classifier, prompt-completion) cap output for the same reason.
+          maxOutputTokens: 2048,
+          thinkingConfig: {
+            thinkingBudget: 512,
+          },
         },
       },
     },

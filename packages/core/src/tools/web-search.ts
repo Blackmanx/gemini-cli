@@ -31,6 +31,7 @@ import {
   type StructuredQuery,
   type ConstraintTarget,
 } from '../utils/searchQuery.js';
+import { summarizeToolOutput } from '../utils/summarizer.js';
 
 /** Temporal windows accepted by the `recency` parameter. */
 export type WebSearchRecency = 'day' | 'week' | 'month' | 'year';
@@ -506,6 +507,19 @@ class WebSearchToolInvocation extends BaseToolInvocation<
           modifiedResponseText +=
             '\n\nSources:\n' + sourceListFormatted.join('\n');
         }
+
+        if (groundingSupports.length === 0) {
+          // The answer came back with sources but no attribution segments, so
+          // nothing in the text maps to a numbered source. Say so explicitly:
+          // otherwise the model sees a bare list and tends to attach [n]
+          // markers that match nothing.
+          modifiedResponseText +=
+            '\n\nNote: this answer came back without per-claim citations. The' +
+            ' sources above are the ones consulted, but no claim is linked to' +
+            ' a specific one. Do not cite [n] markers that are not already' +
+            ' present in the text; use web_fetch on a URI when you need to' +
+            ' verify a specific claim.';
+        }
       }
 
       if (filtered.notes.length > 0) {
@@ -517,9 +531,32 @@ class WebSearchToolInvocation extends BaseToolInvocation<
           '\n\n' + formatQueryEcho(instruction, attempt.backendQueries);
       }
 
+      const searchContent = `Web search results for "${this.params.query}":\n\n${wrapUntrusted(modifiedResponseText)}`;
+      const searchDisplay = `Search results for "${this.params.query}" returned.`;
+
+      // Opt-in token cap for research-heavy sessions. A search answer lands in
+      // the transcript verbatim, so without this one verbose query is paid
+      // for again on every later request.
+      const summarizeConfig =
+        this.context.config.getSummarizeToolOutputConfig?.();
+      if (summarizeConfig && summarizeConfig[WEB_SEARCH_TOOL_NAME]) {
+        const summary = await summarizeToolOutput(
+          this.context.config,
+          { model: 'summarizer-shell' },
+          searchContent,
+          this.context.geminiClient,
+          signal,
+        );
+        return {
+          llmContent: wrapUntrusted(summary),
+          returnDisplay: searchDisplay,
+          sources: filtered.sources,
+        };
+      }
+
       return {
-        llmContent: `Web search results for "${this.params.query}":\n\n${wrapUntrusted(modifiedResponseText)}`,
-        returnDisplay: `Search results for "${this.params.query}" returned.`,
+        llmContent: searchContent,
+        returnDisplay: searchDisplay,
         sources: filtered.sources,
       };
     } catch (error: unknown) {
