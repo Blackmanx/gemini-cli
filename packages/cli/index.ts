@@ -15,6 +15,14 @@ import {
   getScriptArgs,
 } from './src/utils/processUtils.js';
 
+import { enableStartupCompileCache } from './src/utils/startupCompileCache.js';
+
+// Before anything else: the bundle is large enough that V8 spends a
+// measurable slice of every startup recompiling it. This has to run before the
+// heavy child process is imported, or the cache is written too late to be read
+// on this run.
+void enableStartupCompileCache();
+
 // --- Global Entry Point ---
 
 async function getMemoryNodeArgs(): Promise<string[]> {
