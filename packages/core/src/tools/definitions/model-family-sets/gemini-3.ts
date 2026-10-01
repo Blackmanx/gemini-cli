@@ -519,6 +519,12 @@ The user has the ability to modify the \`new_string\` content. If modified, this
           description:
             'Set true to also read the top results and quote what is actually on the pages. Use this when the titles alone would not tell you whether a result is worth reading, or when you need specifics like version numbers, error text, or exact APIs. Costs an extra round-trip.',
         },
+        provider: {
+          type: 'string',
+          enum: ['auto', 'duckduckgo', 'grounding'],
+          description:
+            "Search backend. 'auto' (default) tries DuckDuckGo and falls back to Gemini grounding. 'duckduckgo' returns raw result rows with each page's own snippet text - more to read, but you can judge relevance from the snippet instead of trusting a summary. 'grounding' returns a synthesized cited answer. Omit unless you specifically need one behavior.",
+        },
       },
       required: [WEB_SEARCH_PARAM_QUERY],
     },

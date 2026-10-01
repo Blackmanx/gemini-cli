@@ -1155,6 +1155,15 @@ exports[`coreTools snapshots for specific models > Model: gemini-3-pro-preview >
         "description": "Set true to also read the top results and quote what is actually on the pages. Use this when the titles alone would not tell you whether a result is worth reading, or when you need specifics like version numbers, error text, or exact APIs. Costs an extra round-trip.",
         "type": "boolean",
       },
+      "provider": {
+        "description": "Search backend. 'auto' (default) tries DuckDuckGo and falls back to Gemini grounding. 'duckduckgo' returns raw result rows with each page's own snippet text - more to read, but you can judge relevance from the snippet instead of trusting a summary. 'grounding' returns a synthesized cited answer. Omit unless you specifically need one behavior.",
+        "enum": [
+          "auto",
+          "duckduckgo",
+          "grounding",
+        ],
+        "type": "string",
+      },
       "query": {
         "description": "The search query. Supports natural language questions (e.g., 'Latest breaking changes in React 19') or specific technical queries.",
         "type": "string",

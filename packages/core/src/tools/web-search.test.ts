@@ -18,10 +18,16 @@ import type { Config } from '../config/config.js';
 import { GeminiClient } from '../core/client.js';
 import { ToolErrorType } from './tool-error.js';
 import { createMockMessageBus } from '../test-utils/mock-message-bus.js';
+import type * as DdgModule from './duckduckgo-search.js';
+import { searchDuckDuckGo } from './duckduckgo-search.js';
 
 // Mock GeminiClient and Config constructor
 vi.mock('../core/client.js');
 vi.mock('../config/config.js');
+vi.mock('./duckduckgo-search.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof DdgModule>()),
+  searchDuckDuckGo: vi.fn(),
+}));
 
 describe('WebSearchTool', () => {
   const abortSignal = new AbortController().signal;
@@ -50,6 +56,12 @@ describe('WebSearchTool', () => {
     ).promptId = 'test-prompt-id';
     mockGeminiClient = new GeminiClient(mockConfigInstance);
     tool = new WebSearchTool(mockConfigInstance, createMockMessageBus());
+    // Default to "no results" so the grounding tests below keep exercising
+    // grounding rather than tripping the DuckDuckGo branch.
+    vi.mocked(searchDuckDuckGo).mockResolvedValue({
+      results: [],
+      blocked: false,
+    });
   });
 
   afterEach(() => {
@@ -402,6 +414,76 @@ Sources:
         'Search results for "multibyte query" returned.',
       );
       expect(result.sources).toHaveLength(3);
+    });
+
+    it('answers from DuckDuckGo with snippets and skips grounding', async () => {
+      vi.mocked(searchDuckDuckGo).mockResolvedValue({
+        results: [
+          {
+            title: 'Backpressuring in Streams',
+            url: 'https://example.com/bp',
+            snippet: 'Why backpressure matters.',
+            publishedDate: '2025-01-31',
+          },
+        ],
+        blocked: false,
+      });
+
+      const invocation = tool.build({ query: 'stream backpressure' });
+      const result = await invocation.execute({ abortSignal });
+
+      expect(result.llmContent).toContain('Backpressuring in Streams');
+      expect(result.llmContent).toContain('Why backpressure matters.');
+      expect(result.llmContent).toContain('Published: 2025-01-31');
+      // The whole point: the model never spends a grounding call here.
+      expect(mockGeminiClient.generateContent).not.toHaveBeenCalled();
+    });
+
+    it('falls back to grounding when DuckDuckGo is blocked', async () => {
+      vi.mocked(searchDuckDuckGo).mockResolvedValue({
+        results: [],
+        blocked: true,
+      });
+      (mockGeminiClient.generateContent as Mock).mockResolvedValue({
+        candidates: [
+          {
+            content: { role: 'model', parts: [{ text: 'Grounded answer.' }] },
+          },
+        ],
+      });
+
+      const invocation = tool.build({ query: 'blocked query' });
+      const result = await invocation.execute({ abortSignal });
+
+      expect(result.llmContent).toContain('Grounded answer.');
+      expect(mockGeminiClient.generateContent).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports an error instead of silently swapping backends when pinned', async () => {
+      vi.mocked(searchDuckDuckGo).mockResolvedValue({
+        results: [],
+        blocked: true,
+      });
+
+      const invocation = tool.build({
+        query: 'pinned query',
+        provider: 'duckduckgo',
+      });
+      const result = await invocation.execute({ abortSignal });
+
+      expect(result.error?.type).toBe(ToolErrorType.WEB_SEARCH_FAILED);
+      // Pinned means pinned: no silent substitution.
+      expect(mockGeminiClient.generateContent).not.toHaveBeenCalled();
+    });
+
+    it('skips DuckDuckGo entirely when grounding is pinned', async () => {
+      const invocation = tool.build({
+        query: 'grounding only',
+        provider: 'grounding',
+      });
+      await invocation.execute({ abortSignal });
+
+      expect(searchDuckDuckGo).not.toHaveBeenCalled();
     });
   });
 });

@@ -32,6 +32,11 @@ import {
   type ConstraintTarget,
 } from '../utils/searchQuery.js';
 import { summarizeToolOutput } from '../utils/summarizer.js';
+import {
+  DDG_MAX_RESULTS,
+  searchDuckDuckGo,
+  type DdgResult,
+} from './duckduckgo-search.js';
 
 /** Temporal windows accepted by the `recency` parameter. */
 export type WebSearchRecency = 'day' | 'week' | 'month' | 'year';
@@ -337,8 +342,29 @@ export function formatQueryEcho(
 }
 
 /**
+ * Render one DuckDuckGo hit as a numbered row.
+ *
+ * The snippet is the point: grounding never returns it, and without it a
+ * result row is a title and a URL, which is not enough to decide whether
+ * the page is worth reading or fetching.
+ */
+export function formatDdgResult(result: DdgResult, index: number): string {
+  const lines = [`[${index + 1}] ${result.title}`, `URL: ${result.url}`];
+  if (result.publishedDate) {
+    lines.push(`Published: ${result.publishedDate}`);
+  }
+  if (result.snippet) {
+    lines.push(result.snippet);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Parameters for the WebSearchTool.
  */
+/** Backends the web search tool can answer from. */
+export type WebSearchProviderId = 'auto' | 'duckduckgo' | 'grounding';
+
 export interface WebSearchToolParams {
   /**
    * The search query.
@@ -365,6 +391,17 @@ export interface WebSearchToolParams {
    * extra model round-trip, so it is opt-in.
    */
   fetch_sources?: boolean;
+
+  /**
+   * Which backend answers the search.
+   *
+   * `grounding` returns a synthesized answer with citation markers.
+   * `duckduckgo` returns raw result rows - title, URL, snippet, date -
+   * which is more to read but lets you judge each hit from its own text
+   * instead of a summary. `auto` prefers DuckDuckGo and falls back to
+   * grounding when it is blocked or fails.
+   */
+  provider?: WebSearchProviderId;
 
   /** Whether to echo the queries that were sent/used. */
   include_queries?: boolean;
@@ -397,9 +434,98 @@ class WebSearchToolInvocation extends BaseToolInvocation<
     return `Searching the web for: "${this.params.query}"`;
   }
 
+  /**
+   * Run the DuckDuckGo backend, returning null when it cannot answer.
+   *
+   * Null means "fall back", not "no results": DuckDuckGo blocks datacenter
+   * egress with a challenge page, and an empty result set from a blocked
+   * provider is a lie the caller would report to the model.
+   */
+  private async tryDuckDuckGo(
+    provider: WebSearchProviderId,
+    signal: AbortSignal,
+  ): Promise<WebSearchToolResult | null> {
+    const limit = Math.min(
+      this.params.limit ?? DDG_MAX_RESULTS,
+      DDG_MAX_RESULTS,
+    );
+    let response;
+    try {
+      response = await searchDuckDuckGo({
+        query: this.params.query,
+        limit,
+        recency: this.params.recency,
+        signal,
+      });
+    } catch (error: unknown) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+      debugLogger.warn('DuckDuckGo search failed', error);
+      return null;
+    }
+
+    if (response.blocked || response.results.length === 0) {
+      debugLogger.warn(
+        `DuckDuckGo returned ${response.results.length} results (blocked=${response.blocked})`,
+      );
+      return null;
+    }
+
+    const rendered = response.results
+      .map((result, index) => formatDdgResult(result, index))
+      .join('\n\n');
+    const content =
+      `Web search results for "${this.params.query}":\n\n` +
+      `Raw result rows from DuckDuckGo. Each row carries the page's own` +
+      ` summary text, so judge relevance from the snippet before reading` +
+      ` the page.\n\n${wrapUntrusted(rendered)}`;
+
+    const summarizeConfig =
+      this.context.config.getSummarizeToolOutputConfig?.();
+    if (summarizeConfig && summarizeConfig[WEB_SEARCH_TOOL_NAME]) {
+      const summary = await summarizeToolOutput(
+        this.context.config,
+        { model: 'summarizer-shell' },
+        content,
+        this.context.geminiClient,
+        signal,
+      );
+      return {
+        llmContent: wrapUntrusted(summary),
+        returnDisplay: `Search results for "${this.params.query}" returned.`,
+      };
+    }
+
+    return {
+      llmContent: content,
+      returnDisplay: `Search results for "${this.params.query}" returned.`,
+    };
+  }
+
   async execute({
     abortSignal: signal,
   }: ExecuteOptions): Promise<WebSearchToolResult> {
+    const provider = this.params.provider ?? 'auto';
+    if (provider !== 'grounding') {
+      const scraped = await this.tryDuckDuckGo(provider, signal);
+      if (scraped) {
+        return scraped;
+      }
+      if (provider === 'duckduckgo') {
+        // The caller pinned this provider, so a silent swap to grounding
+        // would return results from a backend it did not ask for.
+        return {
+          llmContent: `DuckDuckGo search for "${this.params.query}" was blocked or failed. Retry with provider 'grounding' or 'auto'.`,
+          returnDisplay: 'DuckDuckGo search unavailable.',
+          error: {
+            message:
+              'DuckDuckGo search unavailable (bot challenge or transport failure).',
+            type: ToolErrorType.WEB_SEARCH_FAILED,
+          },
+        };
+      }
+    }
     const instruction = buildSearchInstruction(
       this.params.query,
       this.params.recency,
