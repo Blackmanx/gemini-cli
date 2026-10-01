@@ -2045,7 +2045,7 @@ const SETTINGS_SCHEMA = {
         },
       },
       headlessHarness: {
-        type: 'string',
+        type: 'enum',
         label: 'OMP: Headless Harness',
         category: 'Performance',
         requiresRestart: false,
