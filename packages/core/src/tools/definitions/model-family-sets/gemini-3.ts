@@ -514,6 +514,11 @@ The user has the ability to modify the \`new_string\` content. If modified, this
           description:
             "The search query. Supports natural language questions (e.g., 'Latest breaking changes in React 19') or specific technical queries.",
         },
+        fetch_sources: {
+          type: 'boolean',
+          description:
+            'Set true to also read the top results and quote what is actually on the pages. Use this when the titles alone would not tell you whether a result is worth reading, or when you need specifics like version numbers, error text, or exact APIs. Costs an extra round-trip.',
+        },
       },
       required: [WEB_SEARCH_PARAM_QUERY],
     },

@@ -117,6 +117,69 @@ describe('WebSearchTool', () => {
       expect(result.sources).toEqual([]);
     });
 
+    it('does not read source pages unless asked', async () => {
+      const params: WebSearchToolParams = { query: 'titles only' };
+      (mockGeminiClient.generateContent as Mock).mockResolvedValue({
+        candidates: [
+          {
+            content: { role: 'model', parts: [{ text: 'An answer.' }] },
+            groundingMetadata: {
+              groundingChunks: [
+                { web: { title: 'Doc', uri: 'https://example.com/a' } },
+              ],
+            },
+          },
+        ],
+      });
+
+      const invocation = tool.build(params);
+      const result = await invocation.execute({ abortSignal });
+
+      expect(mockGeminiClient.generateContent).toHaveBeenCalledTimes(1);
+      expect(result.llmContent).not.toContain('Page content:');
+    });
+
+    it('reads source pages when fetch_sources is set', async () => {
+      const params: WebSearchToolParams = {
+        query: 'with content',
+        fetch_sources: true,
+      };
+      (mockGeminiClient.generateContent as Mock)
+        .mockResolvedValueOnce({
+          candidates: [
+            {
+              content: { role: 'model', parts: [{ text: 'An answer.' }] },
+              groundingMetadata: {
+                groundingChunks: [
+                  { web: { title: 'Doc', uri: 'https://example.com/a' } },
+                ],
+              },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          candidates: [
+            {
+              content: {
+                role: 'model',
+                parts: [
+                  {
+                    text: 'The page documents installStep 3 requires Node 20.',
+                  },
+                ],
+              },
+            },
+          ],
+        });
+
+      const invocation = tool.build(params);
+      const result = await invocation.execute({ abortSignal });
+
+      expect(mockGeminiClient.generateContent).toHaveBeenCalledTimes(2);
+      expect(result.llmContent).toContain('Page content:');
+      expect(result.llmContent).toContain('Node 20');
+    });
+
     it('warns the model when sources carry no attribution', async () => {
       const params: WebSearchToolParams = { query: 'unattributed query' };
       (mockGeminiClient.generateContent as Mock).mockResolvedValue({

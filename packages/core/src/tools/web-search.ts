@@ -56,6 +56,12 @@ export const WEB_SEARCH_MAX_ATTEMPTS = 2;
 export const WEB_SEARCH_MAX_SOURCES = 20;
 
 /**
+ * How many sources `fetch_sources` will read. Each one costs a page load on
+ * the backend, and past a handful the excerpts stop being worth the wait.
+ */
+export const WEB_SEARCH_SOURCE_FETCH_MAX = 5;
+
+/**
  * Google grounding has no first-class recency parameter, so the window is
  * carried in the instruction text instead. The wording is deliberately a
  * search-time *preference*: it never claims the API filtered anything.
@@ -350,6 +356,16 @@ export interface WebSearchToolParams {
   /** Maximum number of sources to return. */
   limit?: number;
 
+  /**
+   * Fetch the top sources and return excerpts of their actual page content.
+   *
+   * Grounding on its own returns a synthesized answer plus a list of
+   * titles and URLs - it never shows what is behind the links, which is
+   * often what decides whether a result is worth reading. This costs an
+   * extra model round-trip, so it is opt-in.
+   */
+  fetch_sources?: boolean;
+
   /** Whether to echo the queries that were sent/used. */
   include_queries?: boolean;
 }
@@ -531,7 +547,12 @@ class WebSearchToolInvocation extends BaseToolInvocation<
           '\n\n' + formatQueryEcho(instruction, attempt.backendQueries);
       }
 
-      const searchContent = `Web search results for "${this.params.query}":\n\n${wrapUntrusted(modifiedResponseText)}`;
+      const excerpts = this.params.fetch_sources
+        ? await this.fetchSourceContent(filtered.sources, signal)
+        : null;
+      const searchContent =
+        `Web search results for "${this.params.query}":\n\n` +
+        `${wrapUntrusted(modifiedResponseText)}${excerpts ?? ''}`;
       const searchDisplay = `Search results for "${this.params.query}" returned.`;
 
       // Opt-in token cap for research-heavy sessions. A search answer lands in
@@ -578,6 +599,60 @@ class WebSearchToolInvocation extends BaseToolInvocation<
           type: ToolErrorType.WEB_SEARCH_FAILED,
         },
       };
+    }
+  }
+
+  /**
+   * Read the top sources and return what is actually on the pages.
+   *
+   * Grounding gives titles and URLs but never the content behind them, so
+   * there is no way to tell a substantive source from a thin one without
+   * fetching it. Uses the same urlContext model config as web_fetch.
+   * Best-effort: a failure here degrades to the plain search answer rather
+   * than failing the tool.
+   */
+  private async fetchSourceContent(
+    sources: GroundingChunkItem[],
+    signal: AbortSignal,
+  ): Promise<string | null> {
+    const uris = sources
+      .map((s) => s.web?.uri)
+      .filter((uri): uri is string => !!uri)
+      .slice(0, WEB_SEARCH_SOURCE_FETCH_MAX);
+    if (uris.length === 0) {
+      return null;
+    }
+
+    const timeoutSignal = AbortSignal.timeout(WEB_SEARCH_TIMEOUT_MS);
+    const attemptSignal = AbortSignal.any([signal, timeoutSignal]);
+    try {
+      const response = await this.context.geminiClient.generateContent(
+        { model: 'web-fetch' },
+        [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `For each URL below, quote the passage most relevant to the search. If a page is thin, off-topic, or unreachable, say so in one line instead of padding it. Be specific: names, versions, numbers, error text.
+
+<authorized_urls>
+${uris.join('\n')}
+</authorized_urls>`,
+              },
+            ],
+          },
+        ],
+        attemptSignal,
+        LlmRole.UTILITY_TOOL,
+      );
+
+      const text = getResponseText(response)?.trim();
+      return text ? `\n\nPage content:\n${wrapUntrusted(text)}` : null;
+    } catch (error: unknown) {
+      if (!isAbortError(error)) {
+        debugLogger.warn('Source content fetch failed', error);
+      }
+      return null;
     }
   }
 
