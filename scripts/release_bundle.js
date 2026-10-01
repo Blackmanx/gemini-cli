@@ -187,14 +187,15 @@ const visibility = execSync('gh repo view --json visibility -q .visibility', {
 const urlIsPublic = visibility === 'PUBLIC';
 const localInstall = `npm install -g ${tarball}`;
 
-console.log('\n--- release bundle ready ---');
 console.log(`version  : ${version}`);
 console.log(`tag      : ${tag}`);
 console.log(`tarball  : ${tarball}`);
 console.log(`contents : ${readdirSync(bundleDir).length} files in bundle/`);
 console.log(`repo     : ${visibility}`);
 
-console.log('\ninstall (works now, from this machine):');
+console.log('\ninstall from this checkout (fastest):');
+console.log(`  cd ${bundleDir} && npm install -g .`);
+console.log('\nor from the packed tarball:');
 console.log(`  ${localInstall}`);
 
 if (urlIsPublic) {
