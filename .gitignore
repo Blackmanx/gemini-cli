@@ -69,3 +69,7 @@ temp_agents/
 # conductor extension and planning directories
 conductor/
 .vscode-test/
+
+# Release bundle artifacts (see scripts/release_bundle.js)
+/release/
+/gemini-cli-bundle.zip
