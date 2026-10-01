@@ -242,11 +242,12 @@ export const DEFAULT_MODEL_CONFIGS: ModelConfigServiceConfig = {
       modelConfig: {
         generateContentConfig: {
           tools: [{ googleSearch: {} }],
-          // Web search runs on every research turn and its answer is injected
-          // into the transcript verbatim, so an unbounded reply is paid for
-          // again on every later request. Utility roles elsewhere in this file
-          // (classifier, prompt-completion) cap output for the same reason.
-          maxOutputTokens: 2048,
+          // A search that truncates mid-sentence is worse than an expensive
+          // one: it reads as complete while having dropped findings. So this
+          // is set generously, and the actual token control is
+          // summarizeToolOutput in settings - a runtime knob, per session,
+          // that costs nothing when unused.
+          maxOutputTokens: 8192,
           thinkingConfig: {
             thinkingBudget: 512,
           },
