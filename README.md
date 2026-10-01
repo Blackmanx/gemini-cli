@@ -98,11 +98,18 @@ only has to survive; it does not need to be the source tree.
 mkdir -p ~/opt/gemini-cli
 unzip gemini-cli-bundle.zip -d ~/opt/gemini-cli
 chmod +x ~/opt/gemini-cli/bundle/gemini.js
+chmod +x ~/opt/gemini-cli/bundle/vendor/ripgrep/* 2>/dev/null
 ```
 
-`chmod +x` is a safety net: the archive stores mode `0755` on `gemini.js`, but
-not every extractor honours it (Python's `zipfile` does not). It must be the
-`bundle/gemini.js` inside — the archive has a top-level `bundle/` directory.
+The second `chmod` is for the vendored ripgrep binaries, and it matters more
+than it looks: `unzip` does not reliably restore the executable bit, and without
+it the vendored `rg` is present but cannot be spawned. The CLI falls back to its
+own grep in that case, which works but is slower — so do run it. There is no
+ripgrep on Windows, hence the `2>/dev/null`.
+
+The first `chmod` is a safety net for the same reason. Note the path: the
+executable is `bundle/gemini.js` inside a top-level `bundle/` directory, not
+`gemini.js` at the root of the archive.
 
 **3. Put it on your `PATH` via a symlink**, so updating later is a one-line swap
 rather than editing your shell profile:
