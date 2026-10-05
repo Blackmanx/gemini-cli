@@ -61,6 +61,7 @@ import {
   COMPLETE_TASK_TOOL_NAME,
   LS_TOOL_NAME,
   READ_FILE_TOOL_NAME,
+  ACTIVATE_SKILL_TOOL_NAME,
 } from '../tools/tool-names.js';
 import {
   GeminiChat,
@@ -84,6 +85,8 @@ import type { SandboxManager } from '../services/sandboxManager.js';
 import type { MessageBus } from '../confirmation-bus/message-bus.js';
 import { MockTool } from '../test-utils/mock-tool.js';
 import { getDirectoryContextString } from '../utils/environmentContext.js';
+import { isRecord } from '../utils/markdownUtils.js';
+import type { SkillManager } from '../skills/skillManager.js';
 import { z } from 'zod';
 import { getErrorMessage } from '../utils/errors.js';
 import { promptIdContext } from '../utils/promptIdContext.js';
@@ -946,6 +949,92 @@ describe('LocalAgentExecutor', () => {
       // Verify that LS_TOOL_NAME is in the list (since LS was registered in beforeEach)
       const toolNames = toolsList.map((t) => t.name);
       expect(toolNames).toContain(LS_TOOL_NAME);
+    });
+
+    describe('skill scoping', () => {
+      const ALL_SKILLS = ['fastapi', 'sqlalchemy', 'angular', 'pytest'];
+
+      const stubSkills = () => {
+        const fake = {
+          getSkills: () =>
+            ALL_SKILLS.map((name) => ({
+              name,
+              description: `desc-${name}`,
+              location: `/skills/${name}/SKILL.md`,
+              body: `body-${name}`,
+            })),
+        };
+        vi.spyOn(mockConfig, 'getSkillManager').mockReturnValue(
+          fake as unknown as SkillManager,
+        );
+      };
+
+      const buildExecutorWithSkills = async (skillNames?: string[]) => {
+        stubSkills();
+        // Stands in for the real ActivateSkillTool: the enum the executor
+        // narrows is the one this schema carries.
+        const activateSkill = new MockTool({
+          name: ACTIVATE_SKILL_TOOL_NAME,
+          params: {
+            type: 'object',
+            properties: { name: { type: 'string', enum: [...ALL_SKILLS] } },
+          },
+        });
+        const definition = createTestDefinition([activateSkill]);
+        definition.skillNames = skillNames;
+        return LocalAgentExecutor.create(definition, mockConfig, onActivity);
+      };
+
+      const promptOf = async (executor: LocalAgentExecutor<z.ZodUnknown>) =>
+        (
+          executor as unknown as {
+            buildSystemPrompt: (i: { goal: string }) => Promise<string>;
+          }
+        ).buildSystemPrompt({ goal: 'g' });
+
+      const enumOf = (executor: LocalAgentExecutor<z.ZodUnknown>): unknown => {
+        const tools = (
+          executor as unknown as {
+            prepareToolsList: () => FunctionDeclaration[];
+          }
+        ).prepareToolsList();
+        const activate = tools.find((t) => t.name === ACTIVATE_SKILL_TOOL_NAME);
+        const schema = activate?.parametersJsonSchema;
+        if (!isRecord(schema) || !isRecord(schema['properties'])) {
+          return undefined;
+        }
+        return schema['properties']['name'];
+      };
+
+      it('inherits every discovered skill when none are named', async () => {
+        const prompt = await promptOf(await buildExecutorWithSkills());
+
+        expect(prompt).toContain('fastapi');
+        expect(prompt).toContain('angular');
+      });
+
+      it('injects only the named skills', async () => {
+        const prompt = await promptOf(
+          await buildExecutorWithSkills(['fastapi', 'sqlalchemy']),
+        );
+
+        expect(prompt).toContain('fastapi');
+        expect(prompt).toContain('sqlalchemy');
+        expect(prompt).not.toContain('angular');
+        expect(prompt).not.toContain('pytest');
+      });
+
+      it('narrows the activate_skill enum to the named skills', async () => {
+        const nameSchema = enumOf(await buildExecutorWithSkills(['fastapi']));
+
+        expect(nameSchema).toMatchObject({ enum: ['fastapi'] });
+      });
+
+      it('leaves the enum untouched when no skills are named', async () => {
+        const nameSchema = enumOf(await buildExecutorWithSkills());
+
+        expect(nameSchema).toMatchObject({ enum: ALL_SKILLS });
+      });
     });
   });
 

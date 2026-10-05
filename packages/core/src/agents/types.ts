@@ -225,6 +225,20 @@ export interface LocalAgentDefinition<
   toolConfig?: ToolConfig;
 
   /**
+   * Restricts which discovered skills this agent can see and activate.
+   *
+   * Without this, a subagent that holds `activate_skill` receives every
+   * discovered skill in its system prompt and in the tool's name enum, which
+   * both inflates the subagent's context and lets it wander into a domain it
+   * was not written for — a backend worker discovering `angular` in a
+   * monorepo. Naming the skills here makes the surface explicit.
+   *
+   * `undefined` keeps the inherited behavior (every skill). An empty array
+   * means "no skills", which drops the skill injection entirely.
+   */
+  skillNames?: string[];
+
+  /**
    * Optional additional workspace directories scoped to this agent.
    * When provided, the agent receives a workspace context that extends
    * the parent's with these directories. Other agents and the main

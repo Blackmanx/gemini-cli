@@ -107,6 +107,11 @@ const localAgentSchema = z
           ),
       )
       .optional(),
+    /**
+     * Restricts this agent to the named skills. Omit to inherit every
+     * discovered skill; an empty list means no skills at all.
+     */
+    skills: z.array(z.string()).optional(),
     mcp_servers: z.record(mcpServerSchema).optional(),
     model: z.string().optional(),
     temperature: z.number().optional(),
@@ -623,6 +628,7 @@ export function markdownToAgentDefinition(
           tools: markdown.tools,
         }
       : undefined,
+    skillNames: markdown.skills,
     mcpServers: Object.keys(mcpServers).length > 0 ? mcpServers : undefined,
     inputConfig,
     metadata,

@@ -43,6 +43,8 @@ import {
 } from '../utils/tool-utils.js';
 import { getDirectoryContextString } from '../utils/environmentContext.js';
 import { renderUserMemory, renderAgentSkills } from '../prompts/snippets.js';
+import { isRecord } from '../utils/markdownUtils.js';
+import type { SkillDefinition } from '../skills/skillManager.js';
 import { promptIdContext } from '../utils/promptIdContext.js';
 import {
   logAgentStart,
@@ -1426,7 +1428,43 @@ export class LocalAgentExecutor<TOutput extends z.ZodTypeAny> {
       ),
     );
 
+    // `activate_skill` builds its name enum from every discovered skill, so a
+    // scoped agent would still see — and could still pick — a skill its
+    // definition excluded. Narrow the enum to the same set the prompt got.
+    if (this.definition.skillNames !== undefined) {
+      const allowed = this.resolveSkills().map((skill) => skill.name);
+      for (const declaration of toolsList) {
+        if (declaration.name !== ACTIVATE_SKILL_TOOL_NAME) continue;
+        const schema = declaration.parametersJsonSchema;
+        if (!isRecord(schema)) continue;
+        const properties = schema['properties'];
+        if (!isRecord(properties)) continue;
+        const nameSchema = properties['name'];
+        if (isRecord(nameSchema) && Array.isArray(nameSchema['enum'])) {
+          nameSchema['enum'] = allowed;
+        }
+      }
+    }
+
     return toolsList;
+  }
+
+  /**
+   * The skills this agent may activate: the ones named in its definition, or
+   * every discovered skill when it named none.
+   *
+   * Skill names are matched case-insensitively because `activate_skill`
+   * resolves them the same way, so an agent that wrote `Angular` still gets a
+   * match rather than a silently empty catalog.
+   */
+  private resolveSkills(): SkillDefinition[] {
+    const skills = this.context.config.getSkillManager().getSkills();
+    const allowed = this.definition.skillNames;
+    if (allowed === undefined) {
+      return skills;
+    }
+    const wanted = allowed.map((name) => name.toLowerCase());
+    return skills.filter((skill) => wanted.includes(skill.name.toLowerCase()));
   }
 
   /** Builds the system prompt from the agent definition and inputs. */
@@ -1439,9 +1477,11 @@ export class LocalAgentExecutor<TOutput extends z.ZodTypeAny> {
     // Inject user inputs into the prompt template.
     let finalPrompt = templateString(promptConfig.systemPrompt, inputs);
 
-    // Inject skill SI if ACTIVATE_SKILL_TOOL_NAME is available to this agent.
+    // Inject the skill catalog when this agent can activate skills. An agent
+    // that named its skills sees only those, so a backend worker in a monorepo
+    // is not offered the frontend catalog (nor pays for it in context).
     if (this.toolRegistry.getTool(ACTIVATE_SKILL_TOOL_NAME) !== undefined) {
-      const skills = this.context.config.getSkillManager().getSkills();
+      const skills = this.resolveSkills();
       if (skills.length > 0) {
         const skillsPrompt = renderAgentSkills(
           skills.map((s) => ({
