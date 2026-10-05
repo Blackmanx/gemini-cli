@@ -661,6 +661,22 @@ You are the backend worker for this monorepo.
 | `tools`                | Restricts the tool surface. `activate_skill` must be in the list for skills to reach the agent at all.             |
 | `workspaceDirectories` | Extends the agent's workspace context with these directories, leaving other agents and the main session untouched. |
 
+A worked pair ships as an extension example, under `bundle/examples/agents/`
+after a build:
+
+| Agent          | Owns                                                   | Skills                                                                                                                                      |
+| -------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `back-worker`  | APIs, services, persistence, migrations, tests         | `fastapi`, `sqlalchemy`, `alembic`, `pytest`, `ruff`, `python`, `architecture-expert`                                                       |
+| `front-worker` | Components, services, routing, state, templates, tests | `angular`, `angular-best-practices`, `design-patterns-expert`, `frontend-security-expert`, `vitest-migration-expert`, `frontend-ui-dark-ts` |
+
+Install it to try the split on a monorepo:
+
+```bash
+gemini extensions install ./bundle/examples/agents --consent
+```
+
+Edit `workspaceDirectories` in each to point at your own package paths.
+
 Agents are discovered from `.gemini/agents/` in the project and
 `~/.gemini/agents/` for the user. A project agent is only loaded once the folder
 is trusted, and the first time you see one it asks for acknowledgement.
