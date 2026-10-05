@@ -6,7 +6,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
+import { loadDatabaseSync } from '../utils/nodeSqlite.js';
 import { SESSION_FILE_PREFIX } from '../services/chatRecordingTypes.js';
 import type { SkillDefinition } from '../skills/skillManager.js';
 import { wrapUntrusted } from '../utils/textUtils.js';
@@ -747,7 +748,7 @@ function withMemoryDb<T>(
 ): T {
   let db: DatabaseSync;
   try {
-    db = new DatabaseSync(file, { readOnly: true });
+    db = new (loadDatabaseSync())(file, { readOnly: true });
   } catch (err) {
     throw new Error(`${url.href}: cannot open the memory bank: ${String(err)}`);
   }

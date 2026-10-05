@@ -6,7 +6,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
+import { loadDatabaseSync } from '../utils/nodeSqlite.js';
 import { redactText } from './redact.js';
 import type {
   MemoryBackend,
@@ -249,7 +250,7 @@ export class LocalMemoryBackend implements MemoryBackend {
   async start(_ctx: MemoryOperationContext): Promise<void> {
     if (this.#db !== undefined) return;
     fs.mkdirSync(this.#dir, { recursive: true });
-    const db = new DatabaseSync(this.databasePath());
+    const db = new (loadDatabaseSync())(this.databasePath());
     try {
       // A stale or corrupt bank must not brick the session; move it aside and
       // start clean rather than throwing out of `start()`.
@@ -257,7 +258,7 @@ export class LocalMemoryBackend implements MemoryBackend {
     } catch {
       db.close();
       this.#quarantine();
-      const retry = new DatabaseSync(this.databasePath());
+      const retry = new (loadDatabaseSync())(this.databasePath());
       retry.exec(SCHEMA);
       this.#db = retry;
       return;

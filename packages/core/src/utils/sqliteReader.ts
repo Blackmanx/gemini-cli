@@ -5,15 +5,15 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import { loadDatabaseSync } from './nodeSqlite.js';
 
 /**
  * SQLite reader backed by the Node builtin `node:sqlite` module.
  *
- * `node:sqlite` is still flagged experimental and emits an `ExperimentalWarning`
- * when it is loaded, so the import above is deliberate and eager: a lazy
- * `createRequire` indirection only hid the warning from consumers that never
- * touch a database, at the cost of an untyped `require()` call.
+ * `DatabaseSync` is resolved through {@link loadDatabaseSync} rather than a
+ * static import: Node prints an `ExperimentalWarning` when `node:sqlite` is
+ * loaded, and loading it eagerly would print it on every startup even for
+ * sessions that never read a database.
  */
 
 /** First 16 bytes of a SQLite 3 database file. */
@@ -618,7 +618,7 @@ function openDatabase(filePath: string): DatabaseLike {
     // `readOnly` plus `PRAGMA query_only` below are two independent engine-level
     // guarantees: a mutating statement cannot be prepared-and-stepped into an
     // actual write from any selector form.
-    db = new DatabaseSync(filePath, { readOnly: true });
+    db = new (loadDatabaseSync())(filePath, { readOnly: true });
     db.exec(`PRAGMA busy_timeout=${BUSY_TIMEOUT_MS}`);
     db.exec('PRAGMA query_only = 1');
   } catch (error) {
