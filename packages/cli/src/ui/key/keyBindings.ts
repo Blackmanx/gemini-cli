@@ -90,6 +90,7 @@ export enum Command {
   TOGGLE_MARKDOWN = 'app.toggleMarkdown',
   TOGGLE_COPY_MODE = 'app.toggleCopyMode',
   TOGGLE_MOUSE_MODE = 'app.toggleMouseMode',
+  COPY_LAST_CODE_BLOCK = 'app.copyLastCodeBlock',
   TOGGLE_YOLO = 'app.toggleYolo',
   CYCLE_APPROVAL_MODE = 'app.cycleApprovalMode',
   SHOW_MORE_LINES = 'app.showMoreLines',
@@ -395,6 +396,7 @@ export const defaultKeyBindingConfig: KeyBindingConfig = new Map([
   [Command.TOGGLE_MARKDOWN, [new KeyBinding('alt+m')]],
   [Command.TOGGLE_COPY_MODE, [new KeyBinding('f9')]],
   [Command.TOGGLE_MOUSE_MODE, [new KeyBinding('ctrl+s')]],
+  [Command.COPY_LAST_CODE_BLOCK, [new KeyBinding('ctrl+shift+c')]],
   [Command.TOGGLE_YOLO, [new KeyBinding('ctrl+y')]],
   [Command.CYCLE_APPROVAL_MODE, [new KeyBinding('shift+tab')]],
   [Command.SHOW_MORE_LINES, [new KeyBinding('ctrl+o')]],
@@ -647,6 +649,8 @@ export const commandDescriptions: Readonly<Record<Command, string>> = {
   [Command.TOGGLE_MARKDOWN]: 'Toggle Markdown rendering.',
   [Command.TOGGLE_COPY_MODE]: 'Toggle copy mode when in alternate buffer mode.',
   [Command.TOGGLE_MOUSE_MODE]: 'Toggle mouse mode (scrolling and clicking).',
+  [Command.COPY_LAST_CODE_BLOCK]:
+    'Copy the last code block from the model response, without fences.',
   [Command.TOGGLE_YOLO]: 'Toggle YOLO (auto-approval) mode for tool calls.',
   [Command.CYCLE_APPROVAL_MODE]:
     'Cycle through approval modes: default (prompt), auto_edit (auto-approve edits), and plan (read-only). Plan mode is skipped when the agent is busy.',

@@ -429,11 +429,16 @@ const RenderCodeBlockInternal: React.FC<RenderCodeBlockProps> = ({
       flexShrink={0}
     >
       {colorizedCode}
-      {mouseEnabled && (
-        <Text color={copied ? theme.text.accent : theme.text.secondary}>
-          {copied ? ' \u2713 copied' : ' click to copy'}
-        </Text>
-      )}
+      {/* Always visible. A hint that only appears once mouse reporting is on
+          is a hint nobody finds, and the key path is the one that has to be
+          advertised. */}
+      <Text color={copied ? theme.text.accent : theme.text.secondary}>
+        {copied
+          ? ' ✓ copied'
+          : mouseEnabled
+            ? ' click to copy, or ctrl+shift+c'
+            : ' ctrl+shift+c to copy'}
+      </Text>
     </Box>
   );
 };

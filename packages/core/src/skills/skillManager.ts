@@ -103,7 +103,9 @@ export class SkillManager {
       .filter((dir) => dir !== storage.getProjectAgentSkillsDir())
       .reverse();
     for (const dir of nested) {
-      this.addSkillsWithPrecedence(await loadSkillsFromDir(dir, 'any-markdown'));
+      this.addSkillsWithPrecedence(
+        await loadSkillsFromDir(dir, 'any-markdown'),
+      );
     }
 
     const projectAgentSkills = await loadSkillsFromDir(
@@ -143,7 +145,20 @@ export class SkillManager {
 
     for (const newSkill of newSkills) {
       const existingSkill = skillMap.get(newSkill.name);
-      if (existingSkill && existingSkill.location !== newSkill.location) {
+      // A monorepo whose services each carry a copy of the shared skills
+      // declares the same text twice. That is not a conflict the user can act
+      // on — there is nothing to choose between them — so only a genuine
+      // difference is worth reporting.
+      const identical =
+        existingSkill !== undefined &&
+        existingSkill.description === newSkill.description &&
+        existingSkill.body === newSkill.body;
+
+      if (
+        existingSkill &&
+        existingSkill.location !== newSkill.location &&
+        !identical
+      ) {
         if (existingSkill.isBuiltin) {
           debugLogger.warn(
             `Skill "${newSkill.name}" from "${newSkill.location}" is overriding the built-in skill.`,

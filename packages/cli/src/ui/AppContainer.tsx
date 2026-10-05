@@ -172,7 +172,8 @@ import {
   EXPAND_HINT_DURATION_MS,
 } from './constants.js';
 import { NewAgentsChoice } from './components/NewAgentsNotification.js';
-import { isSlashCommand } from './utils/commandUtils.js';
+import { copyToClipboard, isSlashCommand } from './utils/commandUtils.js';
+import { lastCodeBlock } from './utils/codeBlockExtract.js';
 import { parseSlashCommand } from '../utils/commands.js';
 import { useTerminalTheme } from './hooks/useTerminalTheme.js';
 import { useTimedMessage } from './hooks/useTimedMessage.js';
@@ -1853,6 +1854,39 @@ Logging in with Google... Restarting Gemini CLI to continue.
         if (mouseMode && !isAlternateBuffer) {
           appEvents.emit(AppEvent.ScrollToBottom);
         }
+        return true;
+      }
+
+      if (keyMatchers[Command.COPY_LAST_CODE_BLOCK](key)) {
+        // Selecting a block on screen yields line numbers and loses the
+        // fences, so the text comes from the reply itself.
+        const history = config.getGeminiClient()?.getChat()?.getHistory();
+        const reply = history
+          ?.filter((item) => item.role === 'model')
+          .flatMap((item) => item.parts?.map((part) => part.text) ?? [])
+          .join('');
+        const block = reply ? lastCodeBlock(reply) : null;
+
+        if (!block) {
+          historyManager.addItem({
+            type: 'info',
+            text: 'No code block in the last response.',
+          });
+          return true;
+        }
+        void copyToClipboard(block, settings.merged)
+          .then(() =>
+            historyManager.addItem({
+              type: 'info',
+              text: 'Code block copied to the clipboard.',
+            }),
+          )
+          .catch((error: unknown) =>
+            historyManager.addItem({
+              type: 'error',
+              text: `Failed to copy. ${error instanceof Error ? error.message : String(error)}`,
+            }),
+          );
         return true;
       }
 

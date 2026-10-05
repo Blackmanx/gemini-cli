@@ -75,7 +75,7 @@ function exists(candidate: string): boolean {
 export function findProjectAgentSkillDirs(startDir: string): string[] {
   const root = path.resolve(startDir);
   const found: string[] = [];
-  const queue: { dir: string; depth: number }[] = [{ dir: root, depth: 0 }];
+  const queue: Array<{ dir: string; depth: number }> = [{ dir: root, depth: 0 }];
 
   while (queue.length > 0) {
     const current = queue.shift()!;

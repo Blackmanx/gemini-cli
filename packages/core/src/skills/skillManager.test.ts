@@ -12,8 +12,17 @@ import { SkillManager } from './skillManager.js';
 import { Storage } from '../config/storage.js';
 import { type GeminiCLIExtension } from '../config/config.js';
 import { loadSkillsFromDir, type SkillDefinition } from './skillLoader.js';
+import { findProjectAgentSkillDirs } from './skillDirs.js';
 import { coreEvents } from '../utils/events.js';
 import { debugLogger } from '../utils/debugLogger.js';
+
+vi.mock('./skillDirs.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./skillDirs.js')>();
+  return {
+    ...actual,
+    findProjectAgentSkillDirs: vi.fn(actual.findProjectAgentSkillDirs),
+  };
+});
 
 vi.mock('./skillLoader.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./skillLoader.js')>();
@@ -163,6 +172,95 @@ description: project-desc
     vi.spyOn(storage, 'getProjectSkillsDir').mockReturnValue('/non-existent');
     await service.discoverSkills(storage, [mockExtension], true);
     expect(service.getSkills()[0].description).toBe('user-desc');
+  });
+
+  it('should not report a conflict when the same skill is declared twice identically', async () => {
+    const service = new SkillManager();
+    const emit = vi
+      .spyOn(coreEvents, 'emitFeedback')
+      .mockImplementation(() => {});
+    vi.spyOn(Storage, 'getUserAgentSkillsDir').mockReturnValue('/no-user');
+    vi.spyOn(Storage, 'getUserSkillsDir').mockReturnValue('/no-user-gemini');
+
+    const storage = new Storage('/workspace');
+    vi.spyOn(storage, 'getProjectSkillsDir').mockReturnValue('/no-gemini');
+    vi.spyOn(storage, 'getProjectAgentSkillsDir').mockReturnValue(
+      '/workspace/.agents/skills',
+    );
+    // A monorepo whose two services each carry their own copy of one skill.
+    vi.mocked(findProjectAgentSkillDirs).mockReturnValue([
+      '/workspace/service-a/.agents/skills',
+      '/workspace/service-b/.agents/skills',
+    ]);
+    vi.mocked(loadSkillsFromDir).mockImplementation(async (dir) =>
+      dir.includes('service-a') || dir.includes('service-b')
+        ? [
+            {
+              name: 'shared-skill',
+              description: 'shared-desc',
+              body: 'shared-body',
+              location: `${dir}/SKILL.md`,
+            },
+          ]
+        : [],
+    );
+
+    await service.discoverSkills(storage, [], true);
+
+    expect(emit).not.toHaveBeenCalledWith(
+      'warning',
+      expect.stringContaining('Skill conflict detected'),
+    );
+    expect(service.getSkills()).toHaveLength(1);
+  });
+
+  it('should still report a conflict when two skills share a name but differ', async () => {
+    const service = new SkillManager();
+    const emit = vi
+      .spyOn(coreEvents, 'emitFeedback')
+      .mockImplementation(() => {});
+    vi.spyOn(Storage, 'getUserAgentSkillsDir').mockReturnValue('/no-user');
+    vi.spyOn(Storage, 'getUserSkillsDir').mockReturnValue('/no-user-gemini');
+
+    const storage = new Storage('/workspace');
+    vi.spyOn(storage, 'getProjectSkillsDir').mockReturnValue('/no-gemini');
+    vi.spyOn(storage, 'getProjectAgentSkillsDir').mockReturnValue(
+      '/workspace/.agents/skills',
+    );
+    vi.mocked(findProjectAgentSkillDirs).mockReturnValue([
+      '/workspace/service-a/.agents/skills',
+      '/workspace/service-b/.agents/skills',
+    ]);
+    vi.mocked(loadSkillsFromDir).mockImplementation(async (dir) => {
+      if (dir.includes('service-a')) {
+        return [
+          {
+            name: 'diverging',
+            description: 'a-desc',
+            body: 'a-body',
+            location: `${dir}/SKILL.md`,
+          },
+        ];
+      }
+      if (dir.includes('service-b')) {
+        return [
+          {
+            name: 'diverging',
+            description: 'b-desc',
+            body: 'b-body',
+            location: `${dir}/SKILL.md`,
+          },
+        ];
+      }
+      return [];
+    });
+
+    await service.discoverSkills(storage, [], true);
+
+    expect(emit).toHaveBeenCalledWith(
+      'warning',
+      expect.stringContaining('Skill conflict detected'),
+    );
   });
 
   it('should discover built-in skills', async () => {
