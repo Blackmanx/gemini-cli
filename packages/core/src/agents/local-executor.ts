@@ -1464,7 +1464,21 @@ export class LocalAgentExecutor<TOutput extends z.ZodTypeAny> {
       return skills;
     }
     const wanted = allowed.map((name) => name.toLowerCase());
-    return skills.filter((skill) => wanted.includes(skill.name.toLowerCase()));
+    const resolved = skills.filter((skill) =>
+      wanted.includes(skill.name.toLowerCase()),
+    );
+    // A typo here silently costs the agent its whole catalog, and the
+    // resulting run looks like the skills simply do not exist.
+    const unknown = allowed.filter(
+      (name) =>
+        !resolved.some((s) => s.name.toLowerCase() === name.toLowerCase()),
+    );
+    if (unknown.length > 0) {
+      debugLogger.warn(
+        `Agent "${this.definition.name}" names skills that were not discovered: ${unknown.join(', ')}. It runs with ${resolved.length} skill(s) instead.`,
+      );
+    }
+    return resolved;
   }
 
   /** Builds the system prompt from the agent definition and inputs. */

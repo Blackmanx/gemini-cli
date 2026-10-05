@@ -1030,6 +1030,31 @@ describe('LocalAgentExecutor', () => {
         expect(nameSchema).toMatchObject({ enum: ['fastapi'] });
       });
 
+      it('injects no skill at all for an empty list', async () => {
+        const prompt = await promptOf(await buildExecutorWithSkills([]));
+
+        expect(prompt).not.toContain('fastapi');
+        expect(prompt).not.toContain('angular');
+        expect(prompt).toContain('Achieve the goal');
+      });
+
+      it('matches named skills case-insensitively', async () => {
+        const prompt = await promptOf(
+          await buildExecutorWithSkills(['FastAPI']),
+        );
+
+        expect(prompt).toContain('fastapi');
+        expect(prompt).not.toContain('angular');
+      });
+
+      it('warns when a named skill was never discovered', async () => {
+        const warn = vi.spyOn(debugLogger, 'warn').mockImplementation(() => {});
+
+        await promptOf(await buildExecutorWithSkills(['fastapi', 'no-existe']));
+
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('no-existe'));
+      });
+
       it('leaves the enum untouched when no skills are named', async () => {
         const nameSchema = enumOf(await buildExecutorWithSkills());
 
