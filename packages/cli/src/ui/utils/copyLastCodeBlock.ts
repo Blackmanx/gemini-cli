@@ -8,7 +8,7 @@ import { debugLogger } from '@google/gemini-cli-core';
 import { lastCodeBlock } from './codeBlockExtract.js';
 import { copyToClipboard } from './commandUtils.js';
 import type { Settings } from '../../config/settingsSchema.js';
-import type { Content } from '@google/gemini-cli-core';
+import type { HistoryItem } from '../types.js';
 
 /**
  * Copying the model's last code block, shared by the F5 key and `/copy-block`.
@@ -25,21 +25,30 @@ export interface CopyBlockOutcome {
   copied: string | null;
 }
 
-/** The concatenated text of every model reply in the chat, oldest first. */
-export function lastModelReply(history: readonly Content[] | undefined): string {
-  return (
-    history
-      ?.filter((item) => item.role === 'model')
-      .flatMap((item) => item.parts?.map((part) => part.text) ?? [])
-      .join('') ?? ''
-  );
+/**
+ * The last thing the model actually printed, from the TUI's own history.
+ *
+ * The chat history is not the source: what reaches the screen is what the user
+ * is looking at, and a reply can be edited, truncated or replayed before it is
+ * drawn. Mining the rendered items also means fences are present, which is what
+ * the extractor needs.
+ */
+export function lastRenderedReply(
+  history: readonly HistoryItem[] | undefined,
+): string {
+  for (let i = (history?.length ?? 0) - 1; i >= 0; i--) {
+    const item = history![i];
+    if ((item.type === 'gemini' || item.type === 'gemini_content') && item.text)
+      return item.text;
+  }
+  return '';
 }
 
 export async function copyLastCodeBlock(
-  history: readonly Content[] | undefined,
+  history: readonly HistoryItem[] | undefined,
   settings: Settings,
 ): Promise<CopyBlockOutcome> {
-  const block = lastCodeBlock(lastModelReply(history));
+  const block = lastCodeBlock(lastRenderedReply(history));
   if (!block) {
     return {
       message: 'No code block in the last response.',

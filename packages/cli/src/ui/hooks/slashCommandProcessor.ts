@@ -98,6 +98,7 @@ export const useSlashCommandProcessor = (
   config: Config | null,
   settings: LoadedSettings,
   addItem: UseHistoryManagerReturn['addItem'],
+  history: UseHistoryManagerReturn['history'],
   clearItems: UseHistoryManagerReturn['clearItems'],
   loadHistory: UseHistoryManagerReturn['loadHistory'],
   refreshStatic: () => void,
@@ -218,6 +219,7 @@ export const useSlashCommandProcessor = (
       },
       ui: {
         addItem,
+        history,
         clear: () => {
           clearItems();
           refreshStatic();
@@ -260,6 +262,7 @@ export const useSlashCommandProcessor = (
       logger,
       loadHistory,
       addItem,
+      history,
       clearItems,
       refreshStatic,
       session.stats,

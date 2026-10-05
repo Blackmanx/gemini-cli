@@ -48,6 +48,12 @@ export interface CommandContext {
   ui: {
     /** Adds a new item to the history display. */
     addItem: UseHistoryManagerReturn['addItem'];
+    /**
+     * The items currently on screen. A command that needs to act on what the
+     * model actually printed — copying a code block, for instance — must read
+     * this rather than the chat history, which is not the same text.
+     */
+    history: UseHistoryManagerReturn['history'];
     /** Clears all history items and the console screen. */
     clear: () => void;
     /**

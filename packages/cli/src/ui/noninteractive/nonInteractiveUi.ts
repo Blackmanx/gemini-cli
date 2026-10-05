@@ -14,6 +14,9 @@ import type { ExtensionUpdateAction } from '../state/extensions.js';
  */
 export function createNonInteractiveUI(): CommandContext['ui'] {
   return {
+    // Headless has no rendered transcript; there is nothing to read a code
+    // block back from, so commands that need one say so rather than guess.
+    history: [],
     addItem: (item, _timestamp) => {
       if ('text' in item && item.text) {
         if (item.type === 'error') {

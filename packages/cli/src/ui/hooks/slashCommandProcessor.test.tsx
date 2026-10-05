@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { HistoryItem } from '../types.js';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { renderHook } from '../../test-utils/render.js';
@@ -121,6 +122,7 @@ function createTestCommand(
 
 describe('useSlashCommandProcessor', () => {
   const mockAddItem = vi.fn();
+  const mockHistory: HistoryItem[] = [];
   const mockClearItems = vi.fn();
   const mockLoadHistory = vi.fn();
   const mockOpenThemeDialog = vi.fn();
@@ -192,6 +194,7 @@ describe('useSlashCommandProcessor', () => {
           mockConfig,
           mockSettings,
           mockAddItem,
+          mockHistory,
           mockClearItems,
           mockLoadHistory,
           refreshStatic,

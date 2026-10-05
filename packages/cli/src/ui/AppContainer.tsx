@@ -1025,6 +1025,7 @@ Logging in with Google... Restarting Gemini CLI to continue.
     config,
     settings,
     historyManager.addItem,
+    historyManager.history,
     historyManager.clearItems,
     historyManager.loadHistory,
     refreshStatic,
@@ -1858,14 +1859,12 @@ Logging in with Google... Restarting Gemini CLI to continue.
       }
 
       if (keyMatchers[Command.COPY_LAST_CODE_BLOCK](key)) {
-        void copyLastCodeBlock(
-          config.getGeminiClient()?.getChat()?.getHistory(),
-          settings.merged,
-        ).then((outcome) =>
-          historyManager.addItem({
-            type: outcome.isError ? 'error' : 'info',
-            text: outcome.message,
-          }),
+        void copyLastCodeBlock(historyManager.history, settings.merged).then(
+          (outcome) =>
+            historyManager.addItem({
+              type: outcome.isError ? 'error' : 'info',
+              text: outcome.message,
+            }),
         );
         return true;
       }

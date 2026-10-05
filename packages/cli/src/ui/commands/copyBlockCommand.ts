@@ -19,7 +19,7 @@ export const copyBlockCommand: SlashCommand = {
   autoExecute: true,
   action: async (context): Promise<SlashCommandActionReturn | void> => {
     const outcome = await copyLastCodeBlock(
-      context.services.agentContext?.geminiClient?.getChat()?.getHistory(),
+      context.ui.history,
       context.services.settings.merged,
     );
     return {
