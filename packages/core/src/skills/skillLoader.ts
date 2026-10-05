@@ -31,6 +31,28 @@ export interface SkillDefinition {
   extensionName?: string;
 }
 
+/**
+ * How a skills directory lays its manifests out on disk.
+ *
+ * The two layouts are not interchangeable. `SKILL.md` is Gemini's own
+ * convention, and insisting on it in `.gemini/skills` is what keeps a `README`
+ * sitting next to a manifest from being read as a second, competing skill.
+ * The `.agents/skills` alias exists for tools following the Agent Skills
+ * standard, where the manifest may be any markdown file at the root or one
+ * directory deep — so there the filename is not a signal.
+ */
+export type SkillDirLayout = 'skill-md' | 'any-markdown';
+
+/** The only manifest `SKILL.md` directories are scanned for. */
+const SKILL_MD_PATTERN = ['SKILL.md', '*/SKILL.md'];
+
+/**
+ * Every markdown file at the root or one directory deep, for the interop
+ * alias. A leading underscore still marks a shared bundle rather than a skill,
+ * which is how other tools park common references.
+ */
+const ANY_MARKDOWN_PATTERN = ['*.md', '*/*.md', '!_*', '!_*/**'];
+
 export const FRONTMATTER_REGEX =
   /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n([\s\S]*))?/;
 
@@ -111,9 +133,14 @@ function parseSimpleFrontmatter(
 
 /**
  * Discovers and loads all skills in the provided directory.
+ *
+ * @param dir Directory to scan.
+ * @param layout Which manifest convention the directory follows. Defaults to
+ *   `skill-md`; pass `any-markdown` for the `.agents/skills` interop alias.
  */
 export async function loadSkillsFromDir(
   dir: string,
+  layout: SkillDirLayout = 'skill-md',
 ): Promise<SkillDefinition[]> {
   const discoveredSkills: SkillDefinition[] = [];
 
@@ -124,13 +151,23 @@ export async function loadSkillsFromDir(
       return [];
     }
 
-    const pattern = ['SKILL.md', '*/SKILL.md'];
-    const skillFiles = await glob(pattern, {
-      cwd: absoluteSearchPath,
-      absolute: true,
-      nodir: true,
-      ignore: ['**/node_modules/**', '**/.git/**'],
-    });
+    const interop = layout === 'any-markdown';
+    const skillFiles = await glob(
+      interop ? ANY_MARKDOWN_PATTERN : SKILL_MD_PATTERN,
+      {
+        cwd: absoluteSearchPath,
+        absolute: true,
+        nodir: true,
+        // A leading underscore marks a shared bundle rather than a skill —
+        // how other tools park references common to several skills — so it is
+        // skipped wherever it appears, including nested below a skill folder.
+        ignore: [
+          '**/node_modules/**',
+          '**/.git/**',
+          ...(interop ? ['_*', '_*/**', '*/*/_*/**'] : []),
+        ],
+      },
+    );
 
     for (const skillFile of skillFiles) {
       const metadata = await loadSkillFromFile(skillFile);
@@ -143,7 +180,10 @@ export async function loadSkillsFromDir(
       const files = await fs.readdir(absoluteSearchPath);
       if (files.length > 0) {
         debugLogger.debug(
-          `Failed to load skills from ${absoluteSearchPath}. The directory is not empty but no valid skills were discovered. Please ensure SKILL.md files are present in subdirectories and have valid frontmatter.`,
+          `Failed to load skills from ${absoluteSearchPath}. The directory is not empty but no valid skills were discovered. ` +
+            (layout === 'any-markdown'
+              ? 'Any markdown file at the root or one level deep counts, provided it opens with a `name` and a `description` in its frontmatter.'
+              : 'Ensure SKILL.md files are present in subdirectories and have valid frontmatter.'),
         );
       }
     }

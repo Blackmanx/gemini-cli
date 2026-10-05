@@ -72,9 +72,12 @@ export class SkillManager {
     const userSkills = await loadSkillsFromDir(Storage.getUserSkillsDir());
     this.addSkillsWithPrecedence(userSkills);
 
-    // 3.1 User agent skills alias (.agents/skills)
+    // 3.1 User agent skills alias (.agents/skills). This alias exists for
+    // tools following the Agent Skills standard, where the manifest is any
+    // markdown file rather than a file called SKILL.md.
     const userAgentSkills = await loadSkillsFromDir(
       Storage.getUserAgentSkillsDir(),
+      'any-markdown',
     );
     this.addSkillsWithPrecedence(userAgentSkills);
 
@@ -94,6 +97,7 @@ export class SkillManager {
     // 4.1 Workspace agent skills alias (.agents/skills)
     const projectAgentSkills = await loadSkillsFromDir(
       storage.getProjectAgentSkillsDir(),
+      'any-markdown',
     );
     this.addSkillsWithPrecedence(projectAgentSkills);
   }

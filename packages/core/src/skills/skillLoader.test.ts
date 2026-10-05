@@ -286,4 +286,74 @@ description: Test sanitization
       'https://antigravity.google/docs/cli-getting-started',
     );
   });
+
+  describe('any-markdown layout', () => {
+    const manifest = (name: string, description: string) =>
+      `---\nname: ${name}\ndescription: ${description}\n---\n\nBody of ${name}.\n`;
+
+    const write = async (rel: string, content: string) => {
+      const file = path.join(testRootDir, rel);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.writeFile(file, content);
+    };
+
+    beforeEach(async () => {
+      await write('root-skill.md', manifest('root-skill', 'at the root'));
+      await write(
+        'nested/anything.md',
+        manifest('nested-skill', 'one directory deep'),
+      );
+      await write('nested/SKILL.md', manifest('canonical', 'canonical name'));
+      await write('too/deep/ignore.md', manifest('too-deep', 'two deep'));
+    });
+
+    it('loads markdown manifests at the root and one level deep', async () => {
+      const skills = await loadSkillsFromDir(testRootDir, 'any-markdown');
+
+      expect(skills.map((s) => s.name).sort()).toEqual([
+        'canonical',
+        'nested-skill',
+        'root-skill',
+      ]);
+    });
+
+    it('finds nothing at two levels deep', async () => {
+      const skills = await loadSkillsFromDir(testRootDir, 'any-markdown');
+
+      expect(skills.map((s) => s.name)).not.toContain('too-deep');
+    });
+
+    it('skips a shared bundle marked with a leading underscore', async () => {
+      await write('_shared/common.md', manifest('shared-thing', 'shared'));
+
+      const skills = await loadSkillsFromDir(testRootDir, 'any-markdown');
+
+      expect(skills.map((s) => s.name)).not.toContain('shared-thing');
+    });
+
+    it('loads a sibling markdown file next to a SKILL.md', async () => {
+      await write('collide/SKILL.md', manifest('collide', 'canonical'));
+      await write('collide/extra.md', manifest('collide-extra', 'sibling'));
+
+      const skills = await loadSkillsFromDir(testRootDir, 'any-markdown');
+
+      expect(skills.map((s) => s.name)).toEqual(
+        expect.arrayContaining(['collide', 'collide-extra']),
+      );
+    });
+
+    it('ignores a markdown file with no frontmatter', async () => {
+      await write('README.md', '# Just a readme\n\nNothing here.\n');
+
+      const skills = await loadSkillsFromDir(testRootDir, 'any-markdown');
+
+      expect(skills.map((s) => s.name)).not.toContain('readme');
+    });
+
+    it('leaves the SKILL.md layout untouched by the alias', async () => {
+      const skills = await loadSkillsFromDir(testRootDir);
+
+      expect(skills.map((s) => s.name)).toEqual(['canonical']);
+    });
+  });
 });
