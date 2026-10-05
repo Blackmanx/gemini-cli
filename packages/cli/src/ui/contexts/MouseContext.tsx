@@ -35,6 +35,12 @@ const MAX_MOUSE_BUFFER_SIZE = 4096;
 interface MouseContextValue {
   subscribe: (handler: MouseHandler) => void;
   unsubscribe: (handler: MouseHandler) => void;
+  /**
+   * Whether mouse reporting is currently on. A clickable affordance has to
+   * hide itself when clicks are not being reported, or it advertises
+   * something that cannot be used.
+   */
+  enabled: boolean;
 }
 
 const MouseContext = createContext<MouseContextValue | undefined>(undefined);
@@ -47,11 +53,24 @@ export function useMouseContext() {
   return context;
 }
 
+/**
+ * The mouse context, or `undefined` when no `MouseProvider` is mounted.
+ *
+ * Components that merely offer a click target — a code block, for instance —
+ * must still render where mouse support is not wired up, so they cannot use
+ * `useMouseContext`, which throws.
+ */
+export function useOptionalMouseContext(): MouseContextValue | undefined {
+  return useContext(MouseContext);
+}
+
 export function useMouse(handler: MouseHandler, { isActive = true } = {}) {
-  const { subscribe, unsubscribe } = useMouseContext();
+  const context = useContext(MouseContext);
+  const subscribe = context?.subscribe;
+  const unsubscribe = context?.unsubscribe;
 
   useEffect(() => {
-    if (!isActive) {
+    if (!isActive || !subscribe || !unsubscribe) {
       return;
     }
 
@@ -193,8 +212,12 @@ export function MouseProvider({
   }, [stdin, mouseEventsEnabled, subscribers, debugKeystrokeLogging]);
 
   const contextValue = useMemo(
-    () => ({ subscribe, unsubscribe }),
-    [subscribe, unsubscribe],
+    () => ({
+      subscribe,
+      unsubscribe,
+      enabled: mouseEventsEnabled ?? false,
+    }),
+    [subscribe, unsubscribe, mouseEventsEnabled],
   );
 
   return (

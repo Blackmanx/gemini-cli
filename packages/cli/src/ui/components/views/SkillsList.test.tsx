@@ -80,6 +80,29 @@ describe('SkillsList Component', () => {
     unmount();
   });
 
+  it('should point at /skills list all when only built-ins were filtered out', async () => {
+    const { lastFrame, unmount } = await render(
+      <SkillsList
+        skills={[]}
+        showDescriptions={true}
+        hiddenBuiltinCount={16}
+      />,
+    );
+    const output = lastFrame();
+    expect(output).toContain('16 built-in skills available');
+    expect(output).toContain('/skills list all');
+    expect(output).not.toContain('No skills available.');
+    unmount();
+  });
+
+  it('should singularize a single hidden built-in', async () => {
+    const { lastFrame, unmount } = await render(
+      <SkillsList skills={[]} showDescriptions={true} hiddenBuiltinCount={1} />,
+    );
+    expect(lastFrame()).toContain('1 built-in skill available');
+    unmount();
+  });
+
   it('should only render Available Agent Skills section when all skills are enabled', async () => {
     const enabledOnly = mockSkills.filter((s) => !s.disabled);
     const { lastFrame, unmount } = await render(

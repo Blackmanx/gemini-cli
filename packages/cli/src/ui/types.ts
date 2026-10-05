@@ -341,6 +341,12 @@ export type HistoryItemSkillsList = HistoryItemBase & {
   type: 'skills_list';
   skills: SkillDefinition[];
   showDescriptions: boolean;
+  /**
+   * How many built-in skills the filter hid. Without this an empty list is
+   * indistinguishable from having none, which reads as "this build ships
+   * nothing" when it ships sixteen.
+   */
+  hiddenBuiltinCount?: number;
 };
 
 export type AgentDefinitionJson = Pick<

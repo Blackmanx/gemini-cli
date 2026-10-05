@@ -12,6 +12,11 @@ import { TableRenderer } from './TableRenderer.js';
 import { RenderInline } from './InlineMarkdownRenderer.js';
 import { useSettings } from '../contexts/SettingsContext.js';
 import { useAlternateBuffer } from '../hooks/useAlternateBuffer.js';
+import { useMouseClick } from '../hooks/useMouseClick.js';
+import { useOptionalMouseContext } from '../contexts/MouseContext.js';
+import { copyToClipboard } from './commandUtils.js';
+import { debugLogger } from '@google/gemini-cli-core';
+import type { DOMElement } from 'ink';
 
 interface MarkdownDisplayProps {
   text: string;
@@ -336,6 +341,37 @@ const RenderCodeBlockInternal: React.FC<RenderCodeBlockProps> = ({
   const MIN_LINES_FOR_MESSAGE = 1; // Minimum lines to show before the "generating more" message
   const RESERVED_LINES = 2; // Lines reserved for the message itself and potential padding
 
+  // Every hook runs before the early returns below; a hook after one of them
+  // would be called conditionally, and React would drop the subscription the
+  // first time a long pending block took a different branch.
+  const fullContent = content.join('\n');
+  const copyRef = React.useRef<DOMElement>(null);
+  const mouseEnabled = useOptionalMouseContext()?.enabled ?? false;
+  const [copied, setCopied] = React.useState(false);
+  const copiedTimer = React.useRef<NodeJS.Timeout | undefined>(undefined);
+
+  useMouseClick(
+    copyRef,
+    () => {
+      clearTimeout(copiedTimer.current);
+      void copyToClipboard(fullContent, settings.merged)
+        .then(() => {
+          setCopied(true);
+          // The label reports the last click, not a mode. Left as-is it would
+          // claim every later block was the one that got copied.
+          copiedTimer.current = setTimeout(() => setCopied(false), 2000);
+        })
+        .catch((error: unknown) =>
+          debugLogger.debug(
+            `Could not copy code block: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+    },
+    { isActive: mouseEnabled },
+  );
+
+  React.useEffect(() => () => clearTimeout(copiedTimer.current), []);
+
   // When not in alternate buffer mode we need to be careful that we don't
   // trigger flicker when the pending code is too long to fit in the terminal
   if (
@@ -376,7 +412,6 @@ const RenderCodeBlockInternal: React.FC<RenderCodeBlockProps> = ({
     }
   }
 
-  const fullContent = content.join('\n');
   const colorizedCode = colorizeCode({
     code: fullContent,
     language: lang,
@@ -387,12 +422,18 @@ const RenderCodeBlockInternal: React.FC<RenderCodeBlockProps> = ({
 
   return (
     <Box
+      ref={copyRef}
       paddingLeft={CODE_BLOCK_PREFIX_PADDING}
       flexDirection="column"
       width={terminalWidth}
       flexShrink={0}
     >
       {colorizedCode}
+      {mouseEnabled && (
+        <Text color={copied ? theme.text.accent : theme.text.secondary}>
+          {copied ? ' \u2713 copied' : ' click to copy'}
+        </Text>
+      )}
     </Box>
   );
 };

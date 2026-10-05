@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MarkdownDisplay } from './MarkdownDisplay.js';
 import { LoadedSettings } from '../../config/settings.js';
 import { renderWithProviders } from '../../test-utils/render.js';
+import * as commandUtils from './commandUtils.js';
 
 describe('<MarkdownDisplay />', () => {
   const baseProps = {
@@ -232,6 +233,49 @@ Another paragraph.
       expect(lastFrame()).toMatchSnapshot();
       expect(lastFrame()).toContain('1 const x = 1;');
       unmount();
+    });
+
+    describe('click-to-copy code blocks', () => {
+      const codeText = '```bash\nls -lR /tmp\n```';
+
+      it('offers no affordance while mouse reporting is off', async () => {
+        const { lastFrame, unmount } = await renderWithProviders(
+          <MarkdownDisplay {...baseProps} text={codeText} />,
+        );
+        expect(lastFrame()).not.toContain('click to copy');
+        unmount();
+      });
+
+      it('advertises the click target when mouse reporting is on', async () => {
+        const { lastFrame, unmount } = await renderWithProviders(
+          <MarkdownDisplay {...baseProps} text={codeText} />,
+          { mouseEventsEnabled: true },
+        );
+        expect(lastFrame()).toContain('click to copy');
+        unmount();
+      });
+
+      it('copies the block and confirms on click', async () => {
+        const copied: string[] = [];
+        const copySpy = vi
+          .spyOn(commandUtils, 'copyToClipboard')
+          .mockImplementation(async (text: string) => {
+            copied.push(text);
+          });
+
+        const { unmount, simulateClick } = await renderWithProviders(
+          <MarkdownDisplay {...baseProps} text={codeText} />,
+          { mouseEventsEnabled: true },
+        );
+
+        await simulateClick(2, 2);
+
+        // The ✓ copied confirmation is transient state that reverts on a
+        // timer; asserting it here would pin the delay, not the behaviour.
+        expect(copied).toEqual(['ls -lR /tmp']);
+        copySpy.mockRestore();
+        unmount();
+      });
     });
   });
 });

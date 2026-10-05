@@ -13,11 +13,13 @@ import { SKILLS_DOCS_URL } from '../../constants.js';
 interface SkillsListProps {
   skills: readonly SkillDefinition[];
   showDescriptions: boolean;
+  hiddenBuiltinCount?: number;
 }
 
 export const SkillsList: React.FC<SkillsListProps> = ({
   skills,
   showDescriptions,
+  hiddenBuiltinCount = 0,
 }) => {
   const sortSkills = (a: SkillDefinition, b: SkillDefinition) => {
     if (a.isBuiltin === b.isBuiltin) {
@@ -86,7 +88,21 @@ export const SkillsList: React.FC<SkillsListProps> = ({
         </Box>
       )}
 
-      {skills.length === 0 && (
+      {skills.length === 0 && hiddenBuiltinCount > 0 && (
+        <Box flexDirection="column">
+          <Text color={theme.text.primary}>No project or user skills.</Text>
+          <Box flexDirection="row">
+            <Text color={theme.text.primary}>
+              {hiddenBuiltinCount} built-in skill
+              {hiddenBuiltinCount === 1 ? '' : 's'} available — use{' '}
+            </Text>
+            <Text color={theme.text.link}>/skills list all</Text>
+            <Text color={theme.text.primary}> to see them.</Text>
+          </Box>
+        </Box>
+      )}
+
+      {skills.length === 0 && hiddenBuiltinCount === 0 && (
         <Box flexDirection="column">
           <Text color={theme.text.primary}>No skills available.</Text>
           <Box flexDirection="row">

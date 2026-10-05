@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Storage } from '../config/storage.js';
 import { type SkillDefinition, loadSkillsFromDir } from './skillLoader.js';
+import { findProjectAgentSkillDirs } from './skillDirs.js';
 import type { GeminiCLIExtension } from '../config/config.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import { coreEvents } from '../utils/events.js';
@@ -94,7 +95,17 @@ export class SkillManager {
     );
     this.addSkillsWithPrecedence(projectSkills);
 
-    // 4.1 Workspace agent skills alias (.agents/skills)
+    // 4.1 Workspace agent skills alias (.agents/skills). Resolved across the
+    // workspace rather than only at `<cwd>`: whoever wants a service's skills
+    // together with its sibling's is standing a level above both. Farthest
+    // first, so a nearer project overrides any name the two share.
+    const nested = findProjectAgentSkillDirs(storage.getProjectRoot())
+      .filter((dir) => dir !== storage.getProjectAgentSkillsDir())
+      .reverse();
+    for (const dir of nested) {
+      this.addSkillsWithPrecedence(await loadSkillsFromDir(dir, 'any-markdown'));
+    }
+
     const projectAgentSkills = await loadSkillsFromDir(
       storage.getProjectAgentSkillsDir(),
       'any-markdown',

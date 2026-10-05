@@ -55,9 +55,8 @@ async function listAction(
     return;
   }
 
-  const skills = showAll
-    ? skillManager.getAllSkills()
-    : skillManager.getAllSkills().filter((s) => !s.isBuiltin);
+  const all = skillManager.getAllSkills();
+  const skills = showAll ? all : all.filter((s) => !s.isBuiltin);
 
   const skillsListItem: HistoryItemSkillsList = {
     type: MessageType.SKILLS_LIST,
@@ -70,6 +69,8 @@ async function listAction(
       isBuiltin: skill.isBuiltin,
     })),
     showDescriptions: useShowDescriptions,
+    hiddenBuiltinCount:
+      skills.length === 0 ? all.filter((s) => s.isBuiltin).length : undefined,
   };
 
   context.ui.addItem(skillsListItem);
