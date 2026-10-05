@@ -32,6 +32,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  statSync,
   rmSync,
 } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -57,6 +58,45 @@ function run(command, args, opts = {}) {
     cwd: root,
     ...opts,
   });
+}
+
+/**
+ * Whether `packages/core/dist` reflects the current `packages/core/src`.
+ *
+ * The bundle reads core through that workspace's `main`, which points at
+ * `dist`, not at the TypeScript source — so a stale `dist` becomes a release
+ * silently missing a core-only change. That happened here once.
+ *
+ * Freshness is taken from the incremental build's stamp, not from comparing
+ * file mtimes: `tsc --incremental` leaves unchanged outputs untouched, so a
+ * per-file mtime check reports a freshly built tree as stale. The build info
+ * file is rewritten on every successful compile, which is exactly the signal
+ * wanted.
+ */
+function coreDistIsStale() {
+  const stamp = join(root, 'packages/core/dist/tsconfig.tsbuildinfo');
+  if (!existsSync(stamp)) {
+    return 'packages/core/dist has never been built';
+  }
+  const newestSource = newestMtime(join(root, 'packages/core/src'));
+  return statSync(stamp).mtimeMs < newestSource
+    ? 'packages/core/src is newer than the last core build'
+    : null;
+}
+
+/** Newest mtime under `dir`, or 0 when it does not exist. */
+function newestMtime(dir) {
+  let newest = 0;
+  const walk = (current) => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const full = join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else newest = Math.max(newest, statSync(full).mtimeMs);
+    }
+  };
+  if (!existsSync(dir)) return 0;
+  walk(dir);
+  return newest;
 }
 
 // Stamp the version from HEAD before anything reads it.
@@ -148,15 +188,24 @@ if (argv.has('--skip-build') && versionChanged) {
   );
   process.exit(1);
 }
-if (!argv.has('--skip-build')) {
+// esbuild resolves `@google/gemini-cli-core` through that workspace's `main`,
+// which points at `packages/core/dist` — not at its TypeScript source. So
+// `npm run bundle` alone happily packages whatever the last core build left
+// behind, and a core-only change ships as a release that silently lacks it.
+// Rebuild core first; that is the whole guard.
+if (argv.has('--skip-build')) {
+  const stale = coreDistIsStale();
+  if (stale) {
+    console.error(
+      `Refusing to package: ${stale}. The bundle reads core from dist, so it ` +
+        'would ship without the current changes. Run `npm run build ' +
+        '--workspace @google/gemini-cli-core`, or drop --skip-build.',
+    );
+    process.exit(1);
+  }
+} else {
+  run('npm', ['run', 'build', '--workspace', '@google/gemini-cli-core']);
   run('npm', ['run', 'bundle']);
-}
-
-if (!existsSync(join(bundleDir, 'gemini.js'))) {
-  console.error(
-    'bundle/gemini.js missing - the bundle step did not produce it.',
-  );
-  process.exit(1);
 }
 
 // 2. Give the bundle a manifest so npm can install it.
