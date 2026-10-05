@@ -29,6 +29,7 @@ import { freshCommand } from '../ui/commands/freshCommand.js';
 import { commandsCommand } from '../ui/commands/commandsCommand.js';
 import { compressCommand } from '../ui/commands/compressCommand.js';
 import { copyCommand } from '../ui/commands/copyCommand.js';
+import { copyBlockCommand } from '../ui/commands/copyBlockCommand.js';
 import { corgiCommand } from '../ui/commands/corgiCommand.js';
 import { docsCommand } from '../ui/commands/docsCommand.js';
 import { exportSessionCommand } from '../ui/commands/exportSessionCommand.js';
@@ -138,6 +139,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
       commandsCommand,
       compressCommand,
       copyCommand,
+      copyBlockCommand,
       corgiCommand,
       docsCommand,
       exportSessionCommand,

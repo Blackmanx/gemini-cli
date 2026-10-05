@@ -436,8 +436,8 @@ const RenderCodeBlockInternal: React.FC<RenderCodeBlockProps> = ({
         {copied
           ? ' ✓ copied'
           : mouseEnabled
-            ? ' click to copy, or ctrl+shift+c'
-            : ' ctrl+shift+c to copy'}
+            ? ' click to copy, or F5'
+            : ' F5 to copy, or /copy-block'}
       </Text>
     </Box>
   );
