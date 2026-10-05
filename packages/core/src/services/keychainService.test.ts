@@ -129,6 +129,14 @@ describe('KeychainService', () => {
         })),
       ),
     );
+
+    // The service short-circuits to the file keychain when it detects WSL,
+    // so the native-keychain cases below never reach their subject unless the
+    // markers are gone. Clear them here rather than in each test; the suite
+    // that does exercise the WSL path sets them back explicitly.
+    for (const marker of ['WSL_DISTRO_NAME', 'WSLENV', 'WSL_INTEROP']) {
+      vi.stubEnv(marker, undefined);
+    }
   });
 
   afterEach(() => {
