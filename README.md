@@ -91,6 +91,10 @@ inside a git repository and fails with _"not a git repository"_.
 
 [releases]: https://github.com/Blackmanx/gemini-cli/releases
 
+**1b. Already have an older build?** Same three commands; the zip replaces the
+whole directory, so there is nothing to uninstall and no version to pin. See
+[Upgrading an existing install](#upgrading-an-existing-install) below.
+
 **2. Unpack it somewhere stable.** The bundle is self-contained, so the location
 only has to survive; it does not need to be the source tree.
 
@@ -428,6 +432,49 @@ To undo a link, see the prefix note above; the symlink lives in
 
 Either install path needs only Node >= 20 (see `.nvmrc`); the bundle is
 self-contained and has no runtime dependency on the clone.
+
+### Upgrading an existing install
+
+The bundle is self-contained and lives entirely in one directory, so upgrading
+is _overwriting that directory_. There is no npm uninstall, no cache to clear,
+and no dependency to reconcile.
+
+```bash
+# 1. Find the latest tag
+REPO=Blackmanx/gemini-cli
+gh release list -R "$REPO" --limit 1
+
+# 2. Download it
+gh release download <tag> -R "$REPO" --pattern 'gemini-cli-bundle.zip'
+
+# 3. Replace the install in place — the old directory moves aside first, so a
+#    failed unzip never leaves you without a working gemini
+mv ~/opt/gemini-cli ~/opt/gemini-cli.bak
+unzip -q gemini-cli-bundle.zip -d ~/opt/gemini-cli
+chmod +x ~/opt/gemini-cli/bundle/gemini.js
+
+# 4. Confirm
+gemini --version          # the tag you just downloaded
+```
+
+Three things that make this safe:
+
+- **`~/.gemini` is never touched.** Your settings, OAuth credentials, managed
+  skills and trusted folders all live there, not in `~/opt/gemini-cli`. They
+  survive every upgrade, and so does anything else installed the same way.
+- **The old copy stays at `~/opt/gemini-cli.bak`** until you delete it. If the
+  new build misbehaves, `mv` it back and you are where you started.
+- **Nothing to reinstall.** There are no runtime dependencies, so there is no
+  `npm install` and no risk of a stale copy of core still sitting in `dist`.
+
+To roll back after a bad upgrade:
+
+```bash
+rm -rf ~/opt/gemini-cli
+mv ~/opt/gemini-cli.bak ~/opt/gemini-cli
+```
+
+Delete the backup once you are happy with the new version.
 
 ## 🧭 What this fork adds
 
