@@ -55,6 +55,12 @@ location is used. Within the same tier (user or workspace), the
 The `.agents/skills/` alias provides an interoperable path for managing
 agent-specific expertise that remains compatible across different AI tools.
 
+The alias also follows the standard's looser manifest rule: there, a skill is
+any `*.md` file at the root or one directory deep, not only a file named
+`SKILL.md`. `.gemini/skills/` keeps the stricter rule, so a `README.md` beside a
+manifest is never mistaken for a second skill. Under the alias, names starting
+with `_` are skipped — that is how other tools park shared references.
+
 ## Key benefits
 
 Agent Skills provide several advantages for managing specialized knowledge and

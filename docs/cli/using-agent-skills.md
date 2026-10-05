@@ -19,6 +19,10 @@ of precedence (lowest to highest):
 > **Tip:** If multiple skills share the same name, the version from the
 > higher-precedence location is used.
 
+The `.agents/skills` alias accepts any `*.md` file at its root or one directory
+deep as a manifest, since tools following the Agent Skills standard do not
+require the name `SKILL.md`. `.gemini/skills` only looks for `SKILL.md`.
+
 ## In-session management
 
 Use the `/skills` slash command during an interactive session to manage your

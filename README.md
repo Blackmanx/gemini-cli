@@ -600,35 +600,46 @@ commands, and only those marked concurrent-safe get through. Editing settings is
 just config state: it takes effect on the next turn, and the entries that need a
 restart already say so in the dialog.
 
-### corporate and gentle-ai skills ship built in
+### gentle-ai skills ship built in
 
-64 skills are packaged as built-in Agent Skills, so they are available in every
-session with no install step. They are ordinary `SKILL.md` directories under
+14 skills from [gentle-ai](https://github.com/gentleman-programming/gentle-ai)
+are packaged as built-in Agent Skills, so they are available in every session
+with no install step. They are ordinary `SKILL.md` directories under
 `bundle/builtin/<name>/`; the model reads only each name and description up
 front and pulls the body in when a task matches.
 
-| Origin               | Skills | Covers                                                                                                                                                                                                                                                                                       |
-| -------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| corporate `Skills-agentes` | 50     | Angular and frontend, Python backend (FastAPI, SQLAlchemy, Alembic, pytest, ruff, uvicorn, gunicorn), classic ML and deep learning, data visualization and wrangling, LLM stacks (LangChain, LangGraph, LlamaIndex, MCP, Promptfoo, Arize Phoenix), PPT decks, and H100 deployment templates |
-| `gentle-ai`          | 14     | Branch and chained PRs, issue triage and creation, judgment-day review, RDD defect workflow, work-unit commits, skill authoring and auditing, Go testing                                                                                                                                     |
-
-Two more, `skill-creator` and `antigravity-support`, come from upstream. The
-`gentle-ai` set is 15 skills minus its own `skill-creator`, which upstream
-already ships and which was left alone.
+They cover branch and chained PRs, issue triage and creation, judgment-day
+review, the RDD defect workflow, work-unit commits, skill authoring and
+auditing, doc design, ephemeral delegation, and Go testing. `skill-creator` and
+`antigravity-support` come from upstream, for 16 built-ins in total.
 
 List them with `gemini skills list --all`; the `[Built-in]` marker distinguishes
 them from your own. Because they sit in the lowest-precedence tier, a skill of
 the same name in `~/.gemini/skills/` or `.gemini/skills/` replaces one without
 any configuration, and `/skills disable <name>` turns a single one off.
 
-The corporate catalog shipped three skills with no frontmatter at all
-(`architecture-expert`, `design-patterns-expert`, `frontend-security-expert`),
-which every Agent Skills loader discards silently. Their descriptions were
-recovered from each skill's `metadata.json` `abstract`, so they now load.
+The ones that read bundled assets (`references/`) ship with them.
 
-Skills that reference bundled assets (`references/`, `templates/`) ship with
-them; `h100-deploy` in particular carries the deployment templates it tells the
-model to copy.
+### `.agents/skills` accepts any markdown filename
+
+The `.agents/skills` alias exists for tools that follow the
+[Agent Skills](https://agentskills.io) standard, where a manifest is any
+markdown file rather than a file named `SKILL.md`. Under that alias, both of
+these load:
+
+```
+.agents/skills/review-checklist.md        # at the root
+.agents/skills/data-viz/charting.md       # one directory deep
+```
+
+`.gemini/skills/` keeps the stricter rule and only looks for `SKILL.md`. That is
+deliberate: in `.gemini/skills/<name>/` a `README.md` next to the manifest would
+otherwise turn into a second, competing skill. Inside the alias, a file or
+directory whose name starts with `_` is still skipped — that is how other tools
+park references shared across skills.
+
+A markdown file with no `name` and `description` in its frontmatter is ignored
+either way, so prose that happens to sit in the directory is harmless.
 
 ### Subagents scoped to their own skills
 
