@@ -147,6 +147,37 @@ fila.cells[0].text = "2026-10-06"
 doc.save("informe.docx")
 ```
 
+## Building a workbook
+
+`new_from_template.py graficos` copies the workbook; `fill_workbook.py` makes it
+yours. A spec may add new sheets with corporate styling, fill the template's ready
+charts, or both in one pass:
+
+```bash
+python3 scripts/fill_workbook.py salida.xlsx spec.json
+```
+
+```json
+{"chart_sheets": [
+   {"sheet": "Barras por segmento",
+    "categories": ["Finanzas", "Salud", "Retail", "Manufactura"],
+    "series": [{"name": "2024", "values": [0.50, 0.45, 0.40, 0.35]},
+               {"name": "2026", "values": [0.85, 0.78, 0.70, 0.65]}],
+    "drop_others": true}],
+ "sheets": [
+   {"name": "Resumen",
+    "columns": ["Sector", "Adopción (%)", "Inversión 2026 (M€)"],
+    "rows": [["Finanzas y Seguros", 0.85, 1200],
+             ["Salud", 0.78, 950]]}]}
+```
+
+New sheets get the department palette from the template's own tokens — navy
+`#0E1245` header band in white bold, banded rows, sized columns, frozen header —
+so they match the charts without any manual formatting. Columns whose header
+mentions `%` are formatted as percentages. `drop_others` removes the chart
+sheets you did not ask for, which is how a delivered workbook stops carrying
+three sheets of sample data.
+
 ## Charts
 
 `assets/templates/chart-workbook.xlsx` has four worked sheets that are already themed:
