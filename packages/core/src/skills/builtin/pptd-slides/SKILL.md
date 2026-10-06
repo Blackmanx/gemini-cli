@@ -26,27 +26,49 @@ broken deck, which is why raw `python-pptx` against it is a trap:
    placeholder index 0 writes nothing — the slide comes out untitled.
 2. **Artwork overlaps the text boxes.** Most layouts carry decorative rings and
    bars positioned on top of the text placeholders, so text lands on the artwork.
-3. **`PICTURE` placeholders sit in the same list.** Text written into one renders
-   as nothing at all — not an error, just a blank.
+3. **23 of the 55 layouts are built from `PICTURE` placeholders** — 88 in all,
+   which is exactly where the good-looking designs live. Text written into one
+   renders as nothing at all: no error, just a blank. Plain python-pptx
+   therefore cannot use the image grids, two-column slides or section headers
+   *at all*, and a deck built that way is text-only by accident.
 
 `new_deck.py` handles all three and reports what it had to work around:
 
 ```bash
-python3 assets/templates/new_deck.py --list            # every usable layout, CLASH flag
+python3 assets/templates/new_deck.py --list            # every layout, CLASH flag and img= count
+python3 assets/templates/new_deck.py --describe "3 imágenes"
 python3 assets/templates/new_deck.py deck.pptx \
-    --slide "0|Crecimiento del uso de IA en 2026|Informe corporate" \
-    --slide "36|1. Introduccion|La IA ya no es una ventaja diferencial"
+    --slide "0|Crecimiento del uso de IA en 2026|Informe corporate"
 python3 assets/templates/new_deck.py deck.pptx --slides slides.json --trim-art
 ```
 
+For anything beyond a title and a body, use `fields`, which addresses every
+placeholder in a layout by index. This is how the image layouts get used:
+
+```json
+[{"layout": "13",
+  "title": "Adopción por sector",
+  "fields": {"2": {"image": "media/finanzas.png"},
+             "3": {"image": "media/salud.png"},
+             "4": "Retail: 70%"}},
+ {"layout": "28",
+  "title": "Tres palancas",
+  "fields": {"19": {"image": "media/a.png"}, "20": {"image": "media/b.png"}}}]
+```
+
+Run `--describe <layout>` first: it lists the text and image placeholder indices
+so the `fields` keys are right. An index that is not in the layout is reported,
+never ignored.
+
 Layouts are named, not indexed — `--list` prints them, and an ambiguous name is
 an error rather than a guess. `--trim-art` deletes only the artwork that
-geometrically collides with a text placeholder. The template's sample slides are
-dropped on the way out, so the deck starts empty.
+geometrically collides with a text placeholder. The template's 123 sample slides
+are dropped on the way out, so the deck starts empty.
 
-Read every warning the script prints. "layout offers one text area" means the
-body was appended to the heading rather than placed separately; pick a layout
-with two text placeholders if that matters.
+Read every warning. "image placeholder N left empty" means that decorative frame
+stays as an empty circle — fill every image slot or choose a layout with the
+count you need. "body appended to the heading" means the layout offers a single
+text area.
 
 Verify the result before delivering — this catches the collisions nothing else
 will report:

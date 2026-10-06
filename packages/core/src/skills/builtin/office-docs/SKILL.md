@@ -116,18 +116,45 @@ doc.save("informe.docx")
 `Gráfico de anillo`. Copy the relevant one rather than building a chart from
 scratch — the formatting is the point.
 
-openpyxl reads charts but does not create them. To add a new chart, copy a sheet
-that already has one:
+**Every chart reads a fixed block of cells, and that block's shape has nothing
+to do with the shape of a table of your data.** Writing your numbers anywhere
+else leaves the chart plotting the template's sample series — `Lorem ipsum`,
+`Jan`…`Dec` — which reads as real data and is worse than an empty chart.
 
-```python
-import shutil, openpyxl
-shutil.copyfile("plantilla.xlsx", "salida.xlsx")
-book = openpyxl.load_workbook("salida.xlsx")
-book.copy_worksheet(book["Gráfico de barras agrupadas"])
+```bash
+python3 scripts/chart_data.py describe        # every chart, its ranges and its shape
+python3 scripts/chart_data.py describe libro.xlsx
 ```
 
-If a new chart type is genuinely needed, build it in LibreOffice headless and
-let it write the XML — `soffice` is installed.
+```
+=== Gráfico de barras agrupadas
+  Bar
+    categories  B7:M7  (horizontal)
+    values      B8:M8  (horizontal)
+    shape       1 serie(s) x 12 categorias
+    ahora       ['Jan', 'Feb', ... 'Dec']
+```
+
+Pick the sheet whose shape fits the data, then write into it with `set`:
+
+```bash
+python3 scripts/chart_data.py set salida.xlsx "Gráfico de barras agrupadas" datos.json
+```
+
+```json
+{"categories": ["Ene", "Feb", "Mar"],
+ "series": [{"name": "Adopción IA", "values": [0.50, 0.62, 0.74]}]}
+```
+
+`set` writes into the exact ranges the chart reads, clears the sample labels
+beside them (`Name`, `Date`, `Lorem ipsum`), and **refuses** data of the wrong
+length instead of truncating it — a chart with three bars when the block holds
+twelve would otherwise silently mislead. Choose a different sheet, or rebuild
+the block, rather than forcing it.
+
+openpyxl reads charts but does not create them. For a chart type that does not
+exist here, copy a sheet that already has one and repoint its ranges, or build
+it in LibreOffice headless and let it write the XML — `soffice` is installed.
 
 ## Delivering
 
