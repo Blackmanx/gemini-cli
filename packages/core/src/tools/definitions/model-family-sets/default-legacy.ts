@@ -531,6 +531,12 @@ A good instruction should concisely answer:
           type: 'string',
           description: 'The search query to find information on the web.',
         },
+        recency: {
+          type: 'string',
+          enum: ['day', 'week', 'month', 'year'],
+          description:
+            "Restrict results to sources published inside this window. Set it whenever the answer depends on what is true NOW rather than on how something works — 'latest version', 'current price', 'recently released', 'breaking changes', 'who is the newest'. Without it the search returns the newest page about a superseded version, because the query text still matches. Leave it unset for stable questions like 'how does X work'.",
+        },
       },
       required: [WEB_SEARCH_PARAM_QUERY],
     },

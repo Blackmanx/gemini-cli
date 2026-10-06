@@ -261,6 +261,16 @@ exports[`coreTools snapshots for specific models > Model: gemini-2.5-pro > snaps
         "description": "The search query to find information on the web.",
         "type": "string",
       },
+      "recency": {
+        "description": "Restrict results to sources published inside this window. Set it whenever the answer depends on what is true NOW rather than on how something works — 'latest version', 'current price', 'recently released', 'breaking changes', 'who is the newest'. Without it the search returns the newest page about a superseded version, because the query text still matches. Leave it unset for stable questions like 'how does X work'.",
+        "enum": [
+          "day",
+          "week",
+          "month",
+          "year",
+        ],
+        "type": "string",
+      },
     },
     "required": [
       "query",
@@ -1155,17 +1165,18 @@ exports[`coreTools snapshots for specific models > Model: gemini-3-pro-preview >
         "description": "Set true to also read the top results and quote what is actually on the pages. Use this when the titles alone would not tell you whether a result is worth reading, or when you need specifics like version numbers, error text, or exact APIs. Costs an extra round-trip.",
         "type": "boolean",
       },
-      "provider": {
-        "description": "Search backend. 'auto' (default) tries DuckDuckGo and falls back to Gemini grounding. 'duckduckgo' returns raw result rows with each page's own snippet text - more to read, but you can judge relevance from the snippet instead of trusting a summary. 'grounding' returns a synthesized cited answer. Omit unless you specifically need one behavior.",
-        "enum": [
-          "auto",
-          "duckduckgo",
-          "grounding",
-        ],
-        "type": "string",
-      },
       "query": {
         "description": "The search query. Supports natural language questions (e.g., 'Latest breaking changes in React 19') or specific technical queries.",
+        "type": "string",
+      },
+      "recency": {
+        "description": "Restrict results to sources published inside this window. Set it whenever the answer depends on what is true NOW rather than on how something works — 'latest version', 'current price', 'recently released', 'breaking changes', 'who is the newest'. Without it the search returns the newest page about a superseded version, because the query text still matches. Leave it unset for stable questions like 'how does X work'.",
+        "enum": [
+          "day",
+          "week",
+          "month",
+          "year",
+        ],
         "type": "string",
       },
     },

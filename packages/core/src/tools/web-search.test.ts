@@ -13,34 +13,36 @@ import {
   afterEach,
   type Mock,
 } from 'vitest';
-import { WebSearchTool, type WebSearchToolParams } from './web-search.js';
+import {
+  WebSearchTool,
+  WEB_SEARCH_TIMEOUT_MS,
+  buildSearchInstruction,
+  type WebSearchToolParams,
+} from './web-search.js';
 import type { Config } from '../config/config.js';
 import { GeminiClient } from '../core/client.js';
 import { ToolErrorType } from './tool-error.js';
 import { createMockMessageBus } from '../test-utils/mock-message-bus.js';
-import type * as DdgModule from './duckduckgo-search.js';
-import { searchDuckDuckGo } from './duckduckgo-search.js';
 
 // Mock GeminiClient and Config constructor
 vi.mock('../core/client.js');
 vi.mock('../config/config.js');
-vi.mock('./duckduckgo-search.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof DdgModule>()),
-  searchDuckDuckGo: vi.fn(),
-}));
 
 describe('WebSearchTool', () => {
   const abortSignal = new AbortController().signal;
   let mockGeminiClient: GeminiClient;
   let tool: WebSearchTool;
 
+  let mockConfigInstance: Config;
+
   beforeEach(() => {
-    const mockConfigInstance = {
+    mockConfigInstance = {
       getGeminiClient: () => mockGeminiClient,
       get geminiClient() {
         return mockGeminiClient;
       },
       getProxy: () => undefined,
+      getWebSearchTimeoutMs: () => WEB_SEARCH_TIMEOUT_MS,
       generationConfigService: {
         getResolvedConfig: vi.fn().mockImplementation(({ model }) => ({
           model,
@@ -56,12 +58,6 @@ describe('WebSearchTool', () => {
     ).promptId = 'test-prompt-id';
     mockGeminiClient = new GeminiClient(mockConfigInstance);
     tool = new WebSearchTool(mockConfigInstance, createMockMessageBus());
-    // Default to "no results" so the grounding tests below keep exercising
-    // grounding rather than tripping the DuckDuckGo branch.
-    vi.mocked(searchDuckDuckGo).mockResolvedValue({
-      results: [],
-      blocked: false,
-    });
   });
 
   afterEach(() => {
@@ -457,75 +453,66 @@ Sources:
       );
       expect(result.sources).toHaveLength(3);
     });
+  });
+});
 
-    it('answers from DuckDuckGo with snippets and skips grounding', async () => {
-      vi.mocked(searchDuckDuckGo).mockResolvedValue({
-        results: [
-          {
-            title: 'Backpressuring in Streams',
-            url: 'https://example.com/bp',
-            snippet: 'Why backpressure matters.',
-            publishedDate: '2025-01-31',
-          },
-        ],
-        blocked: false,
-      });
+describe('buildSearchInstruction', () => {
+  const now = new Date('2026-10-06T09:00:00Z');
 
-      const invocation = tool.build({ query: 'stream backpressure' });
-      const result = await invocation.execute({ abortSignal });
+  it('anchors "latest" to today even without a recency parameter', () => {
+    const instruction = buildSearchInstruction(
+      'new models released',
+      undefined,
+      now,
+    );
 
-      expect(result.llmContent).toContain('Backpressuring in Streams');
-      expect(result.llmContent).toContain('Why backpressure matters.');
-      expect(result.llmContent).toContain('Published: 2025-01-31');
-      // The whole point: the model never spends a grounding call here.
-      expect(mockGeminiClient.generateContent).not.toHaveBeenCalled();
-    });
+    expect(instruction).toContain('2026-10-06');
+    expect(instruction).toContain('do not substitute an earlier year');
+  });
 
-    it('falls back to grounding when DuckDuckGo is blocked', async () => {
-      vi.mocked(searchDuckDuckGo).mockResolvedValue({
-        results: [],
-        blocked: true,
-      });
-      (mockGeminiClient.generateContent as Mock).mockResolvedValue({
-        candidates: [
-          {
-            content: { role: 'model', parts: [{ text: 'Grounded answer.' }] },
-          },
-        ],
-      });
+  it('keeps the recency hint alongside the anchor', () => {
+    const instruction = buildSearchInstruction('release notes', 'week', now);
 
-      const invocation = tool.build({ query: 'blocked query' });
-      const result = await invocation.execute({ abortSignal });
+    expect(instruction).toContain('2026-10-06');
+    expect(instruction).toContain('last 7 days');
+  });
 
-      expect(result.llmContent).toContain('Grounded answer.');
-      expect(mockGeminiClient.generateContent).toHaveBeenCalledTimes(1);
-    });
+  it('keeps the caller query first, so the anchor reads as a suffix', () => {
+    expect(buildSearchInstruction('q', undefined, now).startsWith('q')).toBe(
+      true,
+    );
+  });
+});
 
-    it('reports an error instead of silently swapping backends when pinned', async () => {
-      vi.mocked(searchDuckDuckGo).mockResolvedValue({
-        results: [],
-        blocked: true,
-      });
+describe('grounding timeout budget', () => {
+  it('budgets the attempt from config, not from the built-in constant', async () => {
+    const client = {
+      generateContent: vi.fn().mockRejectedValue(new Error('stop here')),
+    };
+    const config = {
+      getGeminiClient: () => client,
+      get geminiClient() {
+        return client;
+      },
+      getProxy: () => undefined,
+      // A link whose round trip exceeds the 30s default would otherwise time
+      // out on every search instead of merely running slowly.
+      getWebSearchTimeoutMs: () => 120_000,
+    } as unknown as Config;
+    (config as unknown as { config: Config }).config = config;
 
-      const invocation = tool.build({
-        query: 'pinned query',
-        provider: 'duckduckgo',
-      });
-      const result = await invocation.execute({ abortSignal });
+    const timeout = vi.spyOn(AbortSignal, 'timeout');
+    const tool = new WebSearchTool(config, createMockMessageBus());
+    await tool
+      .build({ query: 'q' })
+      .execute({ abortSignal: new AbortController().signal });
 
-      expect(result.error?.type).toBe(ToolErrorType.WEB_SEARCH_FAILED);
-      // Pinned means pinned: no silent substitution.
-      expect(mockGeminiClient.generateContent).not.toHaveBeenCalled();
-    });
+    expect(timeout).toHaveBeenCalledWith(120_000);
+    expect(timeout).not.toHaveBeenCalledWith(WEB_SEARCH_TIMEOUT_MS);
+    timeout.mockRestore();
+  });
 
-    it('skips DuckDuckGo entirely when grounding is pinned', async () => {
-      const invocation = tool.build({
-        query: 'grounding only',
-        provider: 'grounding',
-      });
-      await invocation.execute({ abortSignal });
-
-      expect(searchDuckDuckGo).not.toHaveBeenCalled();
-    });
+  it('keeps the 30s default when nothing is configured', () => {
+    expect(WEB_SEARCH_TIMEOUT_MS).toBe(30_000);
   });
 });

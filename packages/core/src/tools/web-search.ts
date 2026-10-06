@@ -32,11 +32,6 @@ import {
   type ConstraintTarget,
 } from '../utils/searchQuery.js';
 import { summarizeToolOutput } from '../utils/summarizer.js';
-import {
-  DDG_MAX_RESULTS,
-  searchDuckDuckGo,
-  type DdgResult,
-} from './duckduckgo-search.js';
 
 /** Temporal windows accepted by the `recency` parameter. */
 export type WebSearchRecency = 'day' | 'week' | 'month' | 'year';
@@ -90,17 +85,25 @@ export function isWebSearchRecency(value: unknown): value is WebSearchRecency {
 /**
  * Build the instruction sent to the grounded model.
  *
- * With no `recency` the query is returned untouched, so a caller that passes
- * no new parameters produces a byte-identical request.
+ * With no `recency` the query still gets today's date. Without it the model
+ * falls back on training-era priors for "latest", which on a model that has
+ * not seen this year yet means it searches last year while standing in this
+ * one - the answer comes back coherent and a year stale, the worst failure
+ * mode for a freshness question.
  */
 export function buildSearchInstruction(
   query: string,
   recency?: WebSearchRecency,
+  now: Date = new Date(),
 ): string {
+  const anchor =
+    `Temporal anchor: today is ${now.toISOString().slice(0, 10)}. Treat ` +
+    '"latest", "recent" and "new" as relative to that date rather than to ' +
+    'your training data, and do not substitute an earlier year into the query.';
   if (recency === undefined) {
-    return query;
+    return `${query}\n\n${anchor}`;
   }
-  return `${query}\n\n${RECENCY_INSTRUCTIONS[recency]}`;
+  return `${query}\n\n${anchor}\n\n${RECENCY_INSTRUCTIONS[recency]}`;
 }
 
 /**
@@ -342,29 +345,8 @@ export function formatQueryEcho(
 }
 
 /**
- * Render one DuckDuckGo hit as a numbered row.
- *
- * The snippet is the point: grounding never returns it, and without it a
- * result row is a title and a URL, which is not enough to decide whether
- * the page is worth reading or fetching.
- */
-export function formatDdgResult(result: DdgResult, index: number): string {
-  const lines = [`[${index + 1}] ${result.title}`, `URL: ${result.url}`];
-  if (result.publishedDate) {
-    lines.push(`Published: ${result.publishedDate}`);
-  }
-  if (result.snippet) {
-    lines.push(result.snippet);
-  }
-  return lines.join('\n');
-}
-
-/**
  * Parameters for the WebSearchTool.
  */
-/** Backends the web search tool can answer from. */
-export type WebSearchProviderId = 'auto' | 'duckduckgo' | 'grounding';
-
 export interface WebSearchToolParams {
   /**
    * The search query.
@@ -401,7 +383,6 @@ export interface WebSearchToolParams {
    * instead of a summary. `auto` prefers DuckDuckGo and falls back to
    * grounding when it is blocked or fails.
    */
-  provider?: WebSearchProviderId;
 
   /** Whether to echo the queries that were sent/used. */
   include_queries?: boolean;
@@ -434,98 +415,9 @@ class WebSearchToolInvocation extends BaseToolInvocation<
     return `Searching the web for: "${this.params.query}"`;
   }
 
-  /**
-   * Run the DuckDuckGo backend, returning null when it cannot answer.
-   *
-   * Null means "fall back", not "no results": DuckDuckGo blocks datacenter
-   * egress with a challenge page, and an empty result set from a blocked
-   * provider is a lie the caller would report to the model.
-   */
-  private async tryDuckDuckGo(
-    provider: WebSearchProviderId,
-    signal: AbortSignal,
-  ): Promise<WebSearchToolResult | null> {
-    const limit = Math.min(
-      this.params.limit ?? DDG_MAX_RESULTS,
-      DDG_MAX_RESULTS,
-    );
-    let response;
-    try {
-      response = await searchDuckDuckGo({
-        query: this.params.query,
-        limit,
-        recency: this.params.recency,
-        signal,
-      });
-    } catch (error: unknown) {
-      if (isAbortError(error)) {
-        throw error;
-      }
-      debugLogger.warn('DuckDuckGo search failed', error);
-      return null;
-    }
-
-    if (response.blocked || response.results.length === 0) {
-      debugLogger.warn(
-        `DuckDuckGo returned ${response.results.length} results (blocked=${response.blocked})`,
-      );
-      return null;
-    }
-
-    const rendered = response.results
-      .map((result, index) => formatDdgResult(result, index))
-      .join('\n\n');
-    const content =
-      `Web search results for "${this.params.query}":\n\n` +
-      `Raw result rows from DuckDuckGo. Each row carries the page's own` +
-      ` summary text, so judge relevance from the snippet before reading` +
-      ` the page.\n\n${wrapUntrusted(rendered)}`;
-
-    const summarizeConfig =
-      this.context.config.getSummarizeToolOutputConfig?.();
-    if (summarizeConfig && summarizeConfig[WEB_SEARCH_TOOL_NAME]) {
-      const summary = await summarizeToolOutput(
-        this.context.config,
-        { model: 'summarizer-shell' },
-        content,
-        this.context.geminiClient,
-        signal,
-      );
-      return {
-        llmContent: wrapUntrusted(summary),
-        returnDisplay: `Search results for "${this.params.query}" returned.`,
-      };
-    }
-
-    return {
-      llmContent: content,
-      returnDisplay: `Search results for "${this.params.query}" returned.`,
-    };
-  }
-
   async execute({
     abortSignal: signal,
   }: ExecuteOptions): Promise<WebSearchToolResult> {
-    const provider = this.params.provider ?? 'auto';
-    if (provider !== 'grounding') {
-      const scraped = await this.tryDuckDuckGo(provider, signal);
-      if (scraped) {
-        return scraped;
-      }
-      if (provider === 'duckduckgo') {
-        // The caller pinned this provider, so a silent swap to grounding
-        // would return results from a backend it did not ask for.
-        return {
-          llmContent: `DuckDuckGo search for "${this.params.query}" was blocked or failed. Retry with provider 'grounding' or 'auto'.`,
-          returnDisplay: 'DuckDuckGo search unavailable.',
-          error: {
-            message:
-              'DuckDuckGo search unavailable (bot challenge or transport failure).',
-            type: ToolErrorType.WEB_SEARCH_FAILED,
-          },
-        };
-      }
-    }
     const instruction = buildSearchInstruction(
       this.params.query,
       this.params.recency,
@@ -551,7 +443,8 @@ class WebSearchToolInvocation extends BaseToolInvocation<
       }
 
       if (attempt.kind === 'timeout') {
-        const errorMessage = `Error during web search for query "${this.params.query}": the search timed out after ${WEB_SEARCH_TIMEOUT_MS} ms.`;
+        const budgetMs = this.context.config.getWebSearchTimeoutMs();
+        const errorMessage = `Error during web search for query "${this.params.query}": the search timed out after ${budgetMs} ms.`;
         debugLogger.warn(errorMessage);
         return {
           llmContent: `Error: ${errorMessage}`,
@@ -749,7 +642,9 @@ class WebSearchToolInvocation extends BaseToolInvocation<
       return null;
     }
 
-    const timeoutSignal = AbortSignal.timeout(WEB_SEARCH_TIMEOUT_MS);
+    const timeoutSignal = AbortSignal.timeout(
+      this.context.config.getWebSearchTimeoutMs(),
+    );
     const attemptSignal = AbortSignal.any([signal, timeoutSignal]);
     try {
       const response = await this.context.geminiClient.generateContent(
@@ -790,7 +685,9 @@ ${uris.join('\n')}
     signal: AbortSignal,
     instruction: string,
   ): Promise<GroundingAttempt> {
-    const timeoutSignal = AbortSignal.timeout(WEB_SEARCH_TIMEOUT_MS);
+    const timeoutSignal = AbortSignal.timeout(
+      this.context.config.getWebSearchTimeoutMs(),
+    );
     const attemptSignal = AbortSignal.any([signal, timeoutSignal]);
     try {
       const response = await this.context.geminiClient.generateContent(

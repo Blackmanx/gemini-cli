@@ -519,11 +519,11 @@ The user has the ability to modify the \`new_string\` content. If modified, this
           description:
             'Set true to also read the top results and quote what is actually on the pages. Use this when the titles alone would not tell you whether a result is worth reading, or when you need specifics like version numbers, error text, or exact APIs. Costs an extra round-trip.',
         },
-        provider: {
+        recency: {
           type: 'string',
-          enum: ['auto', 'duckduckgo', 'grounding'],
+          enum: ['day', 'week', 'month', 'year'],
           description:
-            "Search backend. 'auto' (default) tries DuckDuckGo and falls back to Gemini grounding. 'duckduckgo' returns raw result rows with each page's own snippet text - more to read, but you can judge relevance from the snippet instead of trusting a summary. 'grounding' returns a synthesized cited answer. Omit unless you specifically need one behavior.",
+            "Restrict results to sources published inside this window. Set it whenever the answer depends on what is true NOW rather than on how something works — 'latest version', 'current price', 'recently released', 'breaking changes', 'who is the newest'. Without it the search returns the newest page about a superseded version, because the query text still matches. Leave it unset for stable questions like 'how does X work'.",
         },
       },
       required: [WEB_SEARCH_PARAM_QUERY],
