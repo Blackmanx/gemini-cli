@@ -176,6 +176,9 @@ export async function startInteractiveUI(
   }
   const cleanupUnmount = () => instance.unmount();
   const cleanupNonResumableCurrentSession = async () => {
+    if (resumedSessionData) {
+      return;
+    }
     try {
       await config
         .getGeminiClient()
