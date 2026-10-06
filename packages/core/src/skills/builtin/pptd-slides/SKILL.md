@@ -67,10 +67,19 @@ asset folder, so there is nothing to point an `image` field at.
 `figures.py` indexes them with stable ids:
 
 ```bash
-python3 assets/templates/figures.py list              # id, size, and which slides use it
-python3 assets/templates/figures.py sheet sheet.png   # contact sheet, for picking by eye
+python3 assets/templates/figures.py search euro        # find by what they depict
+python3 assets/templates/figures.py list               # id, label, kind, slides that use it
+python3 assets/templates/figures.py list --only candado
+python3 assets/templates/figures.py sheet sheet.png    # contact sheet, to check by eye
 python3 assets/templates/figures.py extract 42 out.png
 ```
+
+Every figure is labelled in `figures.json`, with a `kind` of `icono`,
+`decoracion`, `logo`, `ilustracion` or `foto`. Those labels are not in the
+template: it has no alt text at all — the Google Slides export strips all 3912
+of them — and its slide titles are `49`, `Iconografia`, `Elementos graficos`, so
+an id on its own says nothing. Search by meaning; the contact sheet is only to
+confirm. Figure 209 is white on transparent and looks blank on a light preview.
 
 A slide spec cites one inline, with no file to supply:
 
