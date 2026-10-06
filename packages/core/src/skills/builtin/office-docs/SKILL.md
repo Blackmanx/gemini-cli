@@ -75,6 +75,35 @@ under the one it belongs to. That text lives in body paragraphs
 *and* inside table cells, so pass it as-is and let the script remove it;
 `--keep-filler` keeps it if you are inspecting the template.
 
+## Filling the body
+
+`new_from_template.py` produces the shell — cover, header, footer, styles, front
+matter — and nothing else. Write the content with `fill_document.py` from a JSON
+outline rather than by hand:
+
+```bash
+python3 scripts/fill_document.py informe.docx outline.json
+```
+
+```json
+{"front": {"change_log": {"date": "06/10/2026", "by": "Consultor corporate",
+                          "reviewed_by": "Revisor corporate", "approved_by": "Director corporate"},
+           "acronyms": [["IA", "Inteligencia Artificial"]]},
+ "sections": [
+   {"heading": "Introduccion", "paragraphs": ["En 2026, la IA se ha consolidado..."]},
+   {"heading": "Retos", "bullets": ["La regulacion de los datos"],
+    "paragraphs": ["Ambos condicionan el ritmo de despliegue."]},
+   {"heading": "Sectores", "paragraphs": ["Finanzas y Salud lideran la adopcion."],
+    "table": {"caption": "Tabla 1: Adopcion por sector",
+              "header": ["Sector", "Tasa (%)"],
+              "rows": [["Finanzas y Seguros", "85%"]]}}]}
+```
+
+It handles the three things that go wrong when done by hand: the template's own
+sample sections are removed first, headings get bare text because the style
+numbers them itself, and tables are inserted in flow rather than appended after
+the last section.
+
 ## Headings are numbered for you
 
 `Heading 1` and `Heading 2` carry automatic numbering from the template's
