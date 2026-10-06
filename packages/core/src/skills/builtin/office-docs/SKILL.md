@@ -1,0 +1,114 @@
+---
+name: office-docs
+description: Create, edit and fill Word documents and Excel workbooks using the department's corporate templates as the base, so styles, logos, headers and chart formatting match the rest of the department's output. Use whenever the user asks for an acta de reunión, a procedimiento, project documentation, a deliverable document, a report, a spreadsheet, or any .docx/.xlsx work that should look like corporate material. Triggers include "acta", "procedimiento", "documentación del proyecto", "plantilla corporate", "informe", "plantilla de Excel", "gráficos corporate", "docx", "xlsx".
+---
+
+# corporate Office documents
+
+Four department templates ship with this skill. Start from one instead of
+imitating one — the styles, logos, header bands and page setup are already in
+there and are the thing being asked for.
+
+| Template key       | File                        | For |
+| ------------------ | --------------------------- | --- |
+| `acta`             | `assets/templates/acta-reunion.dotx`     | Meeting minutes: who convened, who attended, agenda, per-point development, agreements |
+| `procedimiento`    | `assets/templates/procedimiento.dotx`    | Step-by-step procedures, SOPs, runbooks |
+| `documentacion`    | `assets/templates/documentacion-proyecto.dotx` | Project deliverables; this one carries the logo header |
+| `graficos`        | `assets/templates/chart-workbook.xlsx`    | Charts and KPI workbooks; four sheet recipes, all already themed |
+
+The spreadsheet carries the corporate palette — `dk1 #0E1245`, `dk2 #61CAFE`,
+`accent1 #FF5C5C`, the same tokens the PPT template uses.
+
+**The three Word templates do not.** All three sit on the stock Office theme
+(`dk1 #0E2841`, `accent1 #156082`), so a document built from them will not
+match a slide or a chart from this kit. What they *do* carry is the structure
+corporate actually works in: heading hierarchy, section names, table shapes, the
+`documentacion` logo header. Treat them as the right skeleton, and if the
+colour has to match, pull the tokens from `graficos` and apply them per element
+rather than expecting the theme to do it.
+
+## Before writing anything
+
+**Read the template first.** Filling a table means knowing its real row count and
+header; adding a chart means knowing which sheets already have one.
+
+```bash
+python3 scripts/describe_template.py acta          # headings, tables, page setup
+python3 scripts/describe_template.py graficos      # sheets, charts, active sheet
+python3 scripts/describe_template.py --theme graficos   # palette only
+```
+
+Guessing the layout from the file name gets the table shapes wrong, and these
+templates do not agree with each other: `acta` titles with a `Titulo` style,
+`procedimiento` leaves its title as a bold `Normal` paragraph.
+
+## Creating
+
+```bash
+python3 scripts/new_from_template.py acta informe.docx
+python3 scripts/new_from_template.py procedimiento proc.docx --title "Alta de proveedores"
+python3 scripts/new_from_template.py graficos seguimiento.xlsx --sheet "Progreso circular"
+```
+
+Any output path works; the script creates parent directories.
+
+## The .dotx wrinkle
+
+Word templates declare a *template* content type and python-docx refuses them
+outright. `new_from_template.py` rewrites that one string in
+`[Content_Types].xml` on the way out, so you get a `.docx` with the template's
+theme, styles, header/footer parts and embedded logos intact. The bundled
+templates are never modified — the conversion happens on the copy. If you need
+to do it by hand, import `dotx_to_docx` from `scripts/office.py`.
+
+## Working on an existing document
+
+Same tools, different path. `describe_template.py` takes any `.docx` or
+`.dotx`, not just the bundled ones:
+
+```bash
+python3 scripts/describe_template.py ~/otro/informe.docx
+```
+
+Then edit with `python-docx` (`Document`, `paragraphs`, `tables`, `sections`)
+or `openpyxl` (`load_workbook`, `active`, `save`). Both are installed.
+
+Fill tables by index, never by assuming a fixed row count:
+
+```python
+from docx import Document
+doc = Document("informe.docx")
+tabla = doc.tables[0]
+fila = tabla.add_row().cells          # append; existing rows keep their data
+fila.cells[0].text = "2026-10-06"
+doc.save("informe.docx")
+```
+
+## Charts
+
+`assets/templates/chart-workbook.xlsx` has four worked sheets that are already themed:
+`Gráfico de barras agrupadas`, `Barras por segmento`, `Progreso circular`,
+`Gráfico de anillo`. Copy the relevant one rather than building a chart from
+scratch — the formatting is the point.
+
+openpyxl reads charts but does not create them. To add a new chart, copy a sheet
+that already has one:
+
+```python
+import shutil, openpyxl
+shutil.copyfile("plantilla.xlsx", "salida.xlsx")
+book = openpyxl.load_workbook("salida.xlsx")
+book.copy_worksheet(book["Gráfico de barras agrupadas"])
+```
+
+If a new chart type is genuinely needed, build it in LibreOffice headless and
+let it write the XML — `soffice` is installed.
+
+## Delivering
+
+- Deliver the `.docx` or `.xlsx`, never a rendered PDF, unless asked.
+- Say which template it came from.
+- If you changed the structure of a template, say so; the next person inherits it.
+- For a document meant to be printed or circulated, open it once with
+  `soffice --headless --convert-to pdf` to confirm it is not broken — that is
+  the only check that catches a table that overflows the page.
