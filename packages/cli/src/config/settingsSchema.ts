@@ -2596,6 +2596,28 @@ const SETTINGS_SCHEMA = {
           'Enable dynamic model configuration (definitions, resolutions, and chains) via settings.',
         showInDialog: false,
       },
+      agentRouter: {
+        type: 'object',
+        label: 'Agent Router',
+        category: 'Experimental',
+        requiresRestart: true,
+        default: {},
+        description:
+          'Route each request to the best-suited model before sending it.',
+        showInDialog: false,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'Enable Agent Router',
+            category: 'Experimental',
+            requiresRestart: true,
+            default: true,
+            description:
+              'The router classifies every request with its own model round trip before the real one — roughly 2.5-5s and one extra API call per turn, doubled again by session accounting. Turn it off to always use the configured default model, which also makes cache reads cover the whole prompt instead of two thirds of it.',
+            showInDialog: true,
+          },
+        },
+      },
       gemmaModelRouter: {
         type: 'object',
         label: 'Gemma Model Router',

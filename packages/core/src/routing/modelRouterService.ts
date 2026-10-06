@@ -51,11 +51,13 @@ export class ModelRouterService {
       strategies.push(new GemmaClassifierStrategy());
     }
 
-    // The generic classifier is next.
-    strategies.push(new ClassifierStrategy());
-
-    // The numerical classifier is next.
-    strategies.push(new NumericalClassifierStrategy());
+    // The generic and numerical classifiers each cost a model round trip of
+    // their own, per user turn. They are opt-out as a pair because turning
+    // off one without the other buys nothing.
+    if (this.config.isAgentRouterEnabled()) {
+      strategies.push(new ClassifierStrategy());
+      strategies.push(new NumericalClassifierStrategy());
+    }
 
     // The default strategy is the terminal strategy.
     const terminalStrategy = new DefaultStrategy();

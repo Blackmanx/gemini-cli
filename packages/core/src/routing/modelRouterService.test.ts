@@ -55,6 +55,9 @@ describe('ModelRouterService', () => {
       mockLocalLiteRtLmClient,
     );
     vi.spyOn(mockConfig, 'getNumericalRoutingEnabled').mockResolvedValue(true);
+    // config.js is auto-mocked, so the new getter returns undefined unless the
+    // test says otherwise. The real default is on.
+    vi.spyOn(mockConfig, 'isAgentRouterEnabled').mockReturnValue(true);
     vi.spyOn(mockConfig, 'getResolvedClassifierThreshold').mockResolvedValue(
       90,
     );
@@ -112,6 +115,24 @@ describe('ModelRouterService', () => {
     expect(childStrategies[4]).toBeInstanceOf(NumericalClassifierStrategy);
     expect(childStrategies[5]).toBeInstanceOf(DefaultStrategy);
     expect(compositeStrategyArgs[1]).toBe('agent-router');
+  });
+
+  it('should skip both remote classifiers when the router is disabled', () => {
+    vi.spyOn(mockConfig, 'isAgentRouterEnabled').mockReturnValue(false);
+    vi.mocked(CompositeStrategy).mockClear();
+
+    service = new ModelRouterService(mockConfig);
+    const childStrategies = vi.mocked(CompositeStrategy).mock.calls[0][0];
+
+    // Fallback, Override, ApprovalMode, Default. The two classifiers each
+    // spend a model round trip per user turn, which is what this buys.
+    expect(childStrategies).toHaveLength(4);
+    expect(childStrategies.some((s) => s instanceof ClassifierStrategy)).toBe(
+      false,
+    );
+    expect(
+      childStrategies.some((s) => s instanceof NumericalClassifierStrategy),
+    ).toBe(false);
   });
 
   it('should include GemmaClassifierStrategy when enabled', () => {

@@ -1156,6 +1156,7 @@ export async function loadCliConfig(
       format: (argv.outputFormat ?? settings.output?.format) as OutputFormat,
     },
     gemmaModelRouter: settings.experimental?.gemmaModelRouter,
+    agentRouter: settings.experimental?.agentRouter,
     adk: settings.experimental?.adk,
     fakeResponses: argv.fakeResponses,
     fakeResponsesNonStrict: argv.fakeResponsesNonStrict,

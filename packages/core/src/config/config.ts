@@ -273,6 +273,19 @@ export interface OutputSettings {
   format?: OutputFormat;
 }
 
+/**
+ * Whether the agent-router may classify a request before it is sent.
+ *
+ * The router spends one extra model round trip per user turn to decide which
+ * model should answer. On a fast link that is noise; on a slow one it is a
+ * quarter of every turn, and it doubles the API calls that session accounting
+ * attributes to the session. Turning it off leaves model selection entirely to
+ * the configured default.
+ */
+export interface AgentRouterSettings {
+  enabled?: boolean;
+}
+
 export interface GemmaModelRouterSettings {
   enabled?: boolean;
   autoStartServer?: boolean;
@@ -769,6 +782,7 @@ export interface ConfigParameters {
   policyUpdateConfirmationRequest?: PolicyUpdateConfirmationRequest;
   output?: OutputSettings;
   gemmaModelRouter?: GemmaModelRouterSettings;
+  agentRouter?: AgentRouterSettings;
   adk?: ADKSettings;
   disableModelRouterForAuth?: AuthType[];
   retryFetchErrors?: boolean;
@@ -1043,6 +1057,7 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly outputSettings: OutputSettings;
 
   private readonly gemmaModelRouter: GemmaModelRouterSettings;
+  private readonly agentRouter: AgentRouterSettings;
   private readonly agentSessionNoninteractiveEnabled: boolean;
   private readonly agentSessionInteractiveEnabled: boolean;
   private readonly agentSessionSubagentEnabled: boolean;
@@ -1423,6 +1438,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.useTts = params.useTts ?? false;
     this.useMemory = params.useMemory ?? false;
     this.magicKeywords = params.magicKeywords;
+    this.agentRouter = params.agentRouter ?? {};
     this.webSearchTimeoutMs = params.webSearchTimeoutMs;
     this.modelRoles = params.modelRoles ?? {};
     this.modelCycleOrder = params.modelCycleOrder;
@@ -4475,6 +4491,16 @@ export class Config implements McpContext, AgentLoopContext {
 
   getGemmaModelRouterSettings(): GemmaModelRouterSettings {
     return this.gemmaModelRouter;
+  }
+
+  /**
+   * Whether the agent-router classifies requests.
+   *
+   * Defaults to on: without it, nothing about the existing behaviour changes,
+   * and the setting is an opt-out rather than a silent switch flip.
+   */
+  isAgentRouterEnabled(): boolean {
+    return this.agentRouter.enabled ?? true;
   }
 
   getAgentSessionNoninteractiveEnabled(): boolean {
