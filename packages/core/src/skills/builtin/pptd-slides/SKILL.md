@@ -77,6 +77,14 @@ will report:
 soffice --headless --convert-to pdf deck.pptx && pdftoppm -png -r 50 deck.pdf page
 ```
 
+**A render is not proof of visibility.** The deck ships two themes and they
+disagree on `lt2`: black in one, near-white in the other. LibreOffice resolves
+it against the wrong one and paints black panels white, so a slide whose text is
+invisible in PowerPoint looks perfect in the PDF. `new_deck.py` therefore checks
+the resolved text colour against the fill of whatever shape sits underneath, and
+refuses any layout where they match — `SECTION_TITLE_AND_DESCRIPTION` is the one
+it catches. Colour safety here is static analysis, not a screenshot.
+
 ## Workflow
 
 ### 1. Frame the request before writing any file

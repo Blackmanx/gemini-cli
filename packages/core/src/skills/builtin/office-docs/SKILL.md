@@ -61,8 +61,17 @@ practical way in: the cover title is a text-box shape, and the templates break
 A paragraph-level or run-level edit leaves `Nombre del entregable` stamped on
 every page.
 
-The script also strips the template's sample prose (Lorem ipsum, `Aenean nec
-lorem`, `Subapartado N`) on the way out. That text lives in body paragraphs
+The script also strips the template's sample prose on the way out — and the
+templates carry several placeholder traditions, not just Lorem ipsum:
+`consectetuer`, `Pellentesque habitant`, `Suspendisse dui purus`,
+`Subapartado N`, the `Apartado 1..4` sample headings and empty headings. All of
+it goes, leaving the front matter (change log, index, acronyms) and its styles.
+
+A document from `new_from_template.py` is an empty shell by design: cover,
+header, footer and structure, no content. Fill the body with `python-docx` and
+insert tables in flow — `Document.add_table` appends at the end of the body, so
+a table moved by hand with `_element` ends up after the last section instead of
+under the one it belongs to. That text lives in body paragraphs
 *and* inside table cells, so pass it as-is and let the script remove it;
 `--keep-filler` keeps it if you are inspecting the template.
 
