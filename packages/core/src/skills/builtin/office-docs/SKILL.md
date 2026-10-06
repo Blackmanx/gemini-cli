@@ -52,6 +52,31 @@ python3 scripts/new_from_template.py graficos seguimiento.xlsx --sheet "Progreso
 
 Any output path works; the script creates parent directories.
 
+Pass `--title` and `--subtitle` rather than setting them yourself. The deliverable
+name lives in four places — the cover title, the running header and the footer
+repeat it — and none of them are ordinary body paragraphs. `apply_cover_text`
+in `scripts/office.py` rewrites all of them in one pass and is the only
+practical way in: the cover title is a text-box shape, and the templates break
+`[Nombre del entregable]` across four runs inside one tab-separated paragraph.
+A paragraph-level or run-level edit leaves `Nombre del entregable` stamped on
+every page.
+
+The script also strips the template's sample prose (Lorem ipsum, `Aenean nec
+lorem`, `Subapartado N`) on the way out. That text lives in body paragraphs
+*and* inside table cells, so pass it as-is and let the script remove it;
+`--keep-filler` keeps it if you are inspecting the template.
+
+## Headings are numbered for you
+
+`Heading 1` and `Heading 2` carry automatic numbering from the template's
+numbering definition. Writing `"1. Introducción"` into one renders as
+**"1. 1. Introducción"**. Put the bare text in the heading and let the template
+number it.
+
+The table of contents is a Word field with a cached result. The cache still
+lists the old placeholder headings until someone refreshes it in Word
+(`Ctrl+A`, `F9`); say so rather than trying to compute it in python-docx.
+
 ## The .dotx wrinkle
 
 Word templates declare a *template* content type and python-docx refuses them

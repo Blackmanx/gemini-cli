@@ -9,7 +9,51 @@ PPTD is a YAML design DSL for presentations: one `.pptd` main file + one `.page`
 
 ## Tooling check (do first)
 
-Run `command -v kimi-slides`. If present, use it for `convert`, `check`, and `screenshot`. If absent, work in PPTD anyway (any YAML-capable agent can author it) and replace CLI validation with a YAML parse of every file plus the manual review checklist in `references/design-rules.md`. Full CLI usage: `references/pptd-format.md`.
+Run `command -v kimi-slides`.
+
+- **Present** — use it for `convert`, `check` and `screenshot`, and work in PPTD.
+- **Absent** — do not hand-roll python-pptx against the corporate template. Use
+  `assets/templates/new_deck.py` (see below), which exists because that template is a
+  Google Slides export and breaks the obvious python-pptx code in three ways.
+
+## Building directly from the corporate template
+
+The corporate deck is a Google Slides export. Three of its traits silently produce a
+broken deck, which is why raw `python-pptx` against it is a trap:
+
+1. **Content layouts have no `TITLE` placeholder.** The heading is exported as a
+   `SUBTITLE`, so `slide.shapes.title` is `None` and any loop looking for
+   placeholder index 0 writes nothing — the slide comes out untitled.
+2. **Artwork overlaps the text boxes.** Most layouts carry decorative rings and
+   bars positioned on top of the text placeholders, so text lands on the artwork.
+3. **`PICTURE` placeholders sit in the same list.** Text written into one renders
+   as nothing at all — not an error, just a blank.
+
+`new_deck.py` handles all three and reports what it had to work around:
+
+```bash
+python3 assets/templates/new_deck.py --list            # every usable layout, CLASH flag
+python3 assets/templates/new_deck.py deck.pptx \
+    --slide "0|Crecimiento del uso de IA en 2026|Informe corporate" \
+    --slide "36|1. Introduccion|La IA ya no es una ventaja diferencial"
+python3 assets/templates/new_deck.py deck.pptx --slides slides.json --trim-art
+```
+
+Layouts are named, not indexed — `--list` prints them, and an ambiguous name is
+an error rather than a guess. `--trim-art` deletes only the artwork that
+geometrically collides with a text placeholder. The template's sample slides are
+dropped on the way out, so the deck starts empty.
+
+Read every warning the script prints. "layout offers one text area" means the
+body was appended to the heading rather than placed separately; pick a layout
+with two text placeholders if that matters.
+
+Verify the result before delivering — this catches the collisions nothing else
+will report:
+
+```bash
+soffice --headless --convert-to pdf deck.pptx && pdftoppm -png -r 50 deck.pdf page
+```
 
 ## Workflow
 
