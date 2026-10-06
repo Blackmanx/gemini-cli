@@ -40,8 +40,21 @@ Stitch the screenshots into one grid image (PIL) and read it. Extract and record
 Turn this into a `theme:` block (colors + textStyles) in the `.pptd` and a fixed header pattern reused verbatim on every content page. For a complete worked example (corporate corporate identity: palette tokens, Google Fonts setup, header pattern, card style) read `references/brand.md`; its assets are in `assets/templates/`.
 
 The corporate corporate template ships with this skill at
-`assets/templates/Template PPTs.OSCURO.pptx` (dark variant). To work from it
-rather than from prose, convert it first:
+`assets/templates/Template PPTs.OSCURO.pptx` (dark variant). Read its design
+system out of the file rather than describing it from memory:
+
+```bash
+python3 assets/templates/extract-theme.py     # palette, fonts, layouts, media count
+```
+
+That reads the theme straight out of the PPTX and prints the `theme:` values
+plus the layout names, in about a second. It wants `python-pptx`
+(`pip install python-pptx`); without it the palette and fonts still come out,
+since those live in the theme XML, and only the slide size and layouts are
+skipped. `references/brand.md` is the same system already written up: read
+it for the intent behind the values, not just the values.
+
+When `kimi-slides` is available, prefer it for the full round trip:
 
 ```bash
 kimi-slides convert "assets/templates/Template PPTs.OSCURO.pptx" -o work/template/
