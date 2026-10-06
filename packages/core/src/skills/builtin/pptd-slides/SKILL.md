@@ -56,6 +56,33 @@ placeholder in a layout by index. This is how the image layouts get used:
   "fields": {"19": {"image": "media/a.png"}, "20": {"image": "media/b.png"}}}]
 ```
 
+### Reusing the template's own figures
+
+The template carries ~210 images inside the .pptx: the corporate logo, the decorative
+waves and rings, a few people illustrations, and a large set of grey line-art
+icons in browser frames — globe, checklist, network, money, location, security,
+video, tools. They are reusable content, but they live in the archive, not in an
+asset folder, so there is nothing to point an `image` field at.
+
+`figures.py` indexes them with stable ids:
+
+```bash
+python3 assets/templates/figures.py list              # id, size, and which slides use it
+python3 assets/templates/figures.py sheet sheet.png   # contact sheet, for picking by eye
+python3 assets/templates/figures.py extract 42 out.png
+```
+
+A slide spec cites one inline, with no file to supply:
+
+```json
+[{"layout": "13", "title": "Adopcion por sector",
+  "fields": {"2": {"figure": 42}, "3": {"figure": 51}, "4": {"figure": 30}}}]
+```
+
+Build the contact sheet and look at it before choosing ids — the numbering is
+alphabetical by media name, not by meaning. An id out of range is reported, not
+silently skipped.
+
 Run `--describe <layout>` first: it lists the text and image placeholder indices
 so the `fields` keys are right. An index that is not in the layout is reported,
 never ignored.
