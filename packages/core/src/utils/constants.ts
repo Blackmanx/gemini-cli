@@ -37,3 +37,12 @@ export const OTHER_BLOCKED_MESSAGE =
 
 export const TRUE_EMPTY_RESPONSE_MESSAGE =
   'The model returned an empty response with no text or thoughts. This may be a transient API issue; please try again.';
+
+/**
+ * Default budget for one grounded web-search attempt, in milliseconds.
+ *
+ * Grounding is a second round trip on top of the normal one. 30s suits a
+ * datacenter round trip; on a slow link it fails every search outright rather
+ * than merely slowing it down, which is why `omp.webSearchTimeoutMs` exists.
+ */
+export const WEB_SEARCH_DEFAULT_TIMEOUT_MS = 30_000;

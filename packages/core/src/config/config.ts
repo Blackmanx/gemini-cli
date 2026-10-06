@@ -83,6 +83,7 @@ import { LocalMemoryBackend } from '../memory/store.js';
 import { DeviceRegistry } from '../internal-urls/devices.js';
 import type { MemoryBackend } from '../memory/types.js';
 import type { MagicKeywordSettings } from '../modes/magicKeywords.js';
+import { WEB_SEARCH_DEFAULT_TIMEOUT_MS } from '../utils/constants.js';
 import { discoverRules } from '../discovery/registry.js';
 import type { DiscoveryResult } from '../discovery/types.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
@@ -750,6 +751,14 @@ export interface ConfigParameters {
   appendSystem?: string;
   allowTaintedCommandsInYolo?: boolean;
   headlessHarness?: string;
+  /**
+   * Per-attempt budget for one grounded web search, in milliseconds.
+   *
+   * Grounding is a second round trip on top of the normal one. A budget
+   * shorter than the link's actual round trip fails every search outright
+   * instead of merely slowing it down, so this is the user's to raise.
+   */
+  webSearchTimeoutMs?: number;
   magicKeywords?: MagicKeywordSettings;
   modelRoles?: Record<string, string>;
   modelCycleOrder?: string[];
@@ -884,6 +893,7 @@ export class Config implements McpContext, AgentLoopContext {
   private memoryBackend: MemoryBackend | undefined;
   private deviceRegistry: DeviceRegistry | undefined;
   private magicKeywords: MagicKeywordSettings | undefined;
+  private webSearchTimeoutMs: number | undefined;
   private readonly modelRoles: Readonly<Record<string, string>>;
   private readonly modelCycleOrder: readonly string[] | undefined;
   private readonly useGithub: boolean;
@@ -1413,6 +1423,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.useTts = params.useTts ?? false;
     this.useMemory = params.useMemory ?? false;
     this.magicKeywords = params.magicKeywords;
+    this.webSearchTimeoutMs = params.webSearchTimeoutMs;
     this.modelRoles = params.modelRoles ?? {};
     this.modelCycleOrder = params.modelCycleOrder;
     this.useGithub = params.useGithub ?? false;
@@ -4327,6 +4338,20 @@ export class Config implements McpContext, AgentLoopContext {
    */
   getMagicKeywordsSettings(): MagicKeywordSettings | undefined {
     return this.magicKeywords;
+  }
+
+  /**
+   * Budget for one grounded web-search attempt, in milliseconds.
+   *
+   * Guarded rather than trusted: a zero or negative value would abort every
+   * search before it started, which reads as "search is broken" instead of
+   * "this setting is wrong".
+   */
+  getWebSearchTimeoutMs(): number {
+    const configured = this.webSearchTimeoutMs;
+    return typeof configured === 'number' && configured >= 1_000
+      ? configured
+      : WEB_SEARCH_DEFAULT_TIMEOUT_MS;
   }
 
   /** Whether the local memory bank is open for this session. */

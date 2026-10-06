@@ -1870,6 +1870,16 @@ const SETTINGS_SCHEMA = {
           'Standing instructions appended to the system prompt under a "User instructions" heading. The generated prompt is kept intact. A project APPEND_SYSTEM.md, when present, takes precedence over this.',
         showInDialog: true,
       },
+      webSearchTimeoutMs: {
+        type: 'number',
+        label: 'OMP: Web Search Timeout',
+        category: 'Advanced',
+        requiresRestart: false,
+        default: 30_000,
+        description:
+          'Milliseconds a grounded web search may take before it is abandoned and retried. Raise it when the model sits behind a slow link: grounding is a second round trip on top of the normal one, and a timeout shorter than the actual round trip fails every search rather than merely slowing it down. Minimum 1000.',
+        showInDialog: true,
+      },
       magicKeywords: {
         type: 'object',
         label: 'OMP: Magic Keywords',
