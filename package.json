@@ -1,6 +1,6 @@
 {
   "name": "@google/gemini-cli",
-  "version": "0.70.0-c6aaa674c",
+  "version": "0.70.0-0d8e2306e",
   "engines": {
     "node": ">=20.0.0"
   },
