@@ -16,28 +16,25 @@ Run `command -v kimi-slides`.
   `assets/templates/new_deck.py` (see below), which exists because that template is a
   Google Slides export and breaks the obvious python-pptx code in three ways.
 
-## Two corporate templates
+## One deck, two palettes
 
-Both decks ship with the skill and either can be used:
+`assets/templates/Template PPTs.pptx` is the only template. It carries both: 43
+dark layouts and 11 named `- blanco` / `_BLANCA`. An earlier dark-only deck
+shipped beside it and was dropped — it held nothing the survivor does not.
 
-| `--template` | file | layouts | readable figures |
-| --- | --- | --- | --- |
-| `dark` (default) | `Template PPTs.OSCURO.pptx` | 55 | 209 |
-| `light` | `Template PPTs.pptx` | 54 | 587 |
+```bash
+python3 assets/templates/new_deck.py --list          # 54 layouts, both palettes
+python3 assets/templates/new_deck.py --describe "1_título arriba - blanco"
+```
 
-They are different artefacts, not colour variants of one file:
+Address layouts by the **name** `--list` prints, not by index: the numbering is
+not stable and the two palettes interleave.
 
-- **Layout names do not match.** 26 exist only in the dark deck and 25 only in
-  the light one; the light deck suffixes them (`TITLE_AND_BODY` vs
-  `TITLE_AND_BODY_1`). Run `--template <v> --list` and copy names from there.
-- **Figure ids do not match.** The same shape is a different file in each deck,
-  so `{"figure": 42}` means one thing in `dark` and something else in `light`.
-  The light deck has a much larger library — blue icon set, security/SSL
-  icons, photographs of people and partner logos — and carries both dark and
-  white variants of many layouts.
-- Both share the same theme, so both carry the same trap: `lt2` is black in
-  `theme1`, and LibreOffice resolves it against the wrong theme and paints black
-  panels white.
+Both palettes share one theme, so both carry the same trap: `lt2` is black in
+`theme1`, and LibreOffice resolves it against the wrong theme and paints a black
+panel white. `new_deck.py` resolves the text colour and the fill beneath it and
+refuses any layout where they match — `SECTION_TITLE_AND_DESCRIPTION` is the
+only one, and it is refused in either palette.
 
 ## Building directly from the corporate template
 
@@ -91,23 +88,22 @@ asset folder, so there is nothing to point an `image` field at.
 
 ```bash
 python3 assets/templates/figures.py search euro        # find by what they depict
-python3 assets/templates/figures.py --template light search candado
 python3 assets/templates/figures.py list               # id, label, kind, slides that use it
 python3 assets/templates/figures.py list --only candado
 python3 assets/templates/figures.py sheet sheet.png    # contact sheet, to check by eye
 python3 assets/templates/figures.py extract 42 out.png
 ```
 
-Every figure is labelled in `figures.json`, with a `kind` of `icono`,
-`decoracion`, `logo`, `ilustracion` or `foto`. Those labels are not in the
+Every figure is labelled in `figures.json`, keyed by the SHA-256 of its bytes
+rather than by position — the package also holds eight `.emf` files, so an id
+counted over all the media sits eight places out from 45 onwards. Each entry has
+a `kind` of `icono`, `decoracion`, `logo`, `ilustracion` or `foto`. Those labels are not in the
 template: it has no alt text at all — the Google Slides export strips all 3912
 of them — and its slide titles are `49`, `Iconografia`, `Elementos graficos`, so
 an id on its own says nothing. Search by meaning; the contact sheet is only to
 confirm. Figure 209 is white on transparent and looks blank on a light preview.
 
-A slide spec cites one inline, with no file to supply. Pass the same
-`--template` you used to build the deck, or the id will be read from the wrong
-one:
+A slide spec cites one inline, with no file to supply:
 
 ```json
 [{"layout": "13", "title": "Adopcion por sector",
