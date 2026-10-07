@@ -5150,4 +5150,27 @@ describe('GeminiChat', () => {
     // tool call, or the session loses track of what it asked for.
     expect(chat.getHistoryTurns()).toHaveLength(2);
   });
+
+  it('resends without the trailing model turn when the API reports one', () => {
+    // The 400 names its own fix, so the client applies it instead of repeating a
+    // request that is deterministically invalid. The retry is identical to the
+    // original, which is why the session never recovered on its own.
+    const chat = new GeminiChat(mockConfig);
+    chat.setHistory([
+      { id: '1', content: { role: 'user', parts: [{ text: 'render it' }] } },
+      {
+        id: '2',
+        content: {
+          role: 'model',
+          parts: [
+            { functionCall: { name: 'read_file', args: { path: 'p.png' } } },
+          ],
+        },
+      },
+    ]);
+    // The request the loop holds ends on the model turn until something in the
+    // pipeline appends one; the repair applies to that shape whatever made it.
+    const request = trimTrailingModelTurn(chat.getHistoryTurns(true));
+    expect(request[request.length - 1].content.role).toBe('user');
+  });
 });

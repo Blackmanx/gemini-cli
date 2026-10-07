@@ -682,7 +682,7 @@ export class GeminiChat {
       }
     }
 
-    const requestHistory = trimTrailingModelTurn(this.getHistoryTurns(true));
+    let requestHistory = trimTrailingModelTurn(this.getHistoryTurns(true));
 
     const streamWithRetries = async function* (
       this: GeminiChat,
@@ -734,10 +734,29 @@ export class GeminiChat {
             isSuccess = true;
             return;
           } catch (error) {
+            // 'Requests ending with a model turn are not supported.' is a 400
+            // that says exactly how to fix the request, so the client repairs it
+            // rather than repeating it. Every route into the wire is covered this
+            // way: something between the history and the request - the
+            // binary-injection turn, the interrupted-response placeholder, the
+            // empty-response retry - can append a turn of its own, and chasing
+            // each producer has already missed two. The retry is identical to
+            // the original, so it fails identically, which is why the session
+            // never recovered on its own.
+            const message =
+              error instanceof Error ? error.message : String(error);
+            if (
+              message.includes('ending with a model turn') &&
+              requestHistory[requestHistory.length - 1]?.content.role === 'model'
+            ) {
+              requestHistory = requestHistory.slice(0, -1);
+              lastStreamError = error;
+              continue;
+            }
+
             if (error instanceof InvalidStreamError) {
               lastStreamError = error;
             }
-
             if (error instanceof AgentExecutionStoppedError) {
               yield {
                 type: StreamEventType.AGENT_EXECUTION_STOPPED,
