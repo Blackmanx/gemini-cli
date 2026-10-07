@@ -92,6 +92,43 @@ officecli set deck.pptx "/slide[1]/shape[@id=1284]" --prop size=34pt
 
 As a rule of thumb at 54pt the box takes roughly 20 characters; at 34pt about 34.
 
+## How much text a shape holds
+
+Every shape is sized for the label the template shipped. A longer sentence grows
+out of a circle, a card or a bar and prints over its neighbour — nothing errors.
+The shapes that bite most often:
+
+| shape | fits |
+| --- | --- |
+| circle or Venn region | 2–4 words; it is a label, not a caption |
+| card title | 2–3 words |
+| card body | one clause |
+| cover title | ~20 characters at 54pt |
+| step or column heading | 3–5 words |
+
+Write to the shape's capacity, not to how much you have to say. If the content
+does not fit, that is a reason to pick another slide from the range, not to
+overflow this one.
+
+## Length follows the content
+
+There is no slide count to hit and no ceiling to respect. A three-point summary
+is three slides; a proposal with nine sections is nine or ten. Build as many as
+the material needs, taking them from across the 27–90 range rather than
+repeating one design.
+
+## Check before delivering
+
+```bash
+python3 scripts/check_overlaps.py deck.pptx
+```
+
+It reads the geometry `officecli query` already reports and reports any two
+text boxes that intersect, exiting non-zero while it finds them. Empty decorative
+shapes are skipped — those overlapping their neighbours is the design. Run it
+after filling the text, not before: the overlaps only exist once the sentences
+are in.
+
 ## Do not use `SECTION_TITLE_AND_DESCRIPTION`
 
 Its BODY placeholder resolves to black text on a black panel: the slide comes out
