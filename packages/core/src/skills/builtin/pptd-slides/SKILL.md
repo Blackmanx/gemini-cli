@@ -71,6 +71,35 @@ candidate holds before keeping it:
 officecli query deck.pptx "/slide[45]/*"
 ```
 
+## The structural slides
+
+A deck is not only its content. It opens, divides and closes, and the templates
+have every one of those shapes — in slides 1 to 26, which sit outside the
+content range:
+
+| | clara | oscura |
+| --- | --- | --- |
+| cover | 1–5 | 7–12 |
+| section divider | 6 | 13–14 |
+| index / agenda | 7–8 | 15–16 |
+| timeline | — | 105–106 |
+| org chart, for partners | 106 | 112–113 |
+| team and roles | 101–107 | 107–111 |
+| chart slide | 108 | 114 |
+| content | 27–90 | 27–90 |
+
+So a proposal is: cover, index, then the content slides, a divider between
+blocks of content, and a closing slide. The divider slides read "Separador de
+temas" and are meant to carry the block's name.
+
+**There is no closing slide in either deck.** Close on the cover or a divider
+carrying the next step or the contact, or reuse a content slide with just a
+title — do not invent a new design. `ONE_COLUMN_TEXT` (oscura 123, clara 117)
+is a spare full-width slide if you want something plain.
+
+Note that "Inicio" and "Fin" in the dark deck (105–106) are the **ends of a
+timeline**, not an opening and a closing slide.
+
 ## Make the title fit
 
 The title box on the cover is anchored to its **bottom** and has **no autofit**,
@@ -116,6 +145,11 @@ There is no slide count to hit and no ceiling to respect. A three-point summary
 is three slides; a proposal with nine sections is nine or ten. Build as many as
 the material needs, taking them from across the 27–90 range rather than
 repeating one design.
+
+Count the structural slides too. A deck that only holds the sections the brief
+happened to list is missing its cover, its index, its dividers and its close —
+the brief lists *content*, not structure. Ask what the material can fill, not how
+many clauses the request has.
 
 ## Check before delivering
 
