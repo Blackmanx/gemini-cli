@@ -1,0 +1,12 @@
+{
+  "name": "officecli",
+  "version": "1.0.0",
+  "description": "Office documents (.docx, .xlsx, .pptx) as MCP tools, via the vendored officecli binary.",
+  "mcpServers": {
+    "officecli": {
+      "command": "${extensionPath}${/}officecli-mcp.sh",
+      "args": [],
+      "cwd": "${extensionPath}"
+    }
+  }
+}
