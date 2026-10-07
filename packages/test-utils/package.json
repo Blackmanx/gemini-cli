@@ -1,6 +1,6 @@
 {
   "name": "@google/gemini-cli-test-utils",
-  "version": "0.70.0-385ecccd6",
+  "version": "0.70.0-c6aaa674c",
   "private": true,
   "main": "src/index.ts",
   "license": "Apache-2.0",
