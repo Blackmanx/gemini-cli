@@ -175,38 +175,6 @@ consortium - over one full-width band naming what the call actually funds.
 The breadcrumb is constant across the content slides and names the project:
 `corporate · I+D · <convocatoria>`. Set it once on every content slide, not per slide.
 
-## Composing a diagram
-
-**The reference decks author their diagrams; they are not copied from the
-template.** No template slide has a 34-shape architecture diagram in it, so
-copying one and replacing text will never produce that. Add the elements.
-
-```bash
-officecli batch deck.pptx --commands '[
-  {"command":"add","parent":"/slide[5]","type":"shape","props":{
-     "x":"2cm","y":"3cm","w":"5cm","h":"1.6cm",
-     "fill":"0E1245","color":"FFFFFF","text":"Sistema bajo prueba","margin":"6pt"}},
-  {"command":"add","parent":"/slide[5]","type":"connector","props":{"x":"7.1cm","y":"3.8cm"}},
-  {"command":"add","parent":"/slide[5]","type":"shape","props":{
-     "x":"8.2cm","y":"3cm","w":"5cm","h":"1.6cm",
-     "fill":"FF5C5C","color":"FFFFFF","text":"Informe y evidencias"}}]'
-```
-
-What matters when composing:
-
-- `fill` takes a colour or `none`, and accepts theme modifiers - `accent1+lumMod75`,
-  `accent2+shade60+alpha80` - so tints come from the palette instead of a guessed hex.
-- `color` is the **text** colour, not the fill. `textColor` is not a property and is
-  rejected with a warning.
-- `geometry` chooses the preset: `rect`, `roundRect`, `ellipse`, `diamond`,
-  `rightArrow`, `star5`, the `callout*` family.
-- `margin` is inner padding; without it the text touches the border.
-- `connector` draws the arrow between two boxes.
-
-Start from a **sparse** content slide and delete what is on it first - adding
-shapes on top of a slide that already carries a diagram gives you two diagrams
-stacked. Then add yours and check with `check_overlaps.py` as usual.
-
 ## Check before delivering
 
 ```bash
