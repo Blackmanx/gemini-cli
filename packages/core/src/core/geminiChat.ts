@@ -198,6 +198,36 @@ function isValidContent(content: Content): boolean {
  * @throws Error if the history does not start with a user turn.
  * @throws Error if the history contains an invalid role.
  */
+
+/**
+ * Drops a trailing model turn from a request's history.
+ *
+ * The API rejects a request whose last turn is a model turn: 'Requests ending
+ * with a model turn are not supported.' Three things produce one.
+ *
+ * `extractCuratedHistory` drops model turns it judges invalid, so when the last
+ * one goes the tail becomes whatever preceded it - often another model turn,
+ * just as invalid. The binary-injection path writes a synthetic acknowledgement
+ * before the image parts. And the Context Management branch only verifies that
+ * the user turn after it reached history instead of pushing it, so when that
+ * comparison passes by accident the request goes out ending on the turn it was
+ * meant to follow.
+ *
+ * The trim belongs to the request, not to the history on record, which is why it
+ * is applied where the request is assembled and not inside getHistoryTurns -
+ * that one is also the accessor callers read. Nothing is lost that the model
+ * will not regenerate: it is asked again from the last user turn. An invalid
+ * request, by contrast, fails outright, every time, with no fallback.
+ *
+ * Exported for the test seam.
+ */
+export function trimTrailingModelTurn(history: HistoryTurn[]): HistoryTurn[] {
+  if (history[history.length - 1]?.content.role === 'model') {
+    return history.slice(0, -1);
+  }
+  return history;
+}
+
 function validateHistory(history: Array<Content | HistoryTurn>) {
   for (const item of history) {
     const content = 'content' in item ? item.content : item;
@@ -652,7 +682,7 @@ export class GeminiChat {
       }
     }
 
-    const requestHistory = this.getHistoryTurns(true);
+    const requestHistory = trimTrailingModelTurn(this.getHistoryTurns(true));
 
     const streamWithRetries = async function* (
       this: GeminiChat,
@@ -1309,31 +1339,9 @@ export class GeminiChat {
    * Returns the chat history as HistoryTurns.
    */
   getHistoryTurns(curated: boolean = false): HistoryTurn[] {
-    let history = curated
+    const history = curated
       ? extractCuratedHistory(this.agentHistory.get())
       : [...this.agentHistory.get()];
-
-    // The API rejects a request whose last turn is a model turn: 'Requests
-    // ending with a model turn are not supported.' Two paths append exactly
-    // such a turn - the synthetic acknowledgement the binary-injection path
-    // writes before the image parts, and the interrupted-response placeholder -
-    // and the Context Management branch only verifies that the user turn after
-    // it made it into history rather than pushing it. When that check passes by
-    // accident the request goes out ending on the synthetic turn and every image
-    // read fails identically, retry after retry.
-    //
-    // Only a turn made entirely of thoughts is dropped. A real model response is
-    // never discarded: losing one would silently drop work, whereas losing the
-    // synthetic marker costs nothing and is what makes the request valid.
-    const last = history[history.length - 1];
-    const lastParts = last?.content.parts ?? [];
-    if (
-      last?.content.role === 'model' &&
-      lastParts.length > 0 &&
-      lastParts.every((part) => typeof part === 'object' && part.thought === true)
-    ) {
-      history = history.slice(0, -1);
-    }
 
     if (this.context.config.isContextManagementEnabled()) {
       return scrubHistory(history);

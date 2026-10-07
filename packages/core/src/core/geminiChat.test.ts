@@ -27,6 +27,7 @@ import {
   THINKING_ONLY_NUDGE_MESSAGE,
   NO_RESPONSE_TEXT_NUDGE_MESSAGE,
   applyRetryNudge,
+  trimTrailingModelTurn,
 } from './geminiChat.js';
 import {
   type CompletedToolCall,
@@ -5083,43 +5084,70 @@ describe('GeminiChat', () => {
     });
   });
 
-  it('never sends a request ending on a synthetic model turn', () => {
-    const chat = new GeminiChat(mockConfig);
+  it('trims a trailing model turn whatever it holds, including a tool call', () => {
+    // The tail after a tool call is normally a model turn whose functionResponse
+    // never landed. Restricting the trim to synthetic turns left this one in
+    // place, and the request failed with 'Requests ending with a model turn are
+    // not supported.' on every image read.
+    const history: HistoryTurn[] = [
+      { id: '1', content: { role: 'user', parts: [{ text: 'render it' }] } },
+      {
+        id: '2',
+        content: {
+          role: 'model',
+          parts: [
+            { functionCall: { name: 'read_file', args: { path: 'page-1.png' } } },
+          ],
+        },
+      },
+    ];
+    const sendable = trimTrailingModelTurn(history);
+    expect(sendable[sendable.length - 1].content.role).toBe('user');
+  });
 
+  it('trims a synthetic acknowledgement too', () => {
+    const history: HistoryTurn[] = [
+      { id: '1', content: { role: 'user', parts: [{ text: 'show it' }] } },
+      {
+        id: '2',
+        content: {
+          role: 'model',
+          parts: [
+            {
+              text: 'Binary content received. Proceeding with analysis.',
+              thought: true,
+            },
+          ],
+        },
+      },
+    ];
+    expect(trimTrailingModelTurn(history)).toHaveLength(1);
+  });
+
+  it('leaves a history that already ends on a user turn alone', () => {
+    const history: HistoryTurn[] = [
+      { id: '1', content: { role: 'user', parts: [{ text: 'hello' }] } },
+      { id: '2', content: { role: 'model', parts: [{ text: 'hi there' }] } },
+      { id: '3', content: { role: 'user', parts: [{ text: 'and now?' }] } },
+    ];
+    const sendable = trimTrailingModelTurn(history);
+    expect(sendable).toHaveLength(3);
+    expect(sendable.filter((t) => t.content.role === 'model')).toHaveLength(1);
+  });
+
+  it('leaves the recorded history itself untouched', () => {
+    const chat = new GeminiChat(mockConfig);
     chat.setHistory([
-      { role: 'user', parts: [{ text: 'draw it' }] },
+      { role: 'user', parts: [{ text: 'render it' }] },
       {
         role: 'model',
         parts: [
-          {
-            text: 'Binary content received. Proceeding with analysis.',
-            thought: true,
-          },
+          { functionCall: { name: 'read_file', args: { path: 'page-1.png' } } },
         ],
       },
     ]);
-
-    // 'Requests ending with a model turn are not supported.' The binary
-    // injection path appends exactly this acknowledgement before the image
-    // parts, and when the user turn that should follow it never lands the
-    // request goes out invalid - every image read then fails the same way.
-    const sendable = chat.getHistoryTurns();
-    expect(sendable[sendable.length - 1].content.role).not.toBe('model');
-  });
-
-  it('keeps a real model response that ends the history', () => {
-    const chat = new GeminiChat(mockConfig);
-
-    chat.setHistory([
-      { role: 'user', parts: [{ text: 'hello' }] },
-      { role: 'model', parts: [{ text: 'hi there' }] },
-    ]);
-
-    const sendable = chat.getHistoryTurns();
-    // Only synthetic turns are dropped; a real answer is the model's work.
-    expect(sendable[sendable.length - 1].content.role).toBe('model');
-    expect(sendable[sendable.length - 1].content.parts?.[0]).toEqual({
-      text: 'hi there',
-    });
+    // The trim is for the request; what callers read back must still hold the
+    // tool call, or the session loses track of what it asked for.
+    expect(chat.getHistoryTurns()).toHaveLength(2);
   });
 });
