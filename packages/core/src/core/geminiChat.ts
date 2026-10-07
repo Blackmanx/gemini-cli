@@ -23,6 +23,7 @@ export { AgentChatHistory, type HistoryTurn } from './agentChatHistory.js';
 import { AgentChatHistory, type HistoryTurn } from './agentChatHistory.js';
 
 import { randomUUID } from 'node:crypto';
+import { debugLogger } from '../utils/debugLogger.js';
 import { toParts } from '../code_assist/converter.js';
 import {
   retryWithBackoff,
@@ -1010,9 +1011,21 @@ export class GeminiChat {
     let scrubbedHistory = this.context.config.isContextManagementEnabled()
       ? scrubHistory([...requestHistory])
       : [...requestHistory];
-
     // Always coalesce consecutive roles to prevent 400 Bad Request errors
     scrubbedHistory = coalesceConsecutiveRoles(scrubbedHistory);
+
+    // Last mile: this is the final transformation before the request, so nothing
+    // downstream can reintroduce a tail after
+    // it. The API rejects a request whose last turn is a model turn - 'Requests
+    // ending with a model turn are not supported.' - with a 400 and no fallback,
+    // and because the request is deterministic the retry fails identically,
+    // which is what left a session unable to read a single image.
+    if (scrubbedHistory[scrubbedHistory.length - 1]?.content.role === 'model') {
+      debugLogger.debug(
+        '[GeminiChat] dropping a trailing model turn the API would reject',
+      );
+      scrubbedHistory = scrubbedHistory.slice(0, -1);
+    }
 
     const scrubbedContents = scrubbedHistory.map((h) => h.content);
 
