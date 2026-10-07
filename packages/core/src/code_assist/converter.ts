@@ -178,12 +178,31 @@ function toVertexGenerateContentRequest(
 }
 
 export function toContents(contents: ContentListUnion): Content[] {
-  if (Array.isArray(contents)) {
-    // it's a Content[] or a PartsUnion[]
-    return contents.map(toContent);
+  if (!Array.isArray(contents)) {
+    // A lone Content is not a conversation, so there is no tail to correct.
+    return [toContent(contents)];
   }
-  // it's a Content or a PartsUnion
-  return [toContent(contents)];
+  const out = contents.map(toContent);
+
+
+  // The API rejects a request whose last turn is a model turn: 'Requests ending
+  // with a model turn are not supported.' It answers 400 with no fallback, and
+  // because the request is deterministic the retry fails identically, so one bad
+  // tail breaks every later tool call in the session - reading an image being
+  // the one that always trips it.
+  //
+  // This is the funnel every request on this path goes through, interactive and
+  // headless alike, so the tail is corrected here rather than at one call site
+  // another route can bypass. Trimming in geminiChat was not enough: that
+  // history reaches the client, and whatever runs between there and here can
+  // append a turn of its own.
+  //
+  // Nothing is lost. The dropped turn is the model's own output, which it
+  // regenerates when asked again from the last user turn.
+  if (out[out.length - 1]?.role === 'model') {
+    out.pop();
+  }
+  return out;
 }
 
 function maybeToContent(content?: ContentUnion): Content | undefined {

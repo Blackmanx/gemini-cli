@@ -356,9 +356,36 @@ describe('converter', () => {
       const contents: ContentListUnion = [
         { role: 'user', parts: [{ text: 'hello' }] },
         { role: 'model', parts: [{ text: 'hi' }] },
+        { role: 'user', parts: [{ text: 'show me the render' }] },
       ];
       expect(toContents(contents)).toEqual([
         { role: 'user', parts: [{ text: 'hello' }] },
+        { role: 'model', parts: [{ text: 'hi' }] },
+        { role: 'user', parts: [{ text: 'show me the render' }] },
+      ]);
+    });
+
+    it('drops a trailing model turn, which the API refuses', () => {
+      // 'Requests ending with a model turn are not supported.' The tail after a
+      // tool call is normally a model turn whose functionResponse never landed,
+      // and the retry fails the same way, so every image read broke the session.
+      const contents: ContentListUnion = [
+        { role: 'user', parts: [{ text: 'render it' }] },
+        {
+          role: 'model',
+          parts: [
+            { functionCall: { name: 'read_file', args: { path: 'page-1.png' } } },
+          ],
+        },
+      ];
+      expect(toContents(contents)).toEqual([
+        { role: 'user', parts: [{ text: 'render it' }] },
+      ]);
+    });
+
+    it('keeps a lone model Content, which is not a conversation', () => {
+      const lone: ContentListUnion = { role: 'model', parts: [{ text: 'hi' }] };
+      expect(toContents(lone)).toEqual([
         { role: 'model', parts: [{ text: 'hi' }] },
       ]);
     });
