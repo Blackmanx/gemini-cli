@@ -233,3 +233,62 @@ it in LibreOffice headless and let it write the XML — `soffice` is installed.
 - For a document meant to be printed or circulated, open it once with
   `soffice --headless --convert-to pdf` to confirm it is not broken — that is
   the only check that catches a table that overflows the page.
+
+## The engine: officecli
+
+`bundle/vendor/officecli/` carries `officecli`, a native CLI for .docx, .xlsx
+and .pptx. Use it for anything generic; keep the scripts below for anything that
+needs to know the corporate templates.
+
+```bash
+officecli get    fichero.docx /                 # read the structure
+officecli query  fichero.pptx "/slide[1]//picture"   # CSS-like selectors
+officecli batch  fichero.docx --commands '[...] # several edits in one pass
+officecli validate fichero.docx                # OpenXML schema
+officecli refresh fichero.docx                  # recalculate the TOC
+officecli import  fichero.xlsx /sheet --csv datos.csv
+officecli dump   fichero.docx / > guion.json    # replayable script
+```
+
+Prefer it over hand-written python-docx. What it does that the scripts do not:
+
+- **validates** against the OpenXML schema, so a malformed document is caught
+  instead of shipping;
+- **refreshes** the table of contents, which `python-docx` cannot do at all;
+- **queries** by selector instead of walking `paragraphs` and guessing;
+- **imports** CSV/TSV into a sheet.
+
+### Two things it will get wrong on the corporate templates
+
+**Pass the styleId, not the display name.** The templates use Spanish style ids —
+`Ttulo1`, `Ttulo2`, `Ttulo3`, `Titulosdetablas` — while `Heading 1` is only the
+display name. Passing `"Heading 1"` writes a reference Word cannot resolve, and
+passing `Heading1` makes officecli *inject Word's own built-in heading*, which
+drops the corporate numbering and formatting:
+
+```bash
+officecli batch informe.docx --commands '[
+  {"command":"add","parent":"/body","type":"paragraph",
+   "props":{"text":"Introduccion","styleId":"Ttulo1"}}
+]'
+```
+
+`Ttulo1` produces `3. Introduccion`, auto-numbered by the template.
+`Heading1` produces an unnumbered heading in the wrong typeface.
+
+**`merge` does nothing here.** It replaces `{{key}}` placeholders, and the corporate
+templates contain none — checked, zero across all three files. Filling a template
+means writing into its structure, not merging into markers.
+
+### What the scripts keep
+
+`fill_document.py`, `new_from_template.py`, `chart_data.py` and `fill_workbook.py`
+stay, because they encode what officecli does not know:
+
+- which paragraphs and headings of a template are sample filler to remove;
+- that the cover title lives in a text box and is split across runs;
+- that a chart reads `B8:M8`, and what shape the data has to be;
+- that headings auto-number, so no text should carry a number.
+
+Where both can do the job, prefer officecli; where the template's structure
+matters, use the scripts and reach for officecli underneath them.

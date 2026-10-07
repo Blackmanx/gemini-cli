@@ -16,7 +16,36 @@ Run `command -v kimi-slides`.
   `assets/templates/new_deck.py` (see below), which exists because that template is a
   Google Slides export and breaks the obvious python-pptx code in three ways.
 
-## One deck, two palettes
+## Two corporate decks
+
+| `--template` | file | layouts | figures |
+| --- | --- | --- | --- |
+| `dark` (default) | `Template PPTs.OSCURO.pptx` | 55 | 209 |
+| `light` | `Template PPTs.pptx` | 54 | 587 |
+
+They are separate files: layout names differ (26 exist only in the dark deck, 25
+only in the light one) and figure ids mean nothing across them. Pass the same
+`--template` when building the deck and when picking its figures. The light deck
+also carries white variants of the dark layouts (`- blanco`, `_BLANCA`).
+
+## Filling a template
+
+`new_deck.py` handles the corporate-specific work — dropping the template's sample
+slides, refusing the one layout whose text is invisible in PowerPoint, filling
+picture placeholders from the figure catalogue. For anything else, the bundled
+`officecli` edits the resulting deck directly:
+
+```bash
+officecli query deck.pptx "/slide[2]//picture"
+officecli batch deck.pptx --commands '[
+  {"command":"add","parent":"/slide[1]","type":"picture",
+   "props":{"src":"logo.png","x":"2cm","y":"1cm","alt":"Logotipo corporate"}}]'
+officecli validate deck.pptx
+```
+
+Note the picture props are `src`, `x`, `y` and `alt`; there is no `w` or `h`.
+
+## The older one-deck notes
 
 `assets/templates/Template PPTs.pptx` is the only template. It carries both: 43
 dark layouts and 11 named `- blanco` / `_BLANCA`. An earlier dark-only deck

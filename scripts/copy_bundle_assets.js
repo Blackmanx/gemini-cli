@@ -148,4 +148,22 @@ for (const file of readdirSync(ripgrepDest)) {
 console.log(
   `Copied ripgrep binaries to bundle/vendor/ripgrep/ (${readdirSync(ripgrepDest).length})`,
 );
+
+// 8. Vendor officecli, the generic Office engine the office-docs and
+// pptd-slides skills drive. Optional: a missing copy only costs those skills the
+// generic path, because both keep working from their own scripts.
+const officecliSrc = join(root, 'packages/core/vendor/officecli');
+const officecliDest = join(bundleDir, 'vendor', 'officecli');
+
+if (existsSync(officecliSrc)) {
+  cpSync(officecliSrc, officecliDest, { recursive: true });
+  for (const file of readdirSync(officecliDest)) {
+    chmodSync(join(officecliDest, file), 0o755);
+  }
+  console.log(
+    `Copied officecli to bundle/vendor/officecli/ (${readdirSync(officecliDest).length})`,
+  );
+} else {
+  console.log('officecli not vendored; skipping (optional).');
+}
 console.log('Assets copied to bundle/');
