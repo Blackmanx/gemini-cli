@@ -50,27 +50,47 @@ Deleting 114 slides takes about three seconds in one batch.
 
 ## Which slides to keep
 
-The template is 120 slides, and its own content slides cluster on a few layouts.
-Keeping slides from the right ones is what makes the deck look consistent:
+**Slides 27 to 90 are the content range** in both decks — 64 slides that already
+carry the breadcrumb, the footer and the page number. Slides 1–26 are covers,
+section dividers and title samples; 91 onward are style specimens. Build a deck
+out of 27–90 and vary the picks, so it does not read as one slide repeated.
 
-| layout | clara | oscura | use for |
+| clara (120 slides) | oscura (123 slides) | slides | shape |
 | --- | --- | --- | --- |
-| `TITLE_AND_TWO_COLUMNS_2_1` | 66 | — | the standard content slide, clara |
-| `TITLE_AND_TWO_COLUMNS_2` | — | 63 | the standard content slide, oscura |
-| `TITLE_AND_TWO_COLUMNS_2_2_1` / `_2_2` | 12 | 11 | a content slide with a second element |
-| `1_título arriba - blanco` / `1_título arriba` | 4 | 5 | a slide led by a title on a wide band |
-| `TITLE_AND_TWO_COLUMNS_2_3_1` / `_2_3` | 4 | 4 | three-part comparison |
+| `TITLE_AND_TWO_COLUMNS_2_1` | `TITLE_AND_TWO_COLUMNS_2` | 50 / 43 | the standard content slide |
+| `TITLE_AND_TWO_COLUMNS_2_2_1` | `TITLE_AND_TWO_COLUMNS_2_2` | 9 / 11 | content plus a second element |
+| `TITLE_AND_TWO_COLUMNS_2_3_1_2` | `TITLE_AND_TWO_COLUMNS_2_3_3` | 3 / 3 | three-part comparison |
+| `TITLE_AND_TWO_COLUMNS_2_3_1_1` | `TITLE_AND_TWO_COLUMNS_2_3_2` | 2 / 2 | three-part, narrower |
+| — | `TITLE_AND_BODY_2_2`, `TITLE_AND_TWO_COLUMNS_2_3` | 1 each | one-offs worth avoiding for variety |
 
-Two decks ship with the skill, and they are different files with different
-layout names:
+They differ in shape count — 12, 16, 23, 29, 32, 33 — so consecutive slides
+taken from different parts of the range do not look identical. List what a
+candidate holds before keeping it:
 
-| file | slides | layouts |
-| --- | --- | --- |
-| `assets/templates/Template PPTs.pptx` (clara) | 120 | 54 |
-| `assets/templates/Template PPTs.OSCURO.pptx` (oscura) | 123 | 55 |
+```bash
+officecli query deck.pptx "/slide[45]/*"
+```
 
-`officecli query` a few slides before choosing, and check what the body text box
-already holds — replacing it means replacing all of it, not appending.
+## Make the title fit
+
+The title box on the cover is anchored to its **bottom** and has **no autofit**,
+and the subtitle sits inside its area:
+
+| | y | height | bottom | size |
+| --- | --- | --- | --- | --- |
+| subtitle | 2.50" | 0.55" | 3.05" | 18pt |
+| title | 1.46" | 2.40" | 3.85" | 54pt |
+
+At 54pt the template's own one-line title occupies 3.10"–3.85" and clears the
+subtitle. Two lines grow upward to about 2.0" and print straight through it.
+So a title has to stay on one line: either shorten it, or drop the size until it
+fits.
+
+```bash
+officecli set deck.pptx "/slide[1]/shape[@id=1284]" --prop size=34pt
+```
+
+As a rule of thumb at 54pt the box takes roughly 20 characters; at 34pt about 34.
 
 ## Do not use `SECTION_TITLE_AND_DESCRIPTION`
 
@@ -79,13 +99,6 @@ as a black rectangle with unreadable text, and nothing warns. It is the only
 layout in either deck with this problem. A LibreOffice render hides it, because
 LibreOffice resolves the panel's `lt2` against the wrong theme and paints it
 white — check in PowerPoint, not in the preview.
-
-## Keep titles short
-
-The title box is anchored `valign=bottom` with `autoFit=none`. A title longer
-than the one the template shipped wraps onto a second line and grows upward into
-the label above it, so "Crecimiento de la IA en España 2026" overprints
-"Nombre del cliente". Use roughly the length the template's own slide uses.
 
 ## Figures
 
@@ -114,8 +127,7 @@ photographs of people, partner logos); the oscura one has 209.
 ## Finishing
 
 ```bash
-officecli validate deck.pptx     # OpenXML schema; the templates pass except
-                                 # three pre-existing chart errors in chart-workbook.xlsx
+officecli validate deck.pptx     # OpenXML schema
 ```
 
 Deliver the `.pptx`. Say which template it came from and which slides you kept
