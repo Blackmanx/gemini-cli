@@ -670,7 +670,13 @@ export function supportsMultimodalFunctionResponse(
         ?.multimodalToolUse === true
     );
   }
-  return model.startsWith('gemini-3-');
+  // Both separators are in use for Gemini 3 ids: `gemini-3-pro-preview` and
+  // `gemini-3.1-pro-preview`, `gemini-3.5-flash`, `gemini-3.8-flash`. Matching
+  // only the hyphen reported the dotted ones as unsupported, so an image was
+  // emitted as a sibling of its functionResponse instead of nested inside it -
+  // a shape the API refuses, as 'Requests ending with a model turn are not
+  // supported.'
+  return /^gemini-3([.-]|$)/.test(model);
 }
 
 /**

@@ -1203,3 +1203,28 @@ describe('resolveModel Gemini 3.5 Flash GA', () => {
     });
   });
 });
+
+describe('multimodal function response support', () => {
+  it('recognises Gemini 3 ids written with either separator', () => {
+    // Both spellings ship: `gemini-3-pro-preview` and `gemini-3-flash` use a
+    // hyphen; `gemini-3.1-pro-preview`, `gemini-3.5-flash` and the
+    // `gemini-3.8-flash` that the failing session used a dot. Matching only the
+    // hyphen reported the dotted ids as unsupported, so the image was emitted
+    // as a sibling of its functionResponse, which the API refuses.
+    for (const model of [
+      'gemini-3-pro-preview',
+      'gemini-3-flash',
+      'gemini-3.1-pro-preview',
+      'gemini-3.5-flash',
+      'gemini-3.8-flash',
+    ]) {
+      expect(supportsMultimodalFunctionResponse(model)).toBe(true);
+    }
+  });
+
+  it('does not claim it for earlier models', () => {
+    for (const model of ['gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-30-x']) {
+      expect(supportsMultimodalFunctionResponse(model)).toBe(false);
+    }
+  });
+});
