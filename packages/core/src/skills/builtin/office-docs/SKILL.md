@@ -1,294 +1,137 @@
 ---
 name: office-docs
-description: Create, edit and fill Word documents and Excel workbooks using the department's corporate templates as the base, so styles, logos, headers and chart formatting match the rest of the department's output. Use whenever the user asks for an acta de reunión, a procedimiento, project documentation, a deliverable document, a report, a spreadsheet, or any .docx/.xlsx work that should look like corporate material. Triggers include "acta", "procedimiento", "documentación del proyecto", "plantilla corporate", "informe", "plantilla de Excel", "gráficos corporate", "docx", "xlsx".
+description: Build corporate Word documents and Excel workbooks from the department templates, preserving the corporate styles, section structure, numbering and table shapes. Use for actas, procedimientos, project documentation, reports, deliverables, .docx and .xlsx work in the company's style, and for filling the department's themed charts. Triggers include acta, procedimiento, documentación del proyecto, plantilla corporate, informe, docx, xlsx, gráficos corporate.
 ---
 
 # corporate Office documents
 
-Four department templates ship with this skill. Start from one instead of
-imitating one — the styles, logos, header bands and page setup are already in
-there and are the thing being asked for.
-
-| Template key       | File                        | For |
-| ------------------ | --------------------------- | --- |
-| `acta`             | `assets/templates/acta-reunion.dotx`     | Meeting minutes: who convened, who attended, agenda, per-point development, agreements |
-| `procedimiento`    | `assets/templates/procedimiento.dotx`    | Step-by-step procedures, SOPs, runbooks |
-| `documentacion`    | `assets/templates/documentacion-proyecto.dotx` | Project deliverables; this one carries the logo header |
-| `graficos`        | `assets/templates/chart-workbook.xlsx`    | Charts and KPI workbooks; four sheet recipes, all already themed |
-
-The spreadsheet carries the corporate palette — `dk1 #0E1245`, `dk2 #61CAFE`,
-`accent1 #FF5C5C`, the same tokens the PPT template uses.
-
-**The three Word templates do not.** All three sit on the stock Office theme
-(`dk1 #0E2841`, `accent1 #156082`), so a document built from them will not
-match a slide or a chart from this kit. What they *do* carry is the structure
-corporate actually works in: heading hierarchy, section names, table shapes, the
-`documentacion` logo header. Treat them as the right skeleton, and if the
-colour has to match, pull the tokens from `graficos` and apply them per element
-rather than expecting the theme to do it.
-
-## Before writing anything
-
-**Read the template first.** Filling a table means knowing its real row count and
-header; adding a chart means knowing which sheets already have one.
+Everything is done with `officecli`, the Office engine bundled at
+`bundle/vendor/officecli/`. It reads, queries and writes `.docx`, `.xlsx` and
+`.pptx` by selector, validates against the OpenXML schema, and recalculates
+derived fields.
 
 ```bash
-python3 scripts/describe_template.py acta          # headings, tables, page setup
-python3 scripts/describe_template.py graficos      # sheets, charts, active sheet
-python3 scripts/describe_template.py --theme graficos   # palette only
+officecli get     informe.docx /                        # structure
+officecli query   informe.docx 'p[style=Ttulo1]'          # CSS-like selectors
+officecli set     informe.docx /body/p[10] --prop text="..."
+officecli batch   informe.docx --commands '[...]'        # several edits, one pass
+officecli validate informe.docx
+officecli refresh informe.docx                           # recalculated fields
+officecli import  datos.xlsx /sheet --csv datos.csv
 ```
 
-Guessing the layout from the file name gets the table shapes wrong, and these
-templates do not agree with each other: `acta` titles with a `Titulo` style,
-`procedimiento` leaves its title as a bold `Normal` paragraph.
+## Start from a template, always
 
-## Creating
+The department's templates are real Office files: the styles, logos, header
+bands and page setup are the thing being asked for.
+
+| key | file | for |
+| --- | --- | --- |
+| `acta` | `assets/templates/acta-reunion.dotx` | meeting minutes |
+| `procedimiento` | `assets/templates/procedimiento.dotx` | SOPs, runbooks |
+| `documentacion` | `assets/templates/documentacion-proyecto.dotx` | project deliverables, carries the logo header |
+| `graficos` | `assets/templates/chart-workbook.xlsx` | charts, four themed sheet recipes |
+
+The `.dotx` wrinkle: Word templates declare a *template* content type and
+`python-docx` refuses them outright. Rewriting that one string in
+`[Content_Types].xml` turns the copy into a `.docx` with the theme, styles,
+header/footer parts and logos intact.
+
+## Headings are numbered by the template
+
+`Ttulo1`, `Ttulo2`… carry automatic numbering. Writing `"1. Introducción"`
+renders as **`1. 1. Introducción`**. Put the bare text in the heading.
+
+And `style` is the OOXML **styleId**, not the display name:
+
+| you pass | what happens |
+| --- | --- |
+| `"Heading 1"` (the name) | a reference Word cannot resolve |
+| `Heading1` | officecli **injects Word's own built-in heading**, dropping the corporate typeface and numbering |
+| `Ttulo1` | correct: renders as `1. Introducción`, numbered by the template |
+
+The templates' style ids are Spanish: `Ttulo1`…`Ttulo9`, `TtuloTDC`,
+`Titulosdetablas`, `Titulofiguras`, `Cita`, `Normal`. Read them from the file
+rather than guessing: `officecli get doc.docx /styles`.
+
+## Table captions
+
+A caption uses the `Titulosdetablas` style and belongs **immediately after** its
+table, with the two kept together. A caption left on its own page reads as a
+stray label — that is the commonest defect in these documents:
+
+```
+[Normal            ] TABLA DE ACRÓNIMOS
+[Titulos de tablas ] Tabla 1          <- orphan: the table is a page earlier
+```
+
+Put the caption directly after the table's last row, and if it must not break,
+set `keepNext` on it. Never leave a caption whose table you removed.
+
+## The table of contents
+
+`officecli refresh` recalculates **page numbers**. It does **not** rebuild the
+entries: a document whose body headings were rewritten keeps listing the old
+ones (`Subapartado 1`, `Apartado 1…4`) until the field is rebuilt.
 
 ```bash
-python3 scripts/new_from_template.py acta informe.docx
-python3 scripts/new_from_template.py procedimiento proc.docx --title "Alta de proveedores"
-python3 scripts/new_from_template.py graficos seguimiento.xlsx --sheet "Progreso circular"
+officecli refresh informe.docx        # page numbers, via its HTML backend
 ```
 
-Any output path works; the script creates parent directories.
+To rebuild, remove the stale `toc` and add a fresh one (`officecli query
+doc.docx 'toc'` lists them; `/toc[1]` is LISTA DE FIGURAS, `/toc[2]` LISTA DE
+TABLAS). Say in the delivery that the index needs a refresh in Word — `Ctrl+A`,
+`F9` — because the cached entries only recompute there.
 
-Pass `--title` and `--subtitle` rather than setting them yourself. The deliverable
-name lives in four places — the cover title, the running header and the footer
-repeat it — and none of them are ordinary body paragraphs. `apply_cover_text`
-in `scripts/office.py` rewrites all of them in one pass and is the only
-practical way in: the cover title is a text-box shape, and the templates break
-`[Nombre del entregable]` across four runs inside one tab-separated paragraph.
-A paragraph-level or run-level edit leaves `Nombre del entregable` stamped on
-every page.
+## Remove the sample content
 
-The script also strips the template's sample prose on the way out — and the
-templates carry several placeholder traditions, not just Lorem ipsum:
-`consectetuer`, `Pellentesque habitant`, `Suspendisse dui purus`,
-`Subapartado N`, the `Apartado 1..4` sample headings and empty headings. All of
-it goes, leaving the front matter (change log, index, acronyms) and its styles.
-
-A document from `new_from_template.py` is an empty shell by design: cover,
-header, footer and structure, no content. Fill the body with `python-docx` and
-insert tables in flow — `Document.add_table` appends at the end of the body, so
-a table moved by hand with `_element` ends up after the last section instead of
-under the one it belongs to. That text lives in body paragraphs
-*and* inside table cells, so pass it as-is and let the script remove it;
-`--keep-filler` keeps it if you are inspecting the template.
-
-## Filling the body
-
-`new_from_template.py` produces the shell — cover, header, footer, styles, front
-matter — and nothing else. Write the content with `fill_document.py` from a JSON
-outline rather than by hand:
+The templates ship placeholder prose and headings, and leaving them in reads as
+finished work: `Lorem ipsum`, `consectetuer`, `Pellentesque habitant`,
+`Suspendisse dui purus`, `Subapartado N`, `Apartado 1..4`, empty headings, and
+the bracketed `[Nombre del entregable]` on the cover, header and footer. All of
+it must go, including the sample prose hidden inside table cells.
 
 ```bash
-python3 scripts/fill_document.py informe.docx outline.json
+officecli query informe.docx 'p[text~=Lorem]'     # find what is there
+officecli batch informe.docx --commands '[{"command":"remove","path":"/body/p[12]"}]'
 ```
 
-```json
-{"front": {"change_log": {"date": "06/10/2026", "by": "Consultor corporate",
-                          "reviewed_by": "Revisor corporate", "approved_by": "Director corporate"},
-           "acronyms": [["IA", "Inteligencia Artificial"]]},
- "sections": [
-   {"heading": "Introduccion", "paragraphs": ["En 2026, la IA se ha consolidado..."]},
-   {"heading": "Retos", "bullets": ["La regulacion de los datos"],
-    "paragraphs": ["Ambos condicionan el ritmo de despliegue."]},
-   {"heading": "Sectores", "paragraphs": ["Finanzas y Salud lideran la adopcion."],
-    "table": {"caption": "Tabla 1: Adopcion por sector",
-              "header": ["Sector", "Tasa (%)"],
-              "rows": [["Finanzas y Seguros", "85%"]]}}]}
-```
+## Excel
 
-It handles the three things that go wrong when done by hand: the template's own
-sample sections are removed first, headings get bare text because the style
-numbers them itself, and tables are inserted in flow rather than appended after
-the last section.
+### The charts read fixed blocks
 
-## Headings are numbered for you
+`assets/templates/chart-workbook.xlsx` has four themed sheets. Each chart plots a fixed
+range whose shape has nothing to do with a table of your data, so writing the
+numbers elsewhere leaves the chart plotting the template's sample series
+(`Lorem ipsum`, `Jan`…`Dec`) — which reads as real data and is worse than an
+empty chart.
 
-`Heading 1` and `Heading 2` carry automatic numbering from the template's
-numbering definition. Writing `"1. Introducción"` into one renders as
-**"1. 1. Introducción"**. Put the bare text in the heading and let the template
-number it.
+| sheet | categories | series |
+| --- | --- | --- |
+| `Gráfico de barras agrupadas` | `B7:M7` | `B8:M8` — one series, twelve periods |
+| `Barras por segmento` | `D10:G10` | `D11:G13` — three series, four categories |
+| `Progreso circular` | — | four donuts, two values each (`G17:G18`, `J17:J18`, …) |
+| `Gráfico de anillo` | `B14:B17` | `C14:C17` |
 
-The table of contents is a Word field with a cached result. The cache still
-lists the old placeholder headings until someone refreshes it in Word
-(`Ctrl+A`, `F9`); say so rather than trying to compute it in python-docx.
+A sector-by-year table is four categories × three series, so it belongs in
+`Barras por segmento`, not in `Gráfico de barras agrupadas`. The templates also
+carry decoy blocks in columns no chart reads — cells of `Name`, `Date` and month
+names with sample numbers under them — which are invisible to the chart and
+obvious to whoever opens the file.
 
-## The .dotx wrinkle
+### New sheets
 
-Word templates declare a *template* content type and python-docx refuses them
-outright. `new_from_template.py` rewrites that one string in
-`[Content_Types].xml` on the way out, so you get a `.docx` with the template's
-theme, styles, header/footer parts and embedded logos intact. The bundled
-templates are never modified — the conversion happens on the copy. If you need
-to do it by hand, import `dotx_to_docx` from `scripts/office.py`.
-
-## Working on an existing document
-
-Same tools, different path. `describe_template.py` takes any `.docx` or
-`.dotx`, not just the bundled ones:
-
-```bash
-python3 scripts/describe_template.py ~/otro/informe.docx
-```
-
-Then edit with `python-docx` (`Document`, `paragraphs`, `tables`, `sections`)
-or `openpyxl` (`load_workbook`, `active`, `save`). Both are installed.
-
-Fill tables by index, never by assuming a fixed row count:
-
-```python
-from docx import Document
-doc = Document("informe.docx")
-tabla = doc.tables[0]
-fila = tabla.add_row().cells          # append; existing rows keep their data
-fila.cells[0].text = "2026-10-06"
-doc.save("informe.docx")
-```
-
-## Building a workbook
-
-`new_from_template.py graficos` copies the workbook; `fill_workbook.py` makes it
-yours. A spec may add new sheets with corporate styling, fill the template's ready
-charts, or both in one pass:
-
-```bash
-python3 scripts/fill_workbook.py salida.xlsx spec.json
-```
-
-```json
-{"chart_sheets": [
-   {"sheet": "Barras por segmento",
-    "categories": ["Finanzas", "Salud", "Retail", "Manufactura"],
-    "series": [{"name": "2024", "values": [0.50, 0.45, 0.40, 0.35]},
-               {"name": "2026", "values": [0.85, 0.78, 0.70, 0.65]}],
-    "drop_others": true}],
- "sheets": [
-   {"name": "Resumen",
-    "columns": ["Sector", "Adopción (%)", "Inversión 2026 (M€)"],
-    "rows": [["Finanzas y Seguros", 0.85, 1200],
-             ["Salud", 0.78, 950]]}]}
-```
-
-New sheets get the department palette from the template's own tokens — navy
-`#0E1245` header band in white bold, banded rows, sized columns, frozen header —
-so they match the charts without any manual formatting. Columns whose header
-mentions `%` are formatted as percentages. `drop_others` removes the chart
-sheets you did not ask for, which is how a delivered workbook stops carrying
-three sheets of sample data.
-
-## Charts
-
-`assets/templates/chart-workbook.xlsx` has four worked sheets that are already themed:
-`Gráfico de barras agrupadas`, `Barras por segmento`, `Progreso circular`,
-`Gráfico de anillo`. Copy the relevant one rather than building a chart from
-scratch — the formatting is the point.
-
-**Every chart reads a fixed block of cells, and that block's shape has nothing
-to do with the shape of a table of your data.** Writing your numbers anywhere
-else leaves the chart plotting the template's sample series — `Lorem ipsum`,
-`Jan`…`Dec` — which reads as real data and is worse than an empty chart.
-
-```bash
-python3 scripts/chart_data.py describe        # every chart, its ranges and its shape
-python3 scripts/chart_data.py describe libro.xlsx
-```
-
-```
-=== Gráfico de barras agrupadas
-  Bar
-    categories  B7:M7  (horizontal)
-    values      B8:M8  (horizontal)
-    shape       1 serie(s) x 12 categorias
-    ahora       ['Jan', 'Feb', ... 'Dec']
-```
-
-Pick the sheet whose shape fits the data, then write into it with `set`:
-
-```bash
-python3 scripts/chart_data.py set salida.xlsx "Gráfico de barras agrupadas" datos.json
-```
-
-```json
-{"categories": ["Ene", "Feb", "Mar"],
- "series": [{"name": "Adopción IA", "values": [0.50, 0.62, 0.74]}]}
-```
-
-`set` writes into the exact ranges the chart reads, clears the sample labels
-beside them (`Name`, `Date`, `Lorem ipsum`), and **refuses** data of the wrong
-length instead of truncating it — a chart with three bars when the block holds
-twelve would otherwise silently mislead. Choose a different sheet, or rebuild
-the block, rather than forcing it.
-
-openpyxl reads charts but does not create them. For a chart type that does not
-exist here, copy a sheet that already has one and repoint its ranges, or build
-it in LibreOffice headless and let it write the XML — `soffice` is installed.
+For a sheet that does not exist, use the palette the template's own theme
+carries rather than copying a sheet: navy `#0E1245` header band in white bold,
+banded rows, sized columns, frozen header. Do not add rows into a chart's range
+or move its XML by hand — write into the range the chart reads, or build a plain
+sheet and let the template's styling do the rest.
 
 ## Delivering
 
 - Deliver the `.docx` or `.xlsx`, never a rendered PDF, unless asked.
 - Say which template it came from.
-- If you changed the structure of a template, say so; the next person inherits it.
-- For a document meant to be printed or circulated, open it once with
-  `soffice --headless --convert-to pdf` to confirm it is not broken — that is
-  the only check that catches a table that overflows the page.
-
-## The engine: officecli
-
-`bundle/vendor/officecli/` carries `officecli`, a native CLI for .docx, .xlsx
-and .pptx. Use it for anything generic; keep the scripts below for anything that
-needs to know the corporate templates.
-
-```bash
-officecli get    fichero.docx /                 # read the structure
-officecli query  fichero.pptx "/slide[1]//picture"   # CSS-like selectors
-officecli batch  fichero.docx --commands '[...] # several edits in one pass
-officecli validate fichero.docx                # OpenXML schema
-officecli refresh fichero.docx                  # recalculate the TOC
-officecli import  fichero.xlsx /sheet --csv datos.csv
-officecli dump   fichero.docx / > guion.json    # replayable script
-```
-
-Prefer it over hand-written python-docx. What it does that the scripts do not:
-
-- **validates** against the OpenXML schema, so a malformed document is caught
-  instead of shipping;
-- **refreshes** the table of contents, which `python-docx` cannot do at all;
-- **queries** by selector instead of walking `paragraphs` and guessing;
-- **imports** CSV/TSV into a sheet.
-
-### Two things it will get wrong on the corporate templates
-
-**Pass the styleId, not the display name.** The templates use Spanish style ids —
-`Ttulo1`, `Ttulo2`, `Ttulo3`, `Titulosdetablas` — while `Heading 1` is only the
-display name. Passing `"Heading 1"` writes a reference Word cannot resolve, and
-passing `Heading1` makes officecli *inject Word's own built-in heading*, which
-drops the corporate numbering and formatting:
-
-```bash
-officecli batch informe.docx --commands '[
-  {"command":"add","parent":"/body","type":"paragraph",
-   "props":{"text":"Introduccion","styleId":"Ttulo1"}}
-]'
-```
-
-`Ttulo1` produces `3. Introduccion`, auto-numbered by the template.
-`Heading1` produces an unnumbered heading in the wrong typeface.
-
-**`merge` does nothing here.** It replaces `{{key}}` placeholders, and the corporate
-templates contain none — checked, zero across all three files. Filling a template
-means writing into its structure, not merging into markers.
-
-### What the scripts keep
-
-`fill_document.py`, `new_from_template.py`, `chart_data.py` and `fill_workbook.py`
-stay, because they encode what officecli does not know:
-
-- which paragraphs and headings of a template are sample filler to remove;
-- that the cover title lives in a text box and is split across runs;
-- that a chart reads `B8:M8`, and what shape the data has to be;
-- that headings auto-number, so no text should carry a number.
-
-Where both can do the job, prefer officecli; where the template's structure
-matters, use the scripts and reach for officecli underneath them.
+- Open it once with `soffice --headless --convert-to pdf` before delivering: that
+  is the only check that catches a caption stranded on its own page or a table
+  that overflows.
+- For a Word file, say the index needs `Ctrl+A`, `F9`.

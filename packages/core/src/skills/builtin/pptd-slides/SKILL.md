@@ -1,290 +1,122 @@
 ---
 name: pptd-slides
-description: Create and edit professional corporate presentations using the PPTD format — a YAML design DSL that compiles to PPTX via the kimi-slides CLI. Use when the user asks to create, edit, replicate, or rebrand a presentation/deck/PPT/PPTX, especially when a corporate template must be matched exactly, when deck-wide visual consistency matters (same background, header, theme on every slide), or when iterative visual review (screenshot + fix rounds) is required. Covers the full workflow from template analysis to validated delivery.
+description: Build corporate presentations from the department PowerPoint templates so they look like corporate made them. Covers editing an existing template slide in place, deleting the slides you do not need, replacing text, reusing the template's figures, and the layout and colour traps that make a deck look wrong. Use when the user asks for a deck, presentation, slides or PPTX in the company's corporate style, or to edit one of the corporate templates.
 ---
 
-# PPTD Slides
+# corporate presentations
 
-PPTD is a YAML design DSL for presentations: one `.pptd` main file + one `.page` file per slide + a `media/` folder. The `kimi-slides` CLI converts PPTX ↔ PPTD, validates projects, and renders screenshots. This skill encodes the workflow and the hard rules that make decks come out clean on the first delivery.
+## The one rule that matters
 
-## Tooling check (do first)
+**Copy slides from the template and edit them. Never build slides from layouts.**
 
-Run `command -v kimi-slides`.
+The breadcrumb, the page number, the footer and the decorative waves are drawn
+**on each slide**, not inherited from the layout. A slide created from a layout
+therefore comes out bare — one placeholder, no chrome — no matter how correct
+the layout is. Measured on the corporate template:
 
-- **Present** — use it for `convert`, `check` and `screenshot`, and work in PPTD.
-- **Absent** — do not hand-roll python-pptx against the corporate template. Use
-  `assets/templates/new_deck.py` (see below), which exists because that template is a
-  Google Slides export and breaks the obvious python-pptx code in three ways.
+| | a real template slide | a slide created from its layout |
+| --- | --- | --- |
+| shapes | 5 — body, breadcrumb, 3 placeholders | **1** |
 
-## Two corporate decks
-
-| `--template` | file | layouts | figures |
-| --- | --- | --- | --- |
-| `dark` (default) | `Template PPTs.OSCURO.pptx` | 55 | 209 |
-| `light` | `Template PPTs.pptx` | 54 | 587 |
-
-They are separate files: layout names differ (26 exist only in the dark deck, 25
-only in the light one) and figure ids mean nothing across them. Pass the same
-`--template` when building the deck and when picking its figures. The light deck
-also carries white variants of the dark layouts (`- blanco`, `_BLANCA`).
-
-## Filling a template
-
-`new_deck.py` handles the corporate-specific work — dropping the template's sample
-slides, refusing the one layout whose text is invisible in PowerPoint, filling
-picture placeholders from the figure catalogue. For anything else, the bundled
-`officecli` edits the resulting deck directly:
+So a deck that "uses the template" only if its slides came *from* the template.
 
 ```bash
-officecli query deck.pptx "/slide[2]//picture"
+cp "$TEMPLATE" deck.pptx
+officecli close deck.pptx
+
+# keep the first N, delete the rest (delete from the end so indexes hold)
+python3 - <<'EOF'
+import json
+keep = 6
+total = 120                     # officecli get deck.pptx / | count
+print(json.dumps([{"command": "remove", "path": f"/slide[{i}]"}
+                  for i in range(total, keep, -1)]))
+EOF
+officecli batch deck.pptx --commands "$(python3 - <<'EOF'
+import json
+keep, total = 6, 120
+print(json.dumps([{"command": "remove", "path": f"/slide[{i}]"}
+                  for i in range(total, keep, -1)]))
+EOF
+)"
+
+# see what is on the slide you are keeping, then replace the text
+officecli query deck.pptx "/slide[2]/*"
 officecli batch deck.pptx --commands '[
-  {"command":"add","parent":"/slide[1]","type":"picture",
-   "props":{"src":"logo.png","x":"2cm","y":"1cm","alt":"Logotipo corporate"}}]'
-officecli validate deck.pptx
+  {"command":"set","path":"/slide[2]/shape[@id=1298]","props":{"text":"Crecimiento de la IA"}}]'
 ```
 
-Note the picture props are `src`, `x`, `y` and `alt`; there is no `w` or `h`.
+Deleting 114 slides takes about three seconds in one batch.
 
-## The older one-deck notes
+## Which slides to keep
 
-`assets/templates/Template PPTs.pptx` is the only template. It carries both: 43
-dark layouts and 11 named `- blanco` / `_BLANCA`. An earlier dark-only deck
-shipped beside it and was dropped — it held nothing the survivor does not.
+The template is 120 slides, and its own content slides cluster on a few layouts.
+Keeping slides from the right ones is what makes the deck look consistent:
+
+| layout | clara | oscura | use for |
+| --- | --- | --- | --- |
+| `TITLE_AND_TWO_COLUMNS_2_1` | 66 | — | the standard content slide, clara |
+| `TITLE_AND_TWO_COLUMNS_2` | — | 63 | the standard content slide, oscura |
+| `TITLE_AND_TWO_COLUMNS_2_2_1` / `_2_2` | 12 | 11 | a content slide with a second element |
+| `1_título arriba - blanco` / `1_título arriba` | 4 | 5 | a slide led by a title on a wide band |
+| `TITLE_AND_TWO_COLUMNS_2_3_1` / `_2_3` | 4 | 4 | three-part comparison |
+
+Two decks ship with the skill, and they are different files with different
+layout names:
+
+| file | slides | layouts |
+| --- | --- | --- |
+| `assets/templates/Template PPTs.pptx` (clara) | 120 | 54 |
+| `assets/templates/Template PPTs.OSCURO.pptx` (oscura) | 123 | 55 |
+
+`officecli query` a few slides before choosing, and check what the body text box
+already holds — replacing it means replacing all of it, not appending.
+
+## Do not use `SECTION_TITLE_AND_DESCRIPTION`
+
+Its BODY placeholder resolves to black text on a black panel: the slide comes out
+as a black rectangle with unreadable text, and nothing warns. It is the only
+layout in either deck with this problem. A LibreOffice render hides it, because
+LibreOffice resolves the panel's `lt2` against the wrong theme and paints it
+white — check in PowerPoint, not in the preview.
+
+## Keep titles short
+
+The title box is anchored `valign=bottom` with `autoFit=none`. A title longer
+than the one the template shipped wraps onto a second line and grows upward into
+the label above it, so "Crecimiento de la IA en España 2026" overprints
+"Nombre del cliente". Use roughly the length the template's own slide uses.
+
+## Figures
+
+The templates carry their pictures inside the `.pptx`, with **no alt text at
+all** — the Google Slides export strips all 3912 — and the slide titles are
+useless as context (`49`, `Iconografia`). `figures.py` gives them ids and names:
 
 ```bash
-python3 assets/templates/new_deck.py --list          # 54 layouts, both palettes
-python3 assets/templates/new_deck.py --describe "1_título arriba - blanco"
+python3 assets/templates/figures.py list --limit 40          # id, name, kind, slides
+python3 assets/templates/figures.py search candado           # find by meaning
+python3 assets/templates/figures.py extract 42 out.png       # write one out
 ```
 
-Address layouts by the **name** `--list` prints, not by index: the numbering is
-not stable and the two palettes interleave.
-
-Both palettes share one theme, so both carry the same trap: `lt2` is black in
-`theme1`, and LibreOffice resolves it against the wrong theme and paints a black
-panel white. `new_deck.py` resolves the text colour and the fill beneath it and
-refuses any layout where they match — `SECTION_TITLE_AND_DESCRIPTION` is the
-only one, and it is refused in either palette.
-
-## Building directly from the corporate template
-
-The corporate deck is a Google Slides export. Three of its traits silently produce a
-broken deck, which is why raw `python-pptx` against it is a trap:
-
-1. **Content layouts have no `TITLE` placeholder.** The heading is exported as a
-   `SUBTITLE`, so `slide.shapes.title` is `None` and any loop looking for
-   placeholder index 0 writes nothing — the slide comes out untitled.
-2. **Artwork overlaps the text boxes.** Most layouts carry decorative rings and
-   bars positioned on top of the text placeholders, so text lands on the artwork.
-3. **23 of the 55 layouts are built from `PICTURE` placeholders** — 88 in all,
-   which is exactly where the good-looking designs live. Text written into one
-   renders as nothing at all: no error, just a blank. Plain python-pptx
-   therefore cannot use the image grids, two-column slides or section headers
-   *at all*, and a deck built that way is text-only by accident.
-
-`new_deck.py` handles all three and reports what it had to work around:
+Then `officecli add ... type picture` with `src`, `x`, `y`, `alt` — there is no
+`w` or `h`:
 
 ```bash
-python3 assets/templates/new_deck.py --list            # every layout, CLASH flag and img= count
-python3 assets/templates/new_deck.py --describe "3 imágenes"
-python3 assets/templates/new_deck.py deck.pptx \
-    --slide "0|Crecimiento del uso de IA en 2026|Informe corporate"
-python3 assets/templates/new_deck.py deck.pptx --slides slides.json --trim-art
+officecli batch deck.pptx --commands '[
+  {"command":"add","parent":"/slide[2]","type":"picture",
+   "props":{"src":"figura.png","x":"2cm","y":"3cm","alt":"Crecimiento"}}]'
 ```
 
-For anything beyond a title and a body, use `fields`, which addresses every
-placeholder in a layout by index. This is how the image layouts get used:
+The clara deck has 587 readable pictures (blue icon set, a security/SSL family,
+photographs of people, partner logos); the oscura one has 209.
 
-```json
-[{"layout": "13",
-  "title": "Adopción por sector",
-  "fields": {"2": {"image": "media/finanzas.png"},
-             "3": {"image": "media/salud.png"},
-             "4": "Retail: 70%"}},
- {"layout": "28",
-  "title": "Tres palancas",
-  "fields": {"19": {"image": "media/a.png"}, "20": {"image": "media/b.png"}}}]
-```
-
-### Reusing the template's own figures
-
-The template carries ~210 images inside the .pptx: the corporate logo, the decorative
-waves and rings, a few people illustrations, and a large set of grey line-art
-icons in browser frames — globe, checklist, network, money, location, security,
-video, tools. They are reusable content, but they live in the archive, not in an
-asset folder, so there is nothing to point an `image` field at.
-
-`figures.py` indexes them with stable ids:
+## Finishing
 
 ```bash
-python3 assets/templates/figures.py search euro        # find by what they depict
-python3 assets/templates/figures.py list               # id, label, kind, slides that use it
-python3 assets/templates/figures.py list --only candado
-python3 assets/templates/figures.py sheet sheet.png    # contact sheet, to check by eye
-python3 assets/templates/figures.py extract 42 out.png
+officecli validate deck.pptx     # OpenXML schema; the templates pass except
+                                 # three pre-existing chart errors in chart-workbook.xlsx
 ```
 
-Every figure is labelled in `figures.json`, keyed by the SHA-256 of its bytes
-rather than by position — the package also holds eight `.emf` files, so an id
-counted over all the media sits eight places out from 45 onwards. Each entry has
-a `kind` of `icono`, `decoracion`, `logo`, `ilustracion` or `foto`. Those labels are not in the
-template: it has no alt text at all — the Google Slides export strips all 3912
-of them — and its slide titles are `49`, `Iconografia`, `Elementos graficos`, so
-an id on its own says nothing. Search by meaning; the contact sheet is only to
-confirm. Figure 209 is white on transparent and looks blank on a light preview.
-
-A slide spec cites one inline, with no file to supply:
-
-```json
-[{"layout": "13", "title": "Adopcion por sector",
-  "fields": {"2": {"figure": 42}, "3": {"figure": 51}, "4": {"figure": 30}}}]
-```
-
-Build the contact sheet and look at it before choosing ids — the numbering is
-alphabetical by media name, not by meaning. An id out of range is reported, not
-silently skipped.
-
-Run `--describe <layout>` first: it lists the text and image placeholder indices
-so the `fields` keys are right. An index that is not in the layout is reported,
-never ignored.
-
-Layouts are named, not indexed — `--list` prints them, and an ambiguous name is
-an error rather than a guess. `--trim-art` deletes only the artwork that
-geometrically collides with a text placeholder. The template's 123 sample slides
-are dropped on the way out, so the deck starts empty.
-
-Read every warning. "image placeholder N left empty" means that decorative frame
-stays as an empty circle — fill every image slot or choose a layout with the
-count you need. "body appended to the heading" means the layout offers a single
-text area.
-
-Verify the result before delivering — this catches the collisions nothing else
-will report:
-
-```bash
-soffice --headless --convert-to pdf deck.pptx && pdftoppm -png -r 50 deck.pdf page
-```
-
-**A render is not proof of visibility.** The deck ships two themes and they
-disagree on `lt2`: black in one, near-white in the other. LibreOffice resolves
-it against the wrong one and paints black panels white, so a slide whose text is
-invisible in PowerPoint looks perfect in the PDF. `new_deck.py` therefore checks
-the resolved text colour against the fill of whatever shape sits underneath, and
-refuses any layout where they match — `SECTION_TITLE_AND_DESCRIPTION` is the one
-it catches. Colour safety here is static analysis, not a screenshot.
-
-## Workflow
-
-### 1. Frame the request before writing any file
-
-Determine four things; ask the user when they are not derivable from the request:
-
-1. **Request type**: create from scratch / edit an existing deck / replicate a deck from images or PDF.
-2. **Design source**: a provided PPTX template (convert it and extract its system), a style reference (images, web), or self-directed design.
-3. **Input type**: topic only / full document / page-by-page outline. With only a topic, expand content via research unless the user says otherwise.
-4. **Exact page count and scope**. Confirm what is OUT of scope: for a first-contact or idea-pitch deck this usually means NO budget, NO timeline, NO work packages — just the idea. Getting scope wrong means redoing pages.
-
-### 2. If a corporate template exists, extract its design system first
-
-```
-kimi-slides convert template.pptx -o work/template/
-kimi-slides screenshot work/template -o work/shots/
-```
-
-Stitch the screenshots into one grid image (PIL) and read it. Extract and record:
-
-- Background color of every page type (sample pixels with PIL if unsure).
-- Palette: accent colors, card fills, border colors, muted text colors — as hex.
-- Fonts (titles vs body) and size hierarchy.
-- Reusable components: cover layout, header band, logo placement, footers, card shapes (square vs rounded corners), dividers.
-- Logo assets: reuse the extracted images from `media/`; if a logo only exists in white and a light page needs it, recolor programmatically (numpy) instead of finding a substitute.
-
-Turn this into a `theme:` block (colors + textStyles) in the `.pptd` and a fixed header pattern reused verbatim on every content page. For a complete worked example (corporate corporate identity: palette tokens, Google Fonts setup, header pattern, card style) read `references/brand.md`; its assets are in `assets/templates/`.
-
-The corporate corporate template ships with this skill at
-`assets/templates/Template PPTs.OSCURO.pptx` (dark variant). Read its design
-system out of the file rather than describing it from memory:
-
-```bash
-python3 assets/templates/extract-theme.py     # palette, fonts, layouts, media count
-```
-
-That reads the theme straight out of the PPTX and prints the `theme:` values
-plus the layout names, in about a second. It wants `python-pptx`
-(`pip install python-pptx`); without it the palette and fonts still come out,
-since those live in the theme XML, and only the slide size and layouts are
-skipped. `references/brand.md` is the same system already written up: read
-it for the intent behind the values, not just the values.
-
-When `kimi-slides` is available, prefer it for the full round trip:
-
-```bash
-kimi-slides convert "assets/templates/Template PPTs.OSCURO.pptx" -o work/template/
-```
-
-### 3. Build the project
-
-```
-deck_name/
-  deck_name.pptd      # version: v2, size, theme, customFonts, pages list
-  pages/01_cover.page # one file per slide, numbered with zero padding
-  media/              # every referenced image, copied inside the project
-```
-
-Hard structural rules:
-
-- **Fully self-contained**: all referenced files live inside the project folder; only relative paths (`pages/...`, `media/...`). External URLs are allowed only for images and fonts.
-- **One theme, referenced everywhere**: define colors once in `theme.colors` and use `$token` references. Never hardcode a hex that already has a token.
-- **Identical header on every content page**: crumb/eyebrow text, logo (top-right), accent bar, title, page number. Copy the block verbatim; only the title text changes.
-- **Same background on every slide unless deliberately designing a divider/cover variant.** The most common real user complaint is "these two slides don't follow the style of the others". When in doubt, keep the corporate background.
-
-### 4. Write pages — layout and content rules
-
-Layout (details and measurements in `references/design-rules.md`):
-
-- Keep every element inside the page bounds except intentional bleed.
-- Titles must not collide with the top-right logo: cap title width and shorten long titles.
-- Cards need internal padding: short text, centered, never touching borders. Estimate overflow conservatively; the checker is heuristic, so also look at the render.
-- Leave breathing room: it is better to split a dense slide into two than to shrink fonts below ~8.5px body.
-
-Content:
-
-- Plain, concrete language. Gloss acronyms on first use (e.g. "hardware real conectado a una simulación" instead of bare "HIL"). If a reviewer says "make it easier to understand", simplify wording, not structure.
-- No AI clichés: avoid "no es X, es Y", slogan stacks, "key takeaway", "N caminos", forced metaphors.
-- Do not over-commit: if the user wants an open/generic use case, present candidate domains as options instead of locking one in.
-- No speaker notes and no animations unless explicitly requested.
-- Language of the deck = language of the user.
-
-### 5. Validate — always, in loops
-
-```
-kimi-slides check deck_name --level keep      # repeat until zero errors
-kimi-slides screenshot deck_name -o shots/    # then LOOK at every page
-```
-
-- Fix all errors. Treat warnings as prompts to inspect the render, not as automatic truths — intentional bleed/overlap can be ignored, everything else gets fixed.
-- Visually review stitched screenshots of ALL pages after any multi-page change, and re-render affected pages after single-page edits. Look for: text cut off or touching card borders, title/logo overlap, inconsistent backgrounds, orphan empty space.
-- Without the CLI: parse every `.page`/`.pptd` with a YAML parser, then apply the manual checklist in `references/design-rules.md`.
-
-### 6. Iterate and deliver
-
-- **Never revert user edits.** When the user modifies files between turns (renames, deletions, reworded text), treat their version as the baseline; re-read files before editing and match their exact quoting/style.
-- When applying review comments, re-read the target file first — the user's edits change exact strings, so blind search-and-replace fails.
-- Deliver the `.pptd` project (main file path), not a converted PPTX, unless the user explicitly asks for a different format. Tell the user the deck can be previewed/edited and exported from the editor.
-
-## YAML pitfalls (the #1 source of broken decks)
-
-- Quote any `text:` value containing `:`, `#`, `{`, `}`. Colons inside unquoted flow mappings are the classic failure: `{text: Title: subtitle}` breaks; `{text: "Title: subtitle"}` works.
-- Prefer block scalars for rich text with inline HTML-ish tags:
-  ```yaml
-  content:
-    text: |
-      <p><span style="color:$cyan">LABEL</span></p>
-  ```
-- After user edits, quoting style may change between files — always `read` before `edit`.
-- Validate YAML early: one broken page file can block the whole check run.
-
-## Reference files
-
-- `references/pptd-format.md` — condensed PPTD DSL spec (file structure, elements, fills, borders, theme) and full CLI command reference. Read when authoring or repairing PPTD syntax.
-- `references/design-rules.md` — visual design rules, standard measurements, and the final quality checklist. Read before laying out pages and before delivery.
-- `references/brand.md` — complete worked example of a corporate design system in PPTD (dark navy theme, fonts, header pattern, card styles), with ready-to-use assets in `assets/templates/`. Read when building a deck for corporate or as a model for extracting any other brand.
+Deliver the `.pptx`. Say which template it came from and which slides you kept
+or removed, so the next person knows what was dropped and why.
