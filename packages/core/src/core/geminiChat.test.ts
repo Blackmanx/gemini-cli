@@ -1002,7 +1002,6 @@ describe('GeminiChat', () => {
         LlmRole.MAIN,
       );
 
-      // Verify the function response was added
       expect(chat.agentHistory.length).toBe(initialHistoryLength + 1);
 
       await expect(
@@ -1292,8 +1291,10 @@ describe('GeminiChat', () => {
         LlmRole.MAIN,
       );
 
-      // Verify the function response was added
-      expect(chat.agentHistory.length).toBe(initialHistoryLength + 1);
+      // The image is split into its own turn: a functionResponse and its payload
+      // in one turn is what the API refuses, reporting it as a trailing model
+      // turn. Both payloads still survive, which is what this test is for.
+      expect(chat.agentHistory.length).toBe(initialHistoryLength + 3);
 
       await expect(
         (async () => {
@@ -1303,15 +1304,16 @@ describe('GeminiChat', () => {
         })(),
       ).resolves.not.toThrow();
 
-      // Verify that history contains both the function response and the matched empty model response turn
-      expect(chat.agentHistory.length).toBe(initialHistoryLength + 2);
+      // The function response, the acknowledgement between, the image, and the
+      // matched empty model turn. A functionResponse and its payload in one turn
+      // is what the API refuses, reporting it as a trailing model turn; both
+      // payloads still survive, which is what this test is for.
+      expect(chat.agentHistory.length).toBe(initialHistoryLength + 4);
       const turns = chat.agentHistory.get();
       expect(
-        turns[turns.length - 2].content.parts?.[0]?.functionResponse,
+        turns[turns.length - 4].content.parts?.[0]?.functionResponse,
       ).toBeDefined();
-      expect(
-        turns[turns.length - 2].content.parts?.[1]?.fileData,
-      ).toBeDefined();
+      expect(turns[turns.length - 2].content.parts?.[0]?.fileData).toBeDefined();
       expect(turns[turns.length - 1].content.role).toBe('model');
       expect(turns[turns.length - 1].content.parts).toEqual([]);
     });

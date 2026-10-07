@@ -951,24 +951,42 @@ export class GeminiChat {
   private extractBinaryInjections(
     parts: Part[] | undefined,
   ): Part[] | undefined {
+    if (!parts) {
+      return undefined;
+    }
     const binaryParts: Part[] = [];
-    if (parts) {
-      for (const part of parts) {
-        const response = part.functionResponse?.response;
-        if (response && BINARY_INJECTION_KEY in response) {
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-          const injected = response[BINARY_INJECTION_KEY] as Part[];
-          delete response[BINARY_INJECTION_KEY];
-          if (Array.isArray(injected)) {
-            binaryParts.push(...injected);
-          }
+
+    // Nested form: the tool hid the payloads under a private key of the
+    // response object, which read_file does for content the model cannot take
+    // inline.
+    for (const part of parts) {
+      const response = part.functionResponse?.response;
+      if (response && BINARY_INJECTION_KEY in response) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+        const injected = response[BINARY_INJECTION_KEY] as Part[];
+        delete response[BINARY_INJECTION_KEY];
+        if (Array.isArray(injected)) {
+          binaryParts.push(...injected);
         }
+      }
+    }
+
+    // Sibling form: when the model cannot take a multimodal functionResponse,
+    // the tool emits the payloads as siblings of the functionResponse part
+    // instead. That is the ordinary case for an image on read_file, and it was
+    // not recognised here, so the split below never ran and the request went
+    // out as one turn holding both a functionResponse and its image - which the
+    // API refuses, reporting it as a trailing model turn.
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i];
+      if (part && typeof part === 'object' && ('inlineData' in part || 'fileData' in part)) {
+        binaryParts.unshift(parts[i]);
+        parts.splice(i, 1);
       }
     }
 
     return binaryParts.length > 0 ? binaryParts : undefined;
   }
-
   /**
    * Announce that a model call is backing off before a retry. Idempotent for
    * the outermost saga: a nested open is counted, not announced.
