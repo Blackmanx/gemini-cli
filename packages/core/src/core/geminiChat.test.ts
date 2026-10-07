@@ -5082,4 +5082,44 @@ describe('GeminiChat', () => {
       expect(result).toEqual(contents);
     });
   });
+
+  it('never sends a request ending on a synthetic model turn', () => {
+    const chat = new GeminiChat(mockConfig);
+
+    chat.setHistory([
+      { role: 'user', parts: [{ text: 'draw it' }] },
+      {
+        role: 'model',
+        parts: [
+          {
+            text: 'Binary content received. Proceeding with analysis.',
+            thought: true,
+          },
+        ],
+      },
+    ]);
+
+    // 'Requests ending with a model turn are not supported.' The binary
+    // injection path appends exactly this acknowledgement before the image
+    // parts, and when the user turn that should follow it never lands the
+    // request goes out invalid - every image read then fails the same way.
+    const sendable = chat.getHistoryTurns();
+    expect(sendable[sendable.length - 1].content.role).not.toBe('model');
+  });
+
+  it('keeps a real model response that ends the history', () => {
+    const chat = new GeminiChat(mockConfig);
+
+    chat.setHistory([
+      { role: 'user', parts: [{ text: 'hello' }] },
+      { role: 'model', parts: [{ text: 'hi there' }] },
+    ]);
+
+    const sendable = chat.getHistoryTurns();
+    // Only synthetic turns are dropped; a real answer is the model's work.
+    expect(sendable[sendable.length - 1].content.role).toBe('model');
+    expect(sendable[sendable.length - 1].content.parts?.[0]).toEqual({
+      text: 'hi there',
+    });
+  });
 });
