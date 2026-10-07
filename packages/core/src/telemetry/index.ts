@@ -23,6 +23,7 @@ export {
   resolveTelemetrySettings,
   parseBooleanEnvFlag,
   parseTelemetryTargetValue,
+  parseOtlpHeaders,
 } from './config.js';
 // Type-only on purpose. These extend Google Cloud exporter classes at module
 // scope, so a value re-export would pull the whole @google-cloud/logging stack
