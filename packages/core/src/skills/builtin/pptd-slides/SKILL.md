@@ -16,6 +16,29 @@ Run `command -v kimi-slides`.
   `assets/templates/new_deck.py` (see below), which exists because that template is a
   Google Slides export and breaks the obvious python-pptx code in three ways.
 
+## Two corporate templates
+
+Both decks ship with the skill and either can be used:
+
+| `--template` | file | layouts | readable figures |
+| --- | --- | --- | --- |
+| `dark` (default) | `Template PPTs.OSCURO.pptx` | 55 | 209 |
+| `light` | `Template PPTs.pptx` | 54 | 587 |
+
+They are different artefacts, not colour variants of one file:
+
+- **Layout names do not match.** 26 exist only in the dark deck and 25 only in
+  the light one; the light deck suffixes them (`TITLE_AND_BODY` vs
+  `TITLE_AND_BODY_1`). Run `--template <v> --list` and copy names from there.
+- **Figure ids do not match.** The same shape is a different file in each deck,
+  so `{"figure": 42}` means one thing in `dark` and something else in `light`.
+  The light deck has a much larger library — blue icon set, security/SSL
+  icons, photographs of people and partner logos — and carries both dark and
+  white variants of many layouts.
+- Both share the same theme, so both carry the same trap: `lt2` is black in
+  `theme1`, and LibreOffice resolves it against the wrong theme and paints black
+  panels white.
+
 ## Building directly from the corporate template
 
 The corporate deck is a Google Slides export. Three of its traits silently produce a
@@ -68,6 +91,7 @@ asset folder, so there is nothing to point an `image` field at.
 
 ```bash
 python3 assets/templates/figures.py search euro        # find by what they depict
+python3 assets/templates/figures.py --template light search candado
 python3 assets/templates/figures.py list               # id, label, kind, slides that use it
 python3 assets/templates/figures.py list --only candado
 python3 assets/templates/figures.py sheet sheet.png    # contact sheet, to check by eye
@@ -81,7 +105,9 @@ of them — and its slide titles are `49`, `Iconografia`, `Elementos graficos`, 
 an id on its own says nothing. Search by meaning; the contact sheet is only to
 confirm. Figure 209 is white on transparent and looks blank on a light preview.
 
-A slide spec cites one inline, with no file to supply:
+A slide spec cites one inline, with no file to supply. Pass the same
+`--template` you used to build the deck, or the id will be read from the wrong
+one:
 
 ```json
 [{"layout": "13", "title": "Adopcion por sector",
