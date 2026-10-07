@@ -92,11 +92,6 @@ So a proposal is: cover, index, then the content slides, a divider between
 blocks of content, and a closing slide. The divider slides read "Separador de
 temas" and are meant to carry the block's name.
 
-**There is no closing slide in either deck.** Close on the cover or a divider
-carrying the next step or the contact, or reuse a content slide with just a
-title — do not invent a new design. `ONE_COLUMN_TEXT` (oscura 123, clara 117)
-is a spare full-width slide if you want something plain.
-
 Note that "Inicio" and "Fin" in the dark deck (105–106) are the **ends of a
 timeline**, not an opening and a closing slide.
 
@@ -168,9 +163,12 @@ A ten-slide I+D proposal, as a worked reference:
 | 9 | pilot | the open use case, end to end |
 | 10 | why us, why now | three value cards and a closing band |
 
-The last slide is the one that goes missing. It is not a "thank you": it is the
-argument, three cards - differential innovation, market moment, complementary
-consortium - over one full-width band naming what the call actually funds.
+**The closing slide is the template's last one** and it is easy to delete by
+accident. `ONE_COLUMN_TEXT` — dark #123, clara #117 — is the end card: navy, the
+waves, the corporate logo centred, and no text. It is the last thing in the template
+and carries none of the sample prose, so it reads as surplus when you are
+deleting the slides you did not use. Keep it, write the closing line on it, and
+put it last.
 
 The breadcrumb is constant across the content slides and names the project:
 `corporate · I+D · <convocatoria>`. Set it once on every content slide, not per slide.
