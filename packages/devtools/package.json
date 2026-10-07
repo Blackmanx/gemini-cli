@@ -1,6 +1,6 @@
 {
   "name": "@google/gemini-cli-devtools",
-  "version": "0.70.0-bbd84cd06",
+  "version": "0.70.0-17805a035",
   "license": "Apache-2.0",
   "type": "module",
   "main": "dist/src/index.js",
