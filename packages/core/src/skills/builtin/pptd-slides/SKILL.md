@@ -23,16 +23,25 @@ So a deck that "uses the template" only if its slides came *from* the template.
 ```bash
 cp "$TEMPLATE" deck.pptx
 officecli close deck.pptx
-
-# keep the first N, delete the rest (delete from the end so indexes hold)
-officecli batch deck.pptx --commands "$(python3 -c '
-import json
-keep, total = 6, 120
-print(json.dumps([{"command": "remove", "path": f"/slide[{i}]"}
-                  for i in range(total, keep, -1)]))')"
 ```
 
-Deleting 114 slides takes about three seconds in one batch.
+Identify the template's closing slide before pruning. It is `ONE_COLUMN_TEXT`:
+slide 117 in clara and slide 123 in oscura. Do not assume the closing slide is
+the source deck's final page: clara has appendix slides after it. Select the
+closing slide explicitly and ensure no retained slide follows it.
+
+```bash
+officecli batch deck.pptx --commands "$(python3 -c '
+import json
+keep, total = {1, 2, 3, 4, 5, 6, 27, 50, 117}, 120
+print(json.dumps([{"command": "remove", "path": f"/slide[{i}]"}
+                  for i in range(total, 0, -1) if i not in keep]))')"
+```
+
+Replace `keep` with the slides selected for this deck and use the correct
+closing-slide index and total for the source template. Descending deletion
+preserves the original indices; because the closing slide is the highest
+retained index, it becomes the final slide.
 
 ### Read the whole deck in one call, never one call per slide
 
@@ -221,46 +230,50 @@ A ten-slide I+D proposal, as a worked reference:
 | 9 | pilot | the open use case, end to end |
 | 10 | why us, why now | three value cards and a closing band |
 
-**The closing slide is the template's last one** and it is easy to delete by
-accident. `ONE_COLUMN_TEXT` — dark #123, clara #117 — is the end card: navy, the
-waves, the corporate logo centred, and no text. It is the last thing in the template
-and carries none of the sample prose, so it reads as surplus when you are
-deleting the slides you did not use. Keep it, write the closing line on it, and
-put it last.
+The closing slide is `ONE_COLUMN_TEXT` — dark #123, clara #117 — the end card:
+navy, waves, corporate logo centred, and no text. It is required even when the brief
+does not explicitly request a conclusion. Clara has appendix slides after #117,
+so keep the exact closing slide and ensure it is last in the finished deck.
+Write the closing line on it.
+
+Before delivery, query the final slide index and verify that it is this corporate end
+card and contains the closing message. If it is missing or another slide comes
+after it, rebuild from the untouched template and preserve the end card; never
+substitute a blank slide or claim the deck is complete without it.
 
 The breadcrumb is constant across the content slides and names the project:
 `corporate · I+D · <convocatoria>`. Set it once on every content slide, not per slide.
 
-## Check before delivering
+## Prevent overlap before delivery
+
+Template text is not a free-form canvas. Identify each exact shape and its role
+before editing it; do not infer that a long sentence belongs in a title, subtitle
+or card label just because it is nearby in reading order. Preserve the template's
+separate title and description shapes. Keep titles to one line when the template
+anchors them beside or above a subtitle; shorten the title or reduce its font
+size rather than letting it wrap into the description. Card headings and body
+copy must also stay within the individual shape's measured capacity.
+
+After replacing text, run the overlap checker on the **entire final deck**:
 
 ```bash
 python3 scripts/check_overlaps.py deck.pptx
 ```
 
-One command, the whole deck, non-zero while anything is wrong. It reports two
-things:
+Treat a non-zero result as a release blocker. Fix every finding by shortening
+the text, reducing its font size, or choosing a slide whose text areas fit the
+content. Never move, resize, or delete template shapes to hide a collision.
+Repeat the check after each correction; do not deliver until it exits zero.
 
-- **texto que se sale** — the string needs more lines than the shape is tall and
-  the shape has no autofit, so it prints outside the shape.
-- **texto sobre texto** — two runs of text land on the same pixels. It measures
-  where the glyphs go, not where the boxes are, which is the only way to see the
-  `spAutoFit` trap above: the box geometry is clean and the deck is still wrong.
+The checker reports text outside a no-autofit shape and intersections between
+rendered text, including text inside groups. It compares where the glyphs land,
+not just the shape rectangles, so it catches the `spAutoFit` trap described
+above. `officecli view deck.pptx issues` is only a cross-check: it misses shapes
+inside groups and is not the release gate.
 
-Run it after filling the text, not before: the overlaps only exist once the
-sentences are in. It reads the entire slide tree in a single `officecli query`,
-so it costs one call, not one per slide.
-
-**Its output is the baseline, not decoration.** The untouched template reports
-nothing in the 27–90 content range; a deck built from it should report nothing
-either. Every finding is a real defect and is fixed by shortening the text or
-changing the size — never by adjusting geometry, because the geometry is the
-template's and it is correct. If a finding survives both, the honest fix is
-another slide from the range.
-
-`officecli view deck.pptx issues` is a useful cross-check for the structural
-checks, but it only sees top-level shapes: everything inside a group — which is
-most of these cards — is invisible to it, and it reports text overflow for a box
-the renderer will fix on its own. Use it for what it covers, not as the gate.
+When changing the wording is not acceptable and no matching slide exists, report
+that the content does not fit this template rather than delivering overlapping
+text.
 
 ## Do not use `SECTION_TITLE_AND_DESCRIPTION`
 
