@@ -220,6 +220,9 @@ export const LSP_TOOL_NAME = 'lsp';
 export const LSP_EDIT_TOOL_NAME = 'lsp_edit';
 export const LSP_DISPLAY_NAME = 'LanguageServer';
 
+export const SSH_EXEC_TOOL_NAME = 'ssh_exec';
+export const SSH_EXEC_DISPLAY_NAME = 'SSH';
+
 // Tool Display Names
 export const WRITE_FILE_DISPLAY_NAME = 'WriteFile';
 export const EDIT_DISPLAY_NAME = 'Edit';
@@ -317,6 +320,7 @@ export const ALL_BUILTIN_TOOL_NAMES = [
   RECALL_TOOL_NAME,
   REFLECT_TOOL_NAME,
   MEMORY_EDIT_TOOL_NAME,
+  SSH_EXEC_TOOL_NAME,
 ] as const;
 
 /**

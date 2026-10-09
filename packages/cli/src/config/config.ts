@@ -52,12 +52,14 @@ import {
   type OutputFormat,
   type MagicKeywordSettings,
   detectIdeFromEnv,
+  SshProfileService,
 } from '@google/gemini-cli-core';
 import {
   type Settings,
   type MergedSettings,
   saveModelChange,
   loadSettings,
+  SettingScope,
   isWorktreeEnabled,
   type LoadedSettings,
 } from './settings.js';
@@ -471,6 +473,11 @@ export async function parseArguments(
           description:
             'Additional directories to include in the workspace (comma-separated or multiple --include-directories)',
           coerce: coerceCommaSeparated,
+        })
+        .option('allow-home', {
+          type: 'boolean',
+          description:
+            'Allow starting in the home directory instead of switching to a temp dir.',
         })
         .option('screen-reader', {
           type: 'boolean',
@@ -1001,12 +1008,25 @@ export async function loadCliConfig(
     enabled: !!profileSelector,
   };
 
+  // Profiles are read from the merged settings and written to the user scope,
+  // so `/ssh-add` edits the same file every other global setting lives in and
+  // keeps its comments. Without a LoadedSettings (some headless callers) the
+  // SSH tools are simply absent rather than half-wired.
+  const sshProfiles = loadedSettings
+    ? new SshProfileService({
+        read: () => settings as unknown as Record<string, unknown>,
+        writeProfiles: (profiles: Record<string, unknown>) =>
+          loadedSettings.setValue(SettingScope.User, 'sshProfiles', profiles),
+      })
+    : undefined;
+
   return new Config({
     acpMode: isAcpMode,
     clientName,
     sessionId,
     clientVersion: await getVersion(),
     embeddingModel: DEFAULT_GEMINI_EMBEDDING_MODEL,
+    sshProfiles,
     sandbox: sandboxConfig,
     toolSandboxing: settings.security?.toolSandboxing ?? false,
     targetDir: cwd,

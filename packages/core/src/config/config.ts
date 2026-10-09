@@ -46,6 +46,8 @@ import { GlobTool } from '../tools/glob.js';
 import { ActivateSkillTool } from '../tools/activate-skill.js';
 import { EditTool } from '../tools/edit.js';
 import { ShellTool } from '../tools/shell.js';
+import { SshExecTool } from '../tools/ssh-exec.js';
+import type { SshProfileService } from '../services/sshProfileService.js';
 import { WriteFileTool } from '../tools/write-file.js';
 import { WebFetchTool } from '../tools/web-fetch.js';
 import {
@@ -688,6 +690,13 @@ export interface ConfigParameters {
   toolCallCommand?: string;
   mcpServerCommand?: string;
   mcpServers?: Record<string, MCPServerConfig>;
+  /**
+   * Saved SSH profiles plus the session's active host.
+   *
+   * Injected rather than constructed here because writing profiles goes
+   * through the CLI's settings layer, which core cannot reach.
+   */
+  sshProfiles?: SshProfileService;
   mcpEnablementCallbacks?: McpEnablementCallbacks;
   userMemory?: string | HierarchicalMemory;
   geminiMdFileCount?: number;
@@ -1125,6 +1134,7 @@ export class Config implements McpContext, AgentLoopContext {
   private lastModeSwitchTime: number = performance.now();
   readonly injectionService: InjectionService;
   private approvedPlanPath: string | undefined;
+  private readonly sshProfiles: SshProfileService | undefined;
 
   constructor(params: ConfigParameters) {
     this._sessionId = params.sessionId;
@@ -1132,6 +1142,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.clientName = params.clientName;
     this._clientVersion = params.clientVersion ?? 'unknown';
     this.approvedPlanPath = undefined;
+    this.sshProfiles = params.sshProfiles;
 
     this.embeddingModel =
       params.embeddingModel ?? DEFAULT_GEMINI_EMBEDDING_MODEL;
@@ -2015,6 +2026,15 @@ export class Config implements McpContext, AgentLoopContext {
 
   getSessionId(): string {
     return this.promptId;
+  }
+
+  /**
+   * Saved SSH profiles, or undefined when the caller supplied no settings
+   * layer. `ssh_exec` is only registered when this exists, so a headless core
+   * consumer never gets a tool it cannot serve.
+   */
+  getSshProfiles(): SshProfileService | undefined {
+    return this.sshProfiles;
   }
 
   getWorktreeSettings(): WorktreeSettings | undefined {
@@ -4660,6 +4680,24 @@ export class Config implements McpContext, AgentLoopContext {
     maybeRegister(ShellTool, () =>
       registry.registerTool(new ShellTool(this, this.messageBus)),
     );
+
+    // Only when a settings layer supplied the profiles: without them the tool
+    // could never resolve a host, and advertising it would cost tokens on
+    // every request for a call that always fails.
+    const sshProfiles = this.getSshProfiles();
+    if (sshProfiles) {
+      maybeRegister(SshExecTool, () =>
+        registry.registerTool(
+          new SshExecTool(
+            {
+              profiles: sshProfiles,
+              getActiveProfile: () => sshProfiles.getActiveProfile(),
+            },
+            this.messageBus,
+          ),
+        ),
+      );
+    }
     maybeRegister(ListBackgroundProcessesTool, () =>
       registry.registerTool(
         new ListBackgroundProcessesTool(this, this.messageBus),
