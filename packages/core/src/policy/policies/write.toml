@@ -54,6 +54,14 @@ decision = "ask_user"
 priority = 10
 interactive = true
 
+# Remote commands change a host the operator cannot see, so they are asked
+# for exactly like a local shell command rather than left to the default.
+[[rule]]
+toolName = "ssh_exec"
+decision = "ask_user"
+priority = 10
+interactive = true
+
 [[rule]]
 toolName = "write_file"
 decision = "ask_user"
@@ -101,7 +109,8 @@ toolName = [
   "run_shell_command",
   "write_file",
   "activate_skill",
-  "web_fetch"
+  "web_fetch",
+  "ssh_exec"
 ]
 decision = "deny"
 priority = 10
