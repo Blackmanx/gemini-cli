@@ -183,7 +183,13 @@ export const SshAddDialog: React.FC<SshAddDialogProps> = ({
       const currentField = FIELDS[indexRef.current];
       const current = valuesRef.current[currentField.key] ?? '';
 
-      if (key.name === 'return') {
+      // This fork normalizes the return key to 'enter', not ink's 'return', and
+      // rewrites a return pressed within FAST_RETURN_TIMEOUT of a typed
+      // character into shift+enter, so that unbracketed pastes survive. Those
+      // fields are single-line and a newline is meaningless here, so both
+      // variants advance: otherwise typing a value and immediately hitting
+      // Enter silently does nothing.
+      if (key.name === 'enter') {
         const trimmed = current.trim();
         // Validate as the operator leaves the field, so a name that cannot
         // work is caught before they type a password, not after.
@@ -204,7 +210,7 @@ export const SshAddDialog: React.FC<SshAddDialogProps> = ({
         advance({ ...valuesRef.current, [currentField.key]: trimmed });
         return;
       }
-      if (key.name === 'backspace') {
+      if (key.name === 'backspace' || key.name === 'delete') {
         write(
           { ...valuesRef.current, [currentField.key]: current.slice(0, -1) },
           indexRef.current,
@@ -212,15 +218,15 @@ export const SshAddDialog: React.FC<SshAddDialogProps> = ({
         setError(null);
         return;
       }
-      // Ignore control and navigation keys; only printable characters append.
-      if (key.ctrl || key.shift || !key.sequence || key.name.length !== 1) {
+      // `insertable` is this fork's own flag for "printable character"; the
+      // key name is a terminal-dependent label and cannot be length-tested.
+      if (!key.insertable || key.ctrl || key.alt || key.cmd) {
         return;
       }
       write(
         { ...valuesRef.current, [currentField.key]: current + key.sequence },
         indexRef.current,
       );
-      setError(null);
       setError(null);
     },
     { isActive: true },

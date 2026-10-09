@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { renderWithProviders } from '../../test-utils/render.js';
 import { SshAddDialog } from './SshAddDialog.js';
+import type { Key } from '../contexts/KeypressContext.js';
 
 // The repo's convention for keypress-driven components (see
 // ShellInputPrompt.test.tsx) is to capture the handler useKeypress registers
@@ -25,32 +26,43 @@ beforeEach(() => {
 
 // Ink commits a frame asynchronously; without a real wait the assertion can
 // read the frame from before the keystroke landed.
-const flush = (lastFrame: () => string, ms = 60) =>
-  new Promise<void>((resolve) => {
-    setTimeout(() => {
-      void lastFrame();
-      resolve();
-    }, ms);
+const flush = async (lastFrame?: () => string, ms = 60) => {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
   });
+  // Touch the frame so a pending commit lands before an assertion reads it.
+  void lastFrame?.();
+};
 // Ink delivers one keypress per character. The handler is resolved from the
 // most recent registration inside each press: re-renders append new calls,
 // so capturing it once would go stale.
 const latestHandler = () => mockUseKeypress.mock.calls.at(-1)![0];
 
-const press = (key: { sequence: string; name: string }) =>
+// The Key shape is this fork's, not ink's: the return key is normalized to
+// 'enter' and printable characters carry insertable: true. Building the test
+// inputs from ink's raw shape is exactly what let the 'return' bug through.
+const press = (key: Partial<Key> & { name: string }) =>
   act(() => {
-    latestHandler()({ ctrl: false, meta: false, shift: false, ...key });
+    latestHandler()({
+      sequence: '',
+      alt: false,
+      ctrl: false,
+      cmd: false,
+      shift: false,
+      insertable: false,
+      ...key,
+    } as Key);
   });
 
 const type = (text: string) => {
   for (const char of text) {
-    press({ sequence: char, name: char });
+    press({ sequence: char, name: char, insertable: true });
   }
 };
 
-const enter = () => press({ sequence: '\r', name: 'return' });
+const enter = () => press({ sequence: '\r', name: 'enter' });
 
-const esc = () => press({ sequence: '', name: 'escape' });
+const esc = () => press({ name: 'escape' });
 
 const renderDialog = async (
   existingNames: readonly string[],
@@ -137,6 +149,36 @@ describe('SshAddDialog', () => {
     enter();
     await flush(lastFrame);
     expect(lastFrame()).toContain('already exists');
+    expect(submitted).toBe('NOT-CALLED');
+    unmount();
+  });
+
+  it("advances on the fork-normalized enter key, not ink's return", async () => {
+    let submitted: unknown = 'NOT-CALLED';
+    const { lastFrame, unmount } = await renderDialog([], (a) => {
+      submitted = a;
+    });
+    type('lair');
+    enter();
+    // Advancing is observable: the prompt moves to the next field.
+    await flush(lastFrame);
+    expect(lastFrame()).toContain('Host or IP');
+    unmount();
+    expect(submitted).toBe('NOT-CALLED');
+  });
+
+  it('advances on a fast-return shift+enter, which is Enter typed too quickly', async () => {
+    let submitted: unknown = 'NOT-CALLED';
+    const { lastFrame, unmount } = await renderDialog([], (a) => {
+      submitted = a;
+    });
+    type('lair');
+    // Within FAST_RETURN_TIMEOUT of the last character the fork rewrites a
+    // return to shift+enter. The fields are single-line, so it must still
+    // advance rather than doing nothing.
+    press({ sequence: '\r', name: 'enter', shift: true });
+    await flush(lastFrame);
+    expect(lastFrame()).toContain('Host or IP');
     expect(submitted).toBe('NOT-CALLED');
     unmount();
   });
