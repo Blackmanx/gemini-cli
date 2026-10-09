@@ -24,6 +24,7 @@ import {
   type CustomTheme,
   type SandboxConfig,
   type VertexAiRoutingConfig,
+  type SshProfile,
 } from '@google/gemini-cli-core';
 import type { SessionRetentionSettings } from './settings.js';
 import { DEFAULT_MIN_RETENTION } from '../utils/sessionCleanup.js';
@@ -171,6 +172,25 @@ const SETTINGS_SCHEMA = {
     additionalProperties: {
       type: 'object',
       ref: 'MCPServerConfig',
+    },
+  },
+
+  // Profiles are declared here rather than tolerated by a catch-all: the
+  // settings schema rejects unknown keys, so an undeclared `sshProfiles` is
+  // silently dropped on load and every profile appears to vanish.
+  sshProfiles: {
+    type: 'object',
+    label: 'SSH Servers',
+    category: 'Advanced',
+    requiresRestart: false,
+    default: {} as Record<string, SshProfile>,
+    description:
+      'Saved SSH servers, created with /ssh-add. Passwords are never stored here; they go to the OS keychain.',
+    showInDialog: false,
+    mergeStrategy: MergeStrategy.SHALLOW_MERGE,
+    additionalProperties: {
+      type: 'object',
+      ref: 'SshProfileDefinition',
     },
   },
 
@@ -3863,6 +3883,20 @@ export const SETTINGS_SCHEMA_DEFINITIONS: Record<
       },
     },
     required: ['model'],
+  },
+
+  SshProfileDefinition: {
+    type: 'object',
+    description:
+      'One saved SSH server. Passwords are deliberately absent: they live in the OS keychain, never in a settings file.',
+    properties: {
+      host: { type: 'string' },
+      user: { type: 'string' },
+      port: { type: 'number' },
+      identityFile: { type: 'string' },
+      hasSudoPassword: { type: 'boolean' },
+    },
+    required: ['host', 'user'],
   },
 };
 

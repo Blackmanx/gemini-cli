@@ -1008,13 +1008,19 @@ export async function loadCliConfig(
     enabled: !!profileSelector,
   };
 
-  // Profiles are read from the merged settings and written to the user scope,
-  // so `/ssh-add` edits the same file every other global setting lives in and
-  // keeps its comments. Without a LoadedSettings (some headless callers) the
-  // SSH tools are simply absent rather than half-wired.
+  // Profiles are written to the user scope, so `/ssh-add` edits the same file
+  // every other global setting lives in and keeps its comments.
+  //
+  // Reads go through `loadedSettings.merged` on every call rather than
+  // closing over the `settings` argument: setValue replaces the merged
+  // snapshot, so a captured reference goes stale the moment `/ssh-add` saves
+  // and the freshly written profile would read back as absent.
+  //
+  // Without a LoadedSettings (some headless callers) the SSH tools are simply
+  // absent rather than half-wired.
   const sshProfiles = loadedSettings
     ? new SshProfileService({
-        read: () => settings as unknown as Record<string, unknown>,
+        read: () => loadedSettings.merged as unknown as Record<string, unknown>,
         writeProfiles: (profiles: Record<string, unknown>) =>
           loadedSettings.setValue(SettingScope.User, 'sshProfiles', profiles),
       })
