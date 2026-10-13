@@ -3731,6 +3731,83 @@ describe('Config JIT Initialization', () => {
     expect(config.getGeminiMdFilePaths()).toEqual(['/path/to/GEMINI.md']);
   });
 
+  // config.ts resolves the real Windows profile under WSL during
+  // initialize(); keep that (and its background interop call) out of these
+  // tests. The field under test is set directly instead.
+  vi.mock('../utils/windowsContext.js', async (importOriginal) => {
+    const actual = await importOriginal<
+      typeof import('../utils/windowsContext.js')
+    >();
+    return { ...actual, isWsl: () => false };
+  });
+
+  describe('windows profile path access (WSL)', () => {
+    const windowsParams: ConfigParameters = {
+      sessionId: 'test-session',
+      targetDir: '/tmp/test',
+      debugMode: false,
+      model: 'test-model',
+      cwd: '/tmp/test',
+    };
+
+    async function configWithWindowsProfile(): Promise<Config> {
+      config = new Config(windowsParams);
+      await config.initialize();
+      (
+        config as unknown as { windowsUserProfileRoot: string | null }
+      ).windowsUserProfileRoot = '/mnt/c/Users/jane.doe';
+      return config;
+    }
+
+    it('allows reading and writing inside the Windows profile', async () => {
+      const c = await configWithWindowsProfile();
+
+      expect(
+        c.isPathAllowed('/mnt/c/Users/jane.doe/Downloads/Presentation 1.pptx'),
+      ).toBe(true);
+      expect(
+        c.validatePathAccess(
+          '/mnt/c/Users/jane.doe/Downloads/acta de reunion.docx',
+          'write',
+        ),
+      ).toBeNull();
+      expect(
+        c.validatePathAccess(
+          '/mnt/c/Users/jane.doe/Downloads/Presentation 1.pptx',
+          'read',
+        ),
+      ).toBeNull();
+    });
+
+    it('keeps blocked segments denied inside the profile', async () => {
+      const c = await configWithWindowsProfile();
+
+      expect(c.isPathAllowed('/mnt/c/Users/jane.doe/.env')).toBe(false);
+      expect(c.isPathAllowed('/mnt/c/Users/jane.doe/app/.git/config')).toBe(
+        false,
+      );
+      expect(
+        c.isPathAllowed('/mnt/c/Users/jane.doe/app/node_modules/x.js'),
+      ).toBe(false);
+    });
+
+    it('denies other profiles and unrelated /mnt paths', async () => {
+      const c = await configWithWindowsProfile();
+
+      expect(
+        c.isPathAllowed('/mnt/c/Users/someone.else/Downloads/x.pptx'),
+      ).toBe(false);
+      expect(c.isPathAllowed('/mnt/c/Windows/System32/notes.txt')).toBe(false);
+    });
+
+    it('names the Windows profile in the not-in-workspace error', async () => {
+      const c = await configWithWindowsProfile();
+
+      const error = c.validatePathAccess('/mnt/d/random/file.txt', 'read');
+      expect(error).toContain('Windows user profile: /mnt/c/Users/jane.doe');
+    });
+  });
+
   describe('memory path access', () => {
     it('should NOT add the global ~/.gemini directory to the workspace', async () => {
       // Memory does not broaden the workspace to include the global ~/.gemini/

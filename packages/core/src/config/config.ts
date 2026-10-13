@@ -226,7 +226,12 @@ import { SkillManager, type SkillDefinition } from '../skills/skillManager.js';
 import { startupProfiler } from '../telemetry/startupProfiler.js';
 import type { AgentDefinition } from '../agents/types.js';
 import { fetchAdminControls } from '../code_assist/admin/admin_controls.js';
-import { isSubpath, resolveToRealPath } from '../utils/paths.js';
+import { isSubpath, resolveToRealPath, hasBlockedPathSegment } from '../utils/paths.js';
+import {
+  isWsl,
+  getCachedWindowsUserProfileRootSync,
+  getWindowsUserProfileRoot,
+} from '../utils/windowsContext.js';
 import { validatePath } from '../utils/path-validator.js';
 import { InjectionService } from './injectionService.js';
 import { ExecutionLifecycleService } from '../services/executionLifecycleService.js';
@@ -891,6 +896,13 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly targetDir: string;
   private _ripgrepPathPromise?: Promise<string | null>;
   private workspaceContext: WorkspaceContext;
+  /**
+   * Windows user profile in WSL form (e.g. `/mnt/c/Users/jane.doe`), or
+   * null when not under WSL or not yet resolved. Path validation treats it
+   * as an allowed root so the agent can open — and save to — the user's
+   * Windows files.
+   */
+  private windowsUserProfileRoot: string | null = null;
   private readonly debugMode: boolean;
   private readonly question: string | undefined;
   private readonly worktreeSettings: WorktreeSettings | undefined;
@@ -1659,6 +1671,20 @@ export class Config implements McpContext, AgentLoopContext {
         this.storage.getWorkspaceSettingsPath(),
       ],
     }));
+
+    // Under WSL the user's own files — and the office deliverables the
+    // skills produce — live on the Windows filesystem. Resolve the profile
+    // root so path validation can allow it: synchronously from the
+    // on-disk cache when one exists, with a background resolution on the
+    // first run. The <windows_paths> session context awaits the same
+    // resolver before the model ever sees a /mnt/c path, so the value is
+    // in place by the time anything can act on it.
+    if (isWsl()) {
+      this.windowsUserProfileRoot = getCachedWindowsUserProfileRootSync();
+      void getWindowsUserProfileRoot().then((root) => {
+        if (root) this.windowsUserProfileRoot = root;
+      });
+    }
 
     // Add pending directories to workspace context
     for (const dir of this.pendingIncludeDirectories) {
@@ -3707,6 +3733,22 @@ export class Config implements McpContext, AgentLoopContext {
       return true;
     }
 
+    // The Windows user profile under WSL (Downloads, Desktop, Documents,
+    // OneDrive, ...): where the user's files live and where office
+    // deliverables must land so they can be reviewed in Windows. The
+    // blocked-segment rules (.env, .git, node_modules, ...) still apply
+    // inside it, as they do anywhere else in the workspace.
+    const windowsProfileRoot = this.windowsUserProfileRoot;
+    if (windowsProfileRoot) {
+      const resolvedProfileRoot = resolveToRealPath(windowsProfileRoot);
+      if (
+        isSubpath(resolvedProfileRoot, resolvedPath) &&
+        !hasBlockedPathSegment(path.relative(resolvedProfileRoot, resolvedPath))
+      ) {
+        return true;
+      }
+    }
+
     // Surgical allowlist: the global personal GEMINI.md file (and ONLY that
     // file) is reachable so the prompt-driven memory flow can persist
     // cross-project personal preferences. This deliberately does NOT
@@ -3790,7 +3832,10 @@ export class Config implements McpContext, AgentLoopContext {
 
     const workspaceDirs = this.getWorkspaceContext().getDirectories();
     const projectTempDir = this.storage.getProjectTempDir();
-    return `Path not in workspace: Attempted path "${absolutePath}" resolves outside the allowed workspace directories: ${workspaceDirs.join(', ')} or the project temp directory: ${projectTempDir}`;
+    const windowsProfileNote = this.windowsUserProfileRoot
+      ? ` or the Windows user profile: ${this.windowsUserProfileRoot}`
+      : '';
+    return `Path not in workspace: Attempted path "${absolutePath}" resolves outside the allowed workspace directories: ${workspaceDirs.join(', ')} or the project temp directory: ${projectTempDir}${windowsProfileNote}`;
   }
 
   /**

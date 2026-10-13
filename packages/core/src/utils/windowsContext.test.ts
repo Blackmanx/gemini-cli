@@ -5,19 +5,26 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { spawnAsync } from './shell-utils.js';
 import {
   isWsl,
   toWslPath,
   getWindowsUser,
   getWindowsPathContext,
+  getCachedWindowsUserProfileRootSync,
+  getWindowsUserProfileRoot,
   resetWindowsUserCacheForTesting,
 } from './windowsContext.js';
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
-  return { ...actual, readFileSync: vi.fn() };
+  return {
+    ...actual,
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+  };
 });
 
 vi.mock('./shell-utils.js', () => ({
@@ -41,6 +48,8 @@ describe('windowsContext', () => {
       throw new Error('ENOENT');
     });
     vi.mocked(spawnAsync).mockReset();
+    vi.mocked(writeFileSync).mockReset();
+    vi.mocked(mkdirSync).mockReset();
     resetWindowsUserCacheForTesting();
   });
 
@@ -174,6 +183,68 @@ describe('windowsContext', () => {
       expect(context).toContain('/mnt/c/Users/<user>');
       expect(context).toContain('powershell.exe -NoProfile -Command $env:USERNAME');
       expect(context).not.toContain('The Windows user is');
+    });
+  });
+
+  describe('windows profile root (disk cache)', () => {
+    it('reads a previously cached profile synchronously', () => {
+      vi.mocked(readFileSync).mockReturnValue(
+        '{"username":"jane.doe","wslProfile":"/mnt/c/Users/jane.doe"}',
+      );
+
+      expect(getCachedWindowsUserProfileRootSync()).toBe(
+        '/mnt/c/Users/jane.doe',
+      );
+      // The sync lookup never touches the interop bridge.
+      expect(spawnAsync).not.toHaveBeenCalled();
+    });
+
+    it('ignores cache entries that are not WSL mounts', () => {
+      vi.mocked(readFileSync).mockReturnValue(
+        '{"username":"jane.doe","wslProfile":"C:\\\\Users\\\\jane.doe"}',
+      );
+
+      expect(getCachedWindowsUserProfileRootSync()).toBeNull();
+    });
+
+    it('returns null when there is no cache yet', () => {
+      // readFileSync throws ENOENT from beforeEach.
+      expect(getCachedWindowsUserProfileRootSync()).toBeNull();
+    });
+
+    it('resolves through powershell on first use and persists the answer', async () => {
+      vi.mocked(spawnAsync).mockResolvedValue({
+        stdout: 'jane.doe\nC:\\Users\\jane.doe',
+        stderr: '',
+      });
+
+      await expect(getWindowsUserProfileRoot()).resolves.toBe(
+        '/mnt/c/Users/jane.doe',
+      );
+
+      expect(mkdirSync).toHaveBeenCalled();
+      expect(writeFileSync).toHaveBeenCalled();
+      const [, contents] = vi.mocked(writeFileSync).mock.calls[0];
+      expect(String(contents)).toContain('/mnt/c/Users/jane.doe');
+      expect(String(contents)).toContain('jane.doe');
+    });
+
+    it('reuses the disk cache without calling powershell', async () => {
+      vi.mocked(readFileSync).mockReturnValue(
+        '{"username":"jane.doe","wslProfile":"/mnt/c/Users/jane.doe"}',
+      );
+
+      await expect(getWindowsUserProfileRoot()).resolves.toBe(
+        '/mnt/c/Users/jane.doe',
+      );
+      expect(spawnAsync).not.toHaveBeenCalled();
+      expect(writeFileSync).not.toHaveBeenCalled();
+    });
+
+    it('returns null when the profile cannot be resolved', async () => {
+      vi.mocked(spawnAsync).mockRejectedValue(new Error('ENOENT'));
+
+      await expect(getWindowsUserProfileRoot()).resolves.toBeNull();
     });
   });
 });

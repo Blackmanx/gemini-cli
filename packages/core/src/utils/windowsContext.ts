@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { spawnAsync } from './shell-utils.js';
 import { debugLogger } from './debugLogger.js';
+import { Storage } from '../config/storage.js';
 
 /** How long to wait for the Windows interop bridge before giving up. */
 const POWERSHELL_TIMEOUT_MS = 5000;
@@ -63,6 +65,7 @@ export function getWindowsUser(): Promise<WindowsUser | null> {
 /** Clears the cached Windows user. Test-only. */
 export function resetWindowsUserCacheForTesting(): void {
   windowsUserPromise = undefined;
+  profileRootPromise = undefined;
 }
 
 async function resolveWindowsUser(): Promise<WindowsUser | null> {
@@ -93,6 +96,68 @@ async function resolveWindowsUser(): Promise<WindowsUser | null> {
     debugLogger.debug('[windowsContext] Windows interop unreachable:', e);
     return null;
   }
+}
+
+let profileRootPromise: Promise<string | null> | undefined;
+
+function windowsProfileCachePath(): string {
+  return join(Storage.getGlobalGeminiDir(), 'windows-profile.json');
+}
+
+/**
+ * Synchronous best-effort lookup of the Windows profile root in WSL form
+ * (e.g. `/mnt/c/Users/jane.doe`), backed by the on-disk cache a previous
+ * resolution left behind. Path validation is synchronous, so this is what
+ * it consults: on the very first run there is no value until
+ * {@link getWindowsUserProfileRoot} has completed.
+ */
+export function getCachedWindowsUserProfileRootSync(): string | null {
+  try {
+    const parsed = JSON.parse(
+      readFileSync(windowsProfileCachePath(), 'utf8'),
+    ) as { wslProfile?: unknown };
+    if (
+      typeof parsed.wslProfile === 'string' &&
+      parsed.wslProfile.startsWith('/mnt/')
+    ) {
+      return parsed.wslProfile;
+    }
+  } catch {
+    // First run, unreadable cache, or no WSL mount — nothing cached.
+  }
+  return null;
+}
+
+/**
+ * The Windows user profile in WSL form, resolved through powershell on
+ * first use and persisted to disk so later sessions start instantly.
+ * null when it cannot be resolved (no interop, unexpected output).
+ */
+export function getWindowsUserProfileRoot(): Promise<string | null> {
+  profileRootPromise ??= resolveProfileRoot();
+  return profileRootPromise;
+}
+
+async function resolveProfileRoot(): Promise<string | null> {
+  const cached = getCachedWindowsUserProfileRootSync();
+  if (cached) return cached;
+
+  const user = await getWindowsUser();
+  if (!user) return null;
+
+  const wslProfile = toWslPath(user.profile);
+  if (!wslProfile.startsWith('/mnt/')) return null;
+
+  try {
+    mkdirSync(dirname(windowsProfileCachePath()), { recursive: true });
+    writeFileSync(
+      windowsProfileCachePath(),
+      JSON.stringify({ username: user.username, wslProfile }, null, 2),
+    );
+  } catch (e) {
+    debugLogger.debug('[windowsContext] could not persist profile cache:', e);
+  }
+  return wslProfile;
 }
 
 /**
