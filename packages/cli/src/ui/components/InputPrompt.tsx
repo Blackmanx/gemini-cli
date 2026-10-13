@@ -573,8 +573,9 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     return true;
   }, [buffer, config]);
 
-  // Handle clipboard IMAGE pasting with Ctrl+Shift+V: image only, and tell the
-  // user when the clipboard holds no image instead of silently pasting text.
+  // Handle clipboard IMAGE pasting (Alt+Shift+V; Ctrl+Shift+V where the
+  // terminal passes it through): image only, and tell the user when the
+  // clipboard holds no image instead of silently pasting text.
   const handleClipboardImagePaste = useCallback(async () => {
     if (shortcutsHelpVisible) {
       setShortcutsHelpVisible(false);
@@ -584,7 +585,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       if (!inserted) {
         appEvents.emit(AppEvent.TransientMessage, {
           message:
-            'The clipboard does not contain an image. Copy an image first, then press Ctrl+Shift+V.',
+            'The clipboard does not contain an image. Copy an image first, then press Alt+Shift+V.',
           type: TransientMessageType.Hint,
         });
       }
@@ -1349,7 +1350,8 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         return true;
       }
 
-      // Ctrl+Shift+V for clipboard image paste
+      // Alt+Shift+V (or Ctrl+Shift+V where the terminal passes it) for
+      // clipboard image paste
       if (keyMatchers[Command.PASTE_IMAGE](key)) {
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
         handleClipboardImagePaste();

@@ -1027,6 +1027,32 @@ describe('InputPrompt', () => {
       unmount();
     });
 
+    it('should paste an image with Alt+Shift+V, which terminals do not steal', async () => {
+      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(true);
+      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(
+        '/test/.gemini-clipboard/clipboard-790.png',
+      );
+
+      const { stdin, unmount } = await renderWithProviders(
+        <TestInputPrompt {...props} />,
+      );
+
+      await act(async () => {
+        // modifyOtherKeys form of Alt+Shift+V: CSI 27 ; modifier ; key ~
+        // (modifier 4 = 1 Shift + 2 Alt)
+        stdin.write('\x1b[27;4;118~');
+      });
+
+      await waitFor(() => {
+        expect(clipboardUtils.saveClipboardImage).toHaveBeenCalledWith(
+          props.config.getTargetDir(),
+        );
+        expect(mockBuffer.replaceRangeByOffset).toHaveBeenCalled();
+      });
+      expect(clipboardy.read).not.toHaveBeenCalled();
+      unmount();
+    });
+
     it('should say so when Ctrl+Shift+V finds no image, instead of pasting text', async () => {
       vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(false);
       const emitSpy = vi.spyOn(appEvents, 'emit');

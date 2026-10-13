@@ -109,7 +109,7 @@ export const INFORMATIVE_TIPS = [
   'Delete from the cursor to the end of the line with Ctrl+K',
   'Clear the entire input prompt with a double-press of Esc',
   'Paste from your clipboard with Ctrl+V',
-  'Paste an image from the clipboard with Ctrl+Shift+V',
+  'Paste an image from the clipboard with Alt+Shift+V',
   'Undo text edits in the input with Alt+Z or Cmd+Z',
   'Redo undone text edits with Shift+Alt+Z or Shift+Cmd+Z',
   'Open the current prompt in an external editor with Ctrl+G',

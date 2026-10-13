@@ -94,7 +94,7 @@ available combinations.
 | `input.openExternalEditor`           | Open the current prompt or the plan in an external editor.                | `Ctrl+G`<br />`Ctrl+Shift+G`                                                        |
 | `input.deprecatedOpenExternalEditor` | Deprecated command to open external editor.                               | `Ctrl+X`                                                                            |
 | `input.paste`                        | Paste from the clipboard.                                                 | `Ctrl+V`<br />`Cmd/Win+V`<br />`Alt+V`                                              |
-| `input.pasteImage`                   | Paste an image from the clipboard into the prompt as an @path reference.  | `Ctrl+Shift+V`<br />`Shift+Cmd/Win+V`                                               |
+| `input.pasteImage`                   | Paste an image from the clipboard into the prompt as an @path reference.  | `Alt+Shift+V`<br />`Ctrl+Shift+V`<br />`Shift+Cmd/Win+V`                            |
 
 #### App Controls
 

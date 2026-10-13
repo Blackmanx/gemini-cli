@@ -391,7 +391,15 @@ export const defaultKeyBindingConfig: KeyBindingConfig = new Map([
   ],
   [
     Command.PASTE_IMAGE,
-    [new KeyBinding('ctrl+shift+v'), new KeyBinding('cmd+shift+v')],
+    [
+      // Windows Terminal, gnome-terminal and konsole all reserve
+      // ctrl+shift+v for their own paste action, so the chord never
+      // reaches the app on most Linux setups; alt+shift+v is not
+      // reserved by any of them and carries the same meaning.
+      new KeyBinding('alt+shift+v'),
+      new KeyBinding('ctrl+shift+v'),
+      new KeyBinding('cmd+shift+v'),
+    ],
   ],
 
   // App Controls
