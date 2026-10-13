@@ -1,6 +1,6 @@
 ---
 name: office-docs
-description: Build corporate Word documents and Excel workbooks from the department templates, preserving the corporate styles, section structure, numbering and table shapes. Use for actas, procedimientos, project documentation, reports, deliverables, .docx and .xlsx work in the company's style, and for filling the department's themed charts. Triggers include acta, procedimiento, documentación del proyecto, plantilla corporate, informe, docx, xlsx, gráficos corporate.
+description: Build corporate Word documents and Excel workbooks from the department templates, preserving the corporate styles, section structure, numbering and table shapes. Use for actas, procedimientos, project documentation, reports, deliverables, .docx and .xlsx work in the company's style, and for filling the department's themed charts. Triggers include acta, procedimiento, documentación del proyecto, plantilla corporate, informe, docx, xlsx, gráficos corporate. Exception: when the user hands an existing file as the base or the style source (a path, "desde este documento", "con el estilo de este"), do NOT use these templates — that is office-style-transfer, even if the result is an acta or mentions corporate; the bundled templates apply only when the user gives no reference file.
 ---
 
 # corporate Office documents

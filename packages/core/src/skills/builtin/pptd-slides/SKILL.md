@@ -1,6 +1,6 @@
 ---
 name: pptd-slides
-description: Build corporate presentations from the department PowerPoint templates so they look like corporate made them. Covers editing an existing template slide in place, deleting the slides you do not need, replacing text, reusing the template's figures, and the layout and colour traps that make a deck look wrong. Use when the user asks for a deck, presentation, slides or PPTX in the company's corporate style, or to edit one of the corporate templates.
+description: Build corporate presentations from the department PowerPoint templates so they look like corporate made them. Covers editing an existing template slide in place, deleting the slides you do not need, replacing text, reusing the template's figures, and the layout and colour traps that make a deck look wrong. Use when the user asks for a deck, presentation, slides or PPTX in the company's corporate style, or to edit one of the corporate templates. Exception: when the user hands an existing .pptx as the base or style source (a path, "con el estilo de este"), do NOT use the department templates — that is office-style-transfer, even if corporate branding is requested; these templates apply only when the user gives no reference file.
 ---
 
 # corporate presentations
