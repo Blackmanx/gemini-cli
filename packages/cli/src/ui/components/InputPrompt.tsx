@@ -531,45 +531,75 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     return false;
   }, [buffer, popAllMessages, inputHistory]);
 
-  // Handle clipboard image pasting with Ctrl+V
+  // Save an image from the clipboard and insert an @path reference at the
+  // cursor. Returns true when an image was inserted.
+  const insertClipboardImage = useCallback(async (): Promise<boolean> => {
+    if (!(await clipboardHasImage())) {
+      return false;
+    }
+
+    const imagePath = await saveClipboardImage(config.getTargetDir());
+    if (!imagePath) {
+      return false;
+    }
+
+    // Clean up old images
+    cleanupOldClipboardImages(config.getTargetDir()).catch(() => {
+      // Ignore cleanup errors
+    });
+
+    // Get relative path from current directory
+    const relativePath = path.relative(config.getTargetDir(), imagePath);
+
+    // Insert @path reference at cursor position
+    const insertText = `@${relativePath}`;
+    const currentText = buffer.text;
+    const offset = buffer.getOffset();
+
+    // Add spaces around the path if needed
+    let textToInsert = insertText;
+    const charBefore = offset > 0 ? currentText[offset - 1] : '';
+    const charAfter = offset < currentText.length ? currentText[offset] : '';
+
+    if (charBefore && charBefore !== ' ' && charBefore !== '\n') {
+      textToInsert = ' ' + textToInsert;
+    }
+    if (!charAfter || (charAfter !== ' ' && charAfter !== '\n')) {
+      textToInsert = textToInsert + ' ';
+    }
+
+    // Insert at cursor position
+    buffer.replaceRangeByOffset(offset, offset, textToInsert);
+    return true;
+  }, [buffer, config]);
+
+  // Handle clipboard IMAGE pasting with Ctrl+Shift+V: image only, and tell the
+  // user when the clipboard holds no image instead of silently pasting text.
+  const handleClipboardImagePaste = useCallback(async () => {
+    if (shortcutsHelpVisible) {
+      setShortcutsHelpVisible(false);
+    }
+    try {
+      const inserted = await insertClipboardImage();
+      if (!inserted) {
+        appEvents.emit(AppEvent.TransientMessage, {
+          message:
+            'The clipboard does not contain an image. Copy an image first, then press Ctrl+Shift+V.',
+          type: TransientMessageType.Hint,
+        });
+      }
+    } catch (error) {
+      debugLogger.error('Error pasting an image from the clipboard:', error);
+    }
+  }, [insertClipboardImage, shortcutsHelpVisible, setShortcutsHelpVisible]);
+
+  // Handle clipboard pasting with Ctrl+V: the image, if there is one, then text.
   const handleClipboardPaste = useCallback(async () => {
     if (shortcutsHelpVisible) {
       setShortcutsHelpVisible(false);
     }
     try {
-      if (await clipboardHasImage()) {
-        const imagePath = await saveClipboardImage(config.getTargetDir());
-        if (imagePath) {
-          // Clean up old images
-          cleanupOldClipboardImages(config.getTargetDir()).catch(() => {
-            // Ignore cleanup errors
-          });
-
-          // Get relative path from current directory
-          const relativePath = path.relative(config.getTargetDir(), imagePath);
-
-          // Insert @path reference at cursor position
-          const insertText = `@${relativePath}`;
-          const currentText = buffer.text;
-          const offset = buffer.getOffset();
-
-          // Add spaces around the path if needed
-          let textToInsert = insertText;
-          const charBefore = offset > 0 ? currentText[offset - 1] : '';
-          const charAfter =
-            offset < currentText.length ? currentText[offset] : '';
-
-          if (charBefore && charBefore !== ' ' && charBefore !== '\n') {
-            textToInsert = ' ' + textToInsert;
-          }
-          if (!charAfter || (charAfter !== ' ' && charAfter !== '\n')) {
-            textToInsert = textToInsert + ' ';
-          }
-
-          // Insert at cursor position
-          buffer.replaceRangeByOffset(offset, offset, textToInsert);
-        }
-      }
+      await insertClipboardImage();
 
       if (settings.experimental?.useOSC52Paste) {
         stdout.write('\x1b]52;c;?\x07');
@@ -592,7 +622,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     }
   }, [
     buffer,
-    config,
+    insertClipboardImage,
     stdout,
     settings,
     shortcutsHelpVisible,
@@ -1319,6 +1349,13 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
         return true;
       }
 
+      // Ctrl+Shift+V for clipboard image paste
+      if (keyMatchers[Command.PASTE_IMAGE](key)) {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        handleClipboardImagePaste();
+        return true;
+      }
+
       // Ctrl+V for clipboard paste
       if (keyMatchers[Command.PASTE_CLIPBOARD](key)) {
         // eslint-disable-next-line @typescript-eslint/no-floating-promises
@@ -1383,6 +1420,7 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
       shellHistory,
       reverseSearchCompletion,
       handleClipboardPaste,
+      handleClipboardImagePaste,
       resetCompletionState,
       resetEscapeState,
       vimHandleInput,

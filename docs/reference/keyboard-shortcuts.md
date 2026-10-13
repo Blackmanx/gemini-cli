@@ -94,6 +94,7 @@ available combinations.
 | `input.openExternalEditor`           | Open the current prompt or the plan in an external editor.                | `Ctrl+G`<br />`Ctrl+Shift+G`                                                        |
 | `input.deprecatedOpenExternalEditor` | Deprecated command to open external editor.                               | `Ctrl+X`                                                                            |
 | `input.paste`                        | Paste from the clipboard.                                                 | `Ctrl+V`<br />`Cmd/Win+V`<br />`Alt+V`                                              |
+| `input.pasteImage`                   | Paste an image from the clipboard into the prompt as an @path reference.  | `Ctrl+Shift+V`<br />`Shift+Cmd/Win+V`                                               |
 
 #### App Controls
 
@@ -105,6 +106,8 @@ available combinations.
 | `app.toggleMarkdown`          | Toggle Markdown rendering.                                                                                                                         | `Alt+M`            |
 | `app.toggleCopyMode`          | Toggle copy mode when in alternate buffer mode.                                                                                                    | `F9`               |
 | `app.toggleMouseMode`         | Toggle mouse mode (scrolling and clicking).                                                                                                        | `Ctrl+S`           |
+| `app.cycleModel`              | Move to the next configured model role (see model.cycleOrder).                                                                                     | `Ctrl+P`           |
+| `app.copyLastCodeBlock`       | Copy the last code block from the model response, without fences.                                                                                  | `F5`               |
 | `app.toggleYolo`              | Toggle YOLO (auto-approval) mode for tool calls.                                                                                                   | `Ctrl+Y`           |
 | `app.cycleApprovalMode`       | Cycle through approval modes: default (prompt), auto_edit (auto-approve edits), and plan (read-only). Plan mode is skipped when the agent is busy. | `Shift+Tab`        |
 | `app.showMoreLines`           | Expand and collapse blocks of content when not in alternate buffer mode.                                                                           | `Ctrl+O`           |

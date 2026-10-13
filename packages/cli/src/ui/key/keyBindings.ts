@@ -82,6 +82,7 @@ export enum Command {
   OPEN_EXTERNAL_EDITOR = 'input.openExternalEditor',
   DEPRECATED_OPEN_EXTERNAL_EDITOR = 'input.deprecatedOpenExternalEditor',
   PASTE_CLIPBOARD = 'input.paste',
+  PASTE_IMAGE = 'input.pasteImage',
 
   // App Controls
   SHOW_ERROR_DETAILS = 'app.showErrorDetails',
@@ -388,6 +389,10 @@ export const defaultKeyBindingConfig: KeyBindingConfig = new Map([
       new KeyBinding('alt+v'),
     ],
   ],
+  [
+    Command.PASTE_IMAGE,
+    [new KeyBinding('ctrl+shift+v'), new KeyBinding('cmd+shift+v')],
+  ],
 
   // App Controls
   [Command.SHOW_ERROR_DETAILS, [new KeyBinding('f12')]],
@@ -519,6 +524,7 @@ export const commandCategories: readonly CommandCategory[] = [
       Command.OPEN_EXTERNAL_EDITOR,
       Command.DEPRECATED_OPEN_EXTERNAL_EDITOR,
       Command.PASTE_CLIPBOARD,
+      Command.PASTE_IMAGE,
     ],
   },
   {
@@ -642,6 +648,8 @@ export const commandDescriptions: Readonly<Record<Command, string>> = {
   [Command.DEPRECATED_OPEN_EXTERNAL_EDITOR]:
     'Deprecated command to open external editor.',
   [Command.PASTE_CLIPBOARD]: 'Paste from the clipboard.',
+  [Command.PASTE_IMAGE]:
+    'Paste an image from the clipboard into the prompt as an @path reference.',
 
   // App Controls
   [Command.SHOW_ERROR_DETAILS]:

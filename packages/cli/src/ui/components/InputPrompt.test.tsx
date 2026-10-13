@@ -1002,6 +1002,56 @@ describe('InputPrompt', () => {
       unmount();
     });
 
+    it('should paste an image with Ctrl+Shift+V without pasting text', async () => {
+      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(true);
+      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(
+        '/test/.gemini-clipboard/clipboard-789.png',
+      );
+
+      const { stdin, unmount } = await renderWithProviders(
+        <TestInputPrompt {...props} />,
+      );
+
+      await act(async () => {
+        // modifyOtherKeys form of Ctrl+Shift+V: CSI 27 ; modifier ; key ~
+        stdin.write('\x1b[27;6;118~');
+      });
+
+      await waitFor(() => {
+        expect(clipboardUtils.saveClipboardImage).toHaveBeenCalledWith(
+          props.config.getTargetDir(),
+        );
+        expect(mockBuffer.replaceRangeByOffset).toHaveBeenCalled();
+      });
+      expect(clipboardy.read).not.toHaveBeenCalled();
+      unmount();
+    });
+
+    it('should say so when Ctrl+Shift+V finds no image, instead of pasting text', async () => {
+      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(false);
+      const emitSpy = vi.spyOn(appEvents, 'emit');
+
+      const { stdin, unmount } = await renderWithProviders(
+        <TestInputPrompt {...props} />,
+      );
+
+      await act(async () => {
+        stdin.write('\x1b[27;6;118~');
+      });
+
+      await waitFor(() => {
+        expect(emitSpy).toHaveBeenCalledWith(AppEvent.TransientMessage, {
+          message: expect.stringContaining('does not contain an image'),
+          type: TransientMessageType.Hint,
+        });
+      });
+      expect(clipboardy.read).not.toHaveBeenCalled();
+      expect(mockBuffer.replaceRangeByOffset).not.toHaveBeenCalled();
+
+      emitSpy.mockRestore();
+      unmount();
+    });
+
     it('should handle errors during clipboard operations', async () => {
       const debugLoggerErrorSpy = vi
         .spyOn(debugLogger, 'error')

@@ -95,6 +95,11 @@ describe('clipboardUtils', () => {
     vi.resetAllMocks();
     originalEnv = process.env;
     process.env = { ...originalEnv };
+    // The suite simulates a generic Linux host; WSL detection is covered by
+    // its own tests below and must not leak in from the machine running them.
+    delete process.env['WSL_DISTRO_NAME'];
+    delete process.env['WSL_INTEROP'];
+    delete process.env['WSLLENV'];
 
     // Reset modules to clear internal state (linuxClipboardTool variable)
     vi.resetModules();
@@ -343,6 +348,96 @@ describe('clipboardUtils', () => {
       const result = await clipboardUtils.saveClipboardImage(mockTargetDir);
       expect(result).toBe(null);
       expect(spawn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('WSL (Windows clipboard via powershell.exe)', () => {
+    const mockTargetDir = '/tmp/target';
+    const mockTempDir = path.join('/tmp/global', 'images');
+
+    beforeEach(() => {
+      process.env['WSL_DISTRO_NAME'] = 'Ubuntu';
+      vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+      vi.mocked(fs.unlink).mockResolvedValue(undefined);
+    });
+
+    it('isWsl() is true when a WSL environment variable is present', () => {
+      expect(clipboardUtils.isWsl()).toBe(true);
+    });
+
+    it('isWsl() is false on a plain Linux host', () => {
+      delete process.env['WSL_DISTRO_NAME'];
+      delete process.env['WSL_INTEROP'];
+      delete process.env['WSLLENV'];
+      expect(clipboardUtils.isWsl()).toBe(false);
+    });
+
+    it('clipboardHasImage asks the Windows clipboard', async () => {
+      vi.mocked(spawnAsync).mockResolvedValueOnce({
+        stdout: 'True\r\n',
+        stderr: '',
+      });
+
+      await expect(clipboardUtils.clipboardHasImage()).resolves.toBe(true);
+      expect(spawnAsync).toHaveBeenCalledWith(
+        'powershell.exe',
+        expect.arrayContaining([
+          '-Command',
+          expect.stringContaining('ContainsImage'),
+        ]),
+      );
+    });
+
+    it('clipboardHasImage is false when the Windows clipboard has no image', async () => {
+      vi.mocked(spawnAsync).mockResolvedValueOnce({
+        stdout: 'False\r\n',
+        stderr: '',
+      });
+
+      await expect(clipboardUtils.clipboardHasImage()).resolves.toBe(false);
+      expect(spawnAsync).toHaveBeenCalledTimes(1);
+    });
+
+    it('clipboardHasImage falls back to the Linux tools when interop is gone', async () => {
+      process.env['XDG_SESSION_TYPE'] = 'wayland';
+      vi.mocked(execSync).mockReturnValue(Buffer.from(''));
+      vi.mocked(spawnAsync)
+        .mockRejectedValueOnce(new Error('No interop'))
+        .mockResolvedValueOnce({ stdout: 'image/png', stderr: '' });
+
+      await expect(clipboardUtils.clipboardHasImage()).resolves.toBe(true);
+      expect(spawnAsync).toHaveBeenLastCalledWith('wl-paste', ['--list-types']);
+    });
+
+    it('saveClipboardImage decodes the base64 PNG from powershell.exe', async () => {
+      const png = Buffer.from('fake-png-bytes');
+      vi.mocked(spawnAsync).mockResolvedValueOnce({
+        stdout: `warning text\r\nB64:${png.toString('base64')}\r\n`,
+        stderr: '',
+      });
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      const result = await clipboardUtils.saveClipboardImage(mockTargetDir);
+
+      expect(result).toContain(mockTempDir);
+      expect(result).toMatch(/clipboard-\d+\.png$/);
+      expect(spawnAsync).toHaveBeenCalledWith(
+        'powershell.exe',
+        expect.arrayContaining(['-Command', expect.stringContaining('B64:')]),
+        expect.objectContaining({ timeout: expect.any(Number) }),
+      );
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        expect.stringContaining('clipboard-'),
+        png,
+      );
+    });
+
+    it('saveClipboardImage returns null when the Windows clipboard has no image', async () => {
+      vi.mocked(spawnAsync).mockResolvedValueOnce({ stdout: '', stderr: '' });
+
+      await expect(
+        clipboardUtils.saveClipboardImage(mockTargetDir),
+      ).resolves.toBe(null);
     });
   });
 

@@ -5,7 +5,7 @@
  */
 
 import * as fs from 'node:fs/promises';
-import { createWriteStream, existsSync, statSync } from 'node:fs';
+import { createWriteStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { execSync, spawn } from 'node:child_process';
 import * as path from 'node:path';
 import {
@@ -33,6 +33,119 @@ const PATH_PREFIX_PATTERN = /^([/~.]|[a-zA-Z]:|\\\\)/;
 
 // Track which tool works on Linux to avoid redundant checks/failures
 let linuxClipboardTool: 'wl-paste' | 'xclip' | null = null;
+
+// Cached WSL detection: env vars are stable for the life of the process.
+let wslDetected: boolean | null = null;
+
+/**
+ * True when running inside Windows Subsystem for Linux.
+ *
+ * Under WSL the clipboard the user actually sees is the **Windows** clipboard,
+ * so image paste has to go through the `powershell.exe` interop bridge instead
+ * of `wl-paste`/`xclip` (which talk to WSLg's own Wayland/X server and are not
+ * installed in a stock distro anyway).
+ */
+export function isWsl(): boolean {
+  if (process.platform !== 'linux') {
+    return false;
+  }
+  if (wslDetected !== null) {
+    return wslDetected;
+  }
+  wslDetected = detectWsl();
+  return wslDetected;
+}
+
+function detectWsl(): boolean {
+  if (
+    process.env['WSL_DISTRO_NAME'] ||
+    process.env['WSL_INTEROP'] ||
+    process.env['WSLLENV'] !== undefined
+  ) {
+    return true;
+  }
+  try {
+    // e.g. "Linux version 6.6.114.1-microsoft-standard-WSL2+ ..."
+    return /microsoft/i.test(
+      readFileSync('/proc/sys/kernel/osrelease', 'utf8'),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The Windows clipboard as seen from WSL, via the interop bridge.
+ * Returns null when the bridge is unavailable (e.g. `interop=false`), so the
+ * caller can fall back to the Linux clipboard tools.
+ */
+async function wslClipboardHasImage(): Promise<boolean | null> {
+  try {
+    const { stdout } = await spawnAsync('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      'Add-Type -AssemblyName System.Windows.Forms; ' +
+        'if ([System.Windows.Forms.Clipboard]::ContainsImage()) { "True" } else { "False" }',
+    ]);
+    if (stdout.includes('True')) return true;
+    if (stdout.includes('False')) return false;
+    return null;
+  } catch (e) {
+    debugLogger.debug('Windows clipboard unreachable from WSL:', e);
+    return null;
+  }
+}
+
+/**
+ * Saves the Windows clipboard image to `tempFilePath` from WSL.
+ *
+ * The PNG travels as base64 on stdout and is decoded here: neither side has to
+ * know about the other's filesystem, so a WSL distro with a custom mount (or no
+ * `/mnt/c` at all) still works.
+ */
+async function saveFileWithWslWindowsClipboard(
+  tempFilePath: string,
+): Promise<boolean> {
+  const script = `
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    if ([System.Windows.Forms.Clipboard]::ContainsImage()) {
+      $image = [System.Windows.Forms.Clipboard]::GetImage()
+      $stream = New-Object System.IO.MemoryStream
+      $image.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+      Write-Output ("B64:" + [Convert]::ToBase64String($stream.ToArray()))
+      $stream.Dispose()
+      $image.Dispose()
+    }
+  `;
+
+  try {
+    const { stdout } = await spawnAsync(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      // Interop can stall when no Windows session is attached; never hang a paste.
+      { timeout: 20000 },
+    );
+
+    const line = stdout
+      .split(/\r?\n/)
+      .find((candidate) => candidate.startsWith('B64:'));
+    if (!line) {
+      return false;
+    }
+
+    const buffer = Buffer.from(line.slice(4), 'base64');
+    if (buffer.length === 0) {
+      return false;
+    }
+    await fs.writeFile(tempFilePath, buffer);
+    return true;
+  } catch (e) {
+    debugLogger.debug('Could not save the Windows clipboard image:', e);
+    return false;
+  }
+}
 
 // Helper to check the user's display server and whether they have a compatible clipboard tool installed
 function getUserLinuxClipboardTool(): typeof linuxClipboardTool {
@@ -163,6 +276,14 @@ async function checkXclipForImage() {
  */
 export async function clipboardHasImage(): Promise<boolean> {
   if (process.platform === 'linux') {
+    if (isWsl()) {
+      // The Windows clipboard is the user's clipboard under WSL.
+      const hasImage = await wslClipboardHasImage();
+      if (hasImage !== null) {
+        return hasImage;
+      }
+      // Interop unavailable: fall through to WSLg's Wayland/X11 tools.
+    }
     const tool = getUserLinuxClipboardTool();
     if (tool === 'wl-paste') {
       if (await checkWlPasteForImage()) return true;
@@ -281,6 +402,19 @@ export async function saveClipboardImage(
 
     if (process.platform === 'linux') {
       const tempFilePath = path.join(tempDir, `clipboard-${timestamp}.png`);
+
+      if (isWsl()) {
+        if (await saveFileWithWslWindowsClipboard(tempFilePath)) {
+          return tempFilePath;
+        }
+        // Interop unavailable or no image: fall through to WSLg's tools.
+        try {
+          await fs.unlink(tempFilePath);
+        } catch {
+          /* ignore */
+        }
+      }
+
       const tool = getUserLinuxClipboardTool();
 
       if (tool === 'wl-paste') {
