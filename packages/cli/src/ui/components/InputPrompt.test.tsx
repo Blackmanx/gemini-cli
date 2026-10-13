@@ -279,6 +279,9 @@ describe('InputPrompt', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    // Pin the default escape window so ESC tests behave the same on hosts
+    // where WSL_DISTRO_NAME widens it (see WSL_ESC_TIMEOUT).
+    vi.stubEnv('WSL_DISTRO_NAME', undefined);
     coreEvents.removeAllListeners();
     vi.spyOn(
       terminalCapabilityManager,

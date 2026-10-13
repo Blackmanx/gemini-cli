@@ -68,6 +68,9 @@ describe('KeypressContext', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Pin the default escape window so these tests behave the same on
+    // hosts where WSL_DISTRO_NAME widens it (see WSL_ESC_TIMEOUT).
+    vi.stubEnv('WSL_DISTRO_NAME', undefined);
     stdin = new MockStdin();
     (useStdin as Mock).mockReturnValue({
       stdin,
@@ -300,6 +303,61 @@ describe('KeypressContext', () => {
       expect(lowerPriorityHandler).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'escape' }),
       );
+    });
+
+    describe('ConPTY split ESC prefix (WSL escape window)', () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+
+      it('recombines ESC and letter split across writes within the WSL window', async () => {
+        vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu');
+        const keyHandler = vi.fn();
+        const { result } = await renderHookWithProviders(() =>
+          useKeypressContext(),
+        );
+        act(() => result.current.subscribe(keyHandler));
+
+        act(() => {
+          // ConPTY writes the ESC, then the letter 100ms later: past the
+          // default 50ms window but inside the widened WSL window, so the
+          // two halves must still combine into one alt+letter key.
+          stdin.write('\x1b');
+          vi.advanceTimersByTime(ESC_TIMEOUT + 50);
+          expect(keyHandler).not.toHaveBeenCalled();
+          stdin.write('V');
+        });
+
+        expect(keyHandler).toHaveBeenCalledTimes(1);
+        expect(keyHandler).toHaveBeenCalledWith(
+          expect.objectContaining({ name: 'v', shift: true, alt: true }),
+        );
+      });
+
+      it('expires a lone ESC at the default window outside WSL', async () => {
+        vi.stubEnv('WSL_DISTRO_NAME', undefined);
+        const keyHandler = vi.fn();
+        const { result } = await renderHookWithProviders(() =>
+          useKeypressContext(),
+        );
+        act(() => result.current.subscribe(keyHandler));
+
+        act(() => {
+          stdin.write('\x1b');
+          vi.advanceTimersByTime(ESC_TIMEOUT + 10);
+
+          expect(keyHandler).toHaveBeenNthCalledWith(
+            1,
+            expect.objectContaining({ name: 'escape', alt: false }),
+          );
+          stdin.write('V');
+        });
+
+        expect(keyHandler).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({ name: 'v', shift: true, alt: false }),
+        );
+      });
     });
 
     it('should handle double Escape', async () => {

@@ -52,6 +52,9 @@ describe('Emergency Stop & Input Handling Fixes (b/561556027)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Pin the default escape window so these tests behave the same on
+    // hosts where WSL_DISTRO_NAME widens it (see WSL_ESC_TIMEOUT).
+    vi.stubEnv('WSL_DISTRO_NAME', undefined);
     stdin = new MockStdin();
     (useStdin as Mock).mockReturnValue({
       stdin,

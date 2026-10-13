@@ -29,6 +29,19 @@ export const ESC_TIMEOUT = 50;
 export const PASTE_TIMEOUT = 30_000;
 export const FAST_RETURN_TIMEOUT = 30;
 
+/**
+ * Windows Terminal drives WSL through ConPTY, and ConPTY can write the ESC
+ * prefix of an Alt+key sequence in a separate chunk from the byte that
+ * follows it. When the gap outlasts the escape window the ESC expires as a
+ * lone escape and the letter is parsed as fresh input — Alt+Shift+V would
+ * type a stray "V" instead of pasting an image. Under WSL ConPTY is always
+ * in front of the CLI, so widen the window there to recombine the split.
+ */
+export const WSL_ESC_TIMEOUT = 150;
+
+const escapeTimeoutMs = () =>
+  process.env['WSL_DISTRO_NAME'] ? WSL_ESC_TIMEOUT : ESC_TIMEOUT;
+
 export enum KeypressPriority {
   Low = -100,
   Normal = 0,
@@ -367,7 +380,7 @@ function createDataListener(keypressHandler: KeypressHandler) {
       parser.next(char);
     }
     if (data.length !== 0) {
-      timeoutId = setTimeout(() => parser.next(''), ESC_TIMEOUT);
+      timeoutId = setTimeout(() => parser.next(''), escapeTimeoutMs());
     }
   };
 }
