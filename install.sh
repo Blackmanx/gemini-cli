@@ -146,6 +146,22 @@ check_deps() {
 
 have_npm() { command -v npm >/dev/null 2>&1; }
 
+# ¿El destino global de npm es escribible por el usuario actual?
+# Comprueba `npm root -g` (p. ej. /usr/lib/node_modules), NO el prefijo:
+# el prefijo (/usr) puede ser escribible mientras que el destino real no lo
+# es, y entonces npm install -g muere con EACCES. Si el destino aún no
+# existe, se comprueba el ancestro existente más cercano.
+npm_global_writable() {
+  have_npm || return 1
+  local dir
+  dir="$(npm root -g 2>/dev/null)" || return 1
+  [[ -n "$dir" ]] || return 1
+  while [[ ! -e "$dir" && "$dir" != "/" && "$dir" != "." ]]; do
+    dir="$(dirname "$dir")"
+  done
+  [[ -d "$dir" && -w "$dir" ]]
+}
+
 # ---------------------------------------------------------------------------
 # HTTP — GET con autenticación de GitHub.
 # El repo es privado, así que necesitamos un token. Orden de preferencia:
@@ -261,7 +277,16 @@ download_asset() {  # $1=asset_id, $2=destino. Usa el endpoint de API autenticad
 # Detección de instalaciones existentes
 # ---------------------------------------------------------------------------
 installed_version_from_bin() {
-  # Si 'gemini' está en PATH, intenta leer su versión.
+  # Sondea el binario instalado directamente (no depende de que BIN_DIR
+  # esté en el PATH de esta sesión) y, como fallback, vía PATH.
+  local probe
+  for probe in "${BIN_DIR}/gemini"; do
+    if [[ -e "$probe" ]]; then
+      local v
+      v="$("$probe" --version 2>/dev/null | head -1 | tr -d '[:space:]' | sed 's/^v//' || true)"
+      [[ -n "$v" ]] && { printf '%s' "$v"; return 0; }
+    fi
+  done
   if command -v gemini >/dev/null 2>&1; then
     gemini --version 2>/dev/null | head -1 | tr -d '[:space:]' | sed 's/^v//'
   fi
@@ -383,7 +408,8 @@ resolve_method() {
     printf '%s' "${METHOD}"
     return 0
   fi
-  if have_npm; then
+  # Auto: npm solo si además es escribible; si no, symlink (sin permisos).
+  if npm_global_writable; then
     printf 'npm'
   else
     printf 'symlink'
@@ -393,6 +419,11 @@ resolve_method() {
 install_via_npm() {
   local tgz="$1"
   have_npm || die "Se eligió el método npm pero no hay npm en PATH."
+  if ! npm_global_writable; then
+    die "El prefijo global de npm no es escribible (probablemente hace falta sudo).
+       Puedes:  1) volver a ejecutar con sudo,  o
+               2) usar el método symlink (no necesita permisos):  --symlink"
+  fi
   info "Instalando vía npm global: ${tgz}"
   run npm install -g "$tgz"
 }
@@ -400,26 +431,46 @@ install_via_npm() {
 install_via_symlink() {
   local zip="$1" version="$2"
   local target_dir="${INSTALL_ROOT}/gemini-cli-${version}"
+  # El staging es un nombre distinto al definitivo para poder extraer y
+  # verificar sin tocar (ni dejar a medias) la instalación que ya funciona.
+  local staging="${target_dir}.staging"
   TARGET_DIR="${target_dir}"
 
-  info "Descomprimiendo bundle en ${target_dir}"
+  info "Extrayendo bundle a ${staging}"
   run mkdir -p "${INSTALL_ROOT}"
-  run rm -rf "${target_dir}"
-  run unzip -qo "${zip}" -d "${target_dir}"
+  run rm -rf "${staging}"
+  run unzip -qo "${zip}" -d "${staging}"
 
-  local gemini_js="${target_dir}/bundle/gemini.js"
+  local gemini_js="${staging}/bundle/gemini.js"
   if [[ "${DRY_RUN}" == false && ! -f "${gemini_js}" ]]; then
     # Algunos zips traen un nivel extra; busca el gemini.js real.
-    gemini_js="$(find "${target_dir}" -maxdepth 3 -name 'gemini.js' -path '*/bundle/*' | head -1 || true)"
+    gemini_js="$(find "${staging}" -maxdepth 3 -name 'gemini.js' -path '*/bundle/*' | head -1 || true)"
     [[ -n "${gemini_js}" && -f "${gemini_js}" ]] \
-      || die "No se encontró bundle/gemini.js dentro del zip descargado."
+      || die "No se encontró bundle/gemini.js en el zip. Tu instalación no se ha tocado."
   fi
 
   run chmod +x "${gemini_js}"
 
-  info "Creando symlink ${BIN_DIR}/gemini → ${gemini_js}"
+  # Verificar el bundle ANTES de sustituir el directorio definitivo. Si no
+  # arranca, abortamos aquí y la instalación previa sigue intacta.
+  if [[ "${DRY_RUN}" == false ]]; then
+    if ! "${gemini_js}" --version >/dev/null 2>&1; then
+      run rm -rf "${staging}"
+      die "El bundle descargado no responde al ejecutarse. Tu instalación no se ha tocado."
+    fi
+  fi
+
+  # Sustituir de forma casi atómica: quitar el destino viejo y mover el
+  # staging verificado encima; después sí, fijar el symlink.
+  run rm -rf "${target_dir}"
+  run mv "${staging}" "${target_dir}"
+
+  local final_js="${target_dir}/bundle/gemini.js"
+  [[ -f "${final_js}" ]] || final_js="$(find "${target_dir}" -maxdepth 3 -name 'gemini.js' -path '*/bundle/*' | head -1 || true)"
+
+  info "Creando symlink ${BIN_DIR}/gemini → ${final_js}"
   run mkdir -p "${BIN_DIR}"
-  run ln -sf "${gemini_js}" "${BIN_DIR}/gemini"
+  run ln -sf "${final_js}" "${BIN_DIR}/gemini"
 }
 
 write_state() {
@@ -522,23 +573,9 @@ main() {
   step "Método: ${chosen_method}"
   step "Asset:  ${asset_name} (id ${asset_id})"
 
-  # 5) Backup de ~/.gemini.
-  backup_config
-
-  # 6) Limpieza de instalaciones previas.
-  info "Limpiando instalaciones previas…"
-  remove_npm_installs
-  remove_symlink
-  # Pre-calcula TARGET_DIR para no borrar la carpeta reutilizable (symlink).
-  if [[ "${chosen_method}" == "symlink" ]]; then
-    TARGET_DIR="${INSTALL_ROOT}/gemini-cli-${target_version}"
-  fi
-  remove_fork_dirs
-
-  # 7) Reset de configuración (solo si no se pidió conservar).
-  reset_config
-
-  # 8) Descarga del asset a un fichero temporal (repo privado: vía API).
+  # 5) Descarga del asset a un fichero temporal (repo privado: vía API).
+  #    Se descarga ANTES de tocar nada: si falla, tu instalación actual
+  #    queda intacta.
   local tmp_asset
   tmp_asset="$(mktemp -t "gemini-asset.XXXXXX.${asset_name##*.}")"
   # shellcheck disable=SC2064
@@ -548,51 +585,81 @@ main() {
   else
     info "Descargando ${asset_name}…"
     download_asset "${asset_id}" "${tmp_asset}" \
-      || die "No se pudo descargar ${asset_name}. ¿Token válido? (GITHUB_TOKEN o gh auth login)"
+      || die "No se pudo descargar ${asset_name}. Tu instalación no se ha tocado. ¿Token válido?"
   fi
 
-  # 9) Instalación.
+  # 6) Instalación en su sitio. Para symlink se extrae a un staging y solo
+  #    se sustituye el directorio y se fija el symlink cuando el bundle ya
+  #    ha demostrado arrancar. La instalación previa sigue viva hasta aquí.
   case "${chosen_method}" in
     npm)     install_via_npm "${tmp_asset}" ;;
     symlink) install_via_symlink "${tmp_asset}" "${target_version}" ;;
     *)       die "Método desconocido: ${chosen_method}" ;;
   esac
 
-  # 10) Verificación. Prueba el binario instalado directamente (no depende
-  #     de que BIN_DIR esté en el PATH de esta sesión).
+  # 7) Verificación final del binario en su ubicación definitiva.
   if [[ "${DRY_RUN}" == false ]]; then
-    local got="" probe
-    for probe in "${BIN_DIR}/gemini" "${INSTALL_ROOT}/gemini-cli-${target_version}/bundle/gemini.js"; do
-      if [[ -e "$probe" ]]; then
-        got="$("$probe" --version 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
-        [[ -n "$got" ]] && break
-      fi
-    done
-    if [[ -z "$got" ]] && command -v gemini >/dev/null 2>&1; then
-      got="$(gemini --version 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
-    fi
-    if [[ -n "$got" ]]; then
-      success "Verificado: gemini ${got}"
-    else
-      warn "No pude ejecutar 'gemini --version'. Comprueba tu PATH (${BIN_DIR})."
-    fi
+    verify_binary "${target_version}" \
+      || die "El binario instalado no responde. Revisa el error; tu versión anterior no se ha eliminado."
   fi
 
-  # 11) Estado + aviso de shadow de Windows.
+  # 8) SOLO ahora, con la nueva versión instalada y verificada, se limpia lo
+  #    viejo. Nunca antes: así un fallo arriba no deja el sistema sin gemini.
+  info "Limpiando instalaciones previas…"
+  remove_fork_dirs
+  # Otros paquetes npm (los oficiales @google/…) se retiran siempre.
+  remove_npm_installs
+  # Un symlink anterior estorba si ahora usamos npm (sombrearía el binario).
+  if [[ "${chosen_method}" == "npm" ]]; then
+    remove_symlink
+  fi
+
+  # 9) Configuración: backup + reset SOLO en instalación nueva. En una
+  #    actualización ~/.gemini se conserva tal cual (tokens, settings, etc.).
+  if [[ -z "${INSTALLED_VERSION}" ]]; then
+    backup_config
+    reset_config
+  else
+    step "Actualización: se conserva ${CONFIG_DIR} (sin backup ni reset)."
+  fi
+
+  # 10) Estado + aviso de shadow de Windows.
   write_state "${target_version}" "${chosen_method}" "${target_tag}"
   handle_windows_shadow
 
   echo
   success "Instalación completada: ${target_version} (${chosen_method})"
-  if [[ "${KEEP_CONFIG}" == true ]]; then
-    info "Se conservó tu configuración actual en ${CONFIG_DIR}."
-  elif [[ -n "${BACKUP_ARCHIVE:-}" ]]; then
-    info "Backup de configuración: ${BACKUP_ARCHIVE}"
-    warn "${CONFIG_DIR} fue reseteado. Para recuperar tu config anterior:"
-    warn "  tar -xzf ${BACKUP_ARCHIVE} -C ${HOME}"
+  if [[ -z "${INSTALLED_VERSION}" ]]; then
+    if [[ "${KEEP_CONFIG}" == true ]]; then
+      info "Se conservó tu configuración actual en ${CONFIG_DIR}."
+    elif [[ -n "${BACKUP_ARCHIVE:-}" ]]; then
+      info "Backup de configuración: ${BACKUP_ARCHIVE}"
+      warn "${CONFIG_DIR} fue reseteado (instalación nueva). Para recuperar:"
+      warn "  tar -xzf ${BACKUP_ARCHIVE} -C ${HOME}"
+    else
+      step "Instalación nueva sin ${CONFIG_DIR} previo; nada que respaldar."
+    fi
   else
-    step "No había ${CONFIG_DIR} previo; nada que respaldar ni restaurar."
+    info "Configuración intacta en ${CONFIG_DIR}."
   fi
+}
+
+# Imprime la versión que responde el binario instalado, o vacío si falla.
+# Prueba el symlink y la carpeta de la versión directamente (no depende de
+# que BIN_DIR esté en el PATH de esta sesión).
+verify_binary() {
+  local version="$1" got="" probe
+  for probe in "${BIN_DIR}/gemini" "${INSTALL_ROOT}/gemini-cli-${version}/bundle/gemini.js"; do
+    if [[ -e "$probe" ]]; then
+      got="$("$probe" --version 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
+      [[ -n "$got" ]] && break
+    fi
+  done
+  if [[ -z "$got" ]] && command -v gemini >/dev/null 2>&1; then
+    got="$(gemini --version 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
+  fi
+  [[ -n "$got" ]] || return 1
+  success "Verificado: gemini ${got}"
 }
 
 main "$@"
