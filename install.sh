@@ -584,12 +584,14 @@ main() {
 
   echo
   success "Instalación completada: ${target_version} (${chosen_method})"
-  [[ -n "${BACKUP_ARCHIVE:-}" ]] && info "Backup de configuración: ${BACKUP_ARCHIVE}"
   if [[ "${KEEP_CONFIG}" == true ]]; then
     info "Se conservó tu configuración actual en ${CONFIG_DIR}."
-  else
+  elif [[ -n "${BACKUP_ARCHIVE:-}" ]]; then
+    info "Backup de configuración: ${BACKUP_ARCHIVE}"
     warn "${CONFIG_DIR} fue reseteado. Para recuperar tu config anterior:"
     warn "  tar -xzf ${BACKUP_ARCHIVE} -C ${HOME}"
+  else
+    step "No había ${CONFIG_DIR} previo; nada que respaldar ni restaurar."
   fi
 }
 
