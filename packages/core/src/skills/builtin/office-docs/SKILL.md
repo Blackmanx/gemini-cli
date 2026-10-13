@@ -135,3 +135,7 @@ sheet and let the template's styling do the rest.
   is the only check that catches a caption stranded on its own page or a table
   that overflows.
 - For a Word file, say the index needs `Ctrl+A`, `F9`.
+- Under WSL, save the deliverable on the Windows filesystem — normally the
+  user's Windows Downloads (`/mnt/c/Users/<user>/Downloads`; the session
+  context's `<windows_paths>` block names the exact user) — so the user can
+  review it in Windows.

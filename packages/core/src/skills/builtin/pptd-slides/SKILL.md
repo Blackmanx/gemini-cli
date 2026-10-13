@@ -314,4 +314,7 @@ officecli validate deck.pptx     # OpenXML schema
 ```
 
 Deliver the `.pptx`. Say which template it came from and which slides you kept
-or removed, so the next person knows what was dropped and why.
+or removed, so the next person knows what was dropped and why. Under WSL the
+file belongs on the Windows filesystem for review — normally the user's
+Windows Downloads (`/mnt/c/Users/<user>/Downloads`; see the session context's
+`<windows_paths>` block) — not the Linux workspace.

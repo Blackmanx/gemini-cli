@@ -43,6 +43,17 @@ file genuinely cannot carry the requested content, say so and ask before
 switching — silently starting a second document from the department templates
 is the failure mode this rule exists to prevent.
 
+## Where the output goes
+
+The user reviews office documents in Windows, so the finished file must land
+on the Windows filesystem, not in the Linux workspace. Under WSL the session
+context carries a `<windows_paths>` block with the exact user and mount — use
+it instead of guessing. Default: write the result **next to the source file**
+(the user handed `C:\Users\<user>\Downloads\X.pptx` → save to
+`/mnt/c/Users/<user>/Downloads/`). When the request names no source directory,
+write to the user's Windows Downloads (`/mnt/c/Users/<user>/Downloads`). Name
+the final path in the response so the user can open it from Windows.
+
 ## Read the whole file before writing a word
 
 `extract_style.py` reads the file once — geometry straight out of the package

@@ -7,6 +7,7 @@
 import type { Part, Content } from '@google/genai';
 import type { Config } from '../config/config.js';
 import { getFolderStructure } from './getFolderStructure.js';
+import { getWindowsPathContext } from './windowsContext.js';
 import type { HistoryTurn } from '../core/agentChatHistory.js';
 import { deriveStableId } from './cryptoUtils.js';
 
@@ -55,6 +56,7 @@ export async function getEnvironmentContext(config: Config): Promise<Part[]> {
     day: 'numeric',
   });
   const platform = process.platform;
+  const windowsPathContext = await getWindowsPathContext();
   const directoryContext = config.getIncludeDirectoryTree()
     ? await getDirectoryContextString(config)
     : '';
@@ -70,7 +72,7 @@ export async function getEnvironmentContext(config: Config): Promise<Part[]> {
 This is the Gemini CLI. We are setting up the context for our chat.
 Today's date is ${today} (formatted according to the user's locale).
 My operating system is: ${platform}
-The project's temporary directory is: ${tempDir}
+${windowsPathContext ? `${windowsPathContext}\n` : ''}The project's temporary directory is: ${tempDir}
 ${directoryContext}
 
 ${environmentMemory}
