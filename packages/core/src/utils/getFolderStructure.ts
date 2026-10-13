@@ -117,13 +117,16 @@ async function readFullStructure(
           error.code === 'ENOENT' ||
           error.code === 'EPERM')
       ) {
-        debugLogger.warn(
-          `Warning: Could not read directory ${currentPath}: ${error.message}`,
-        );
         if (currentPath === rootPath && error.code === 'ENOENT') {
           return null; // Root directory itself not found
         }
-        // For other EACCES/ENOENT/EPERM on subdirectories, just skip them.
+        // Unreadable subdirectories are expected in shared roots such as /tmp
+        // (/tmp/systemd-private-*, /tmp/snap-private-tmp). Skipping them is not
+        // a user-facing problem, so keep it out of the warn channel, which
+        // headless mode writes straight to stderr.
+        debugLogger.debug(
+          `Skipped unreadable directory ${currentPath}: ${error.message}`,
+        );
         continue;
       }
       throw error;

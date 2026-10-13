@@ -62,6 +62,7 @@ import {
 } from './config/trustedFolders.js';
 import { getStartupWarnings } from './utils/startupWarnings.js';
 import { getUserStartupWarnings } from './utils/userStartupWarnings.js';
+import { redirectHomeWorkspaceToTmp } from './utils/homeWorkspaceFallback.js';
 import { ConsolePatcher } from './ui/utils/ConsolePatcher.js';
 import { runNonInteractive } from './nonInteractiveCli.js';
 import {
@@ -466,6 +467,15 @@ export async function startInteractiveUI(
 export async function main() {
   let config: Config | undefined;
   const cliStartupHandle = startupProfiler.start('cli_startup');
+
+  // Must run before anything reads process.cwd() (loadSettings, loadCliConfig,
+  // sandbox setup): those all derive the workspace root from the cwd. The flag
+  // is read from argv directly because parseArguments has not run yet, and the
+  // redirect cannot wait for it without loadSettings() having already resolved
+  // the workspace against the home directory.
+  if (!process.argv.includes('--allow-home')) {
+    redirectHomeWorkspaceToTmp();
+  }
 
   // Listen for admin controls from parent process (IPC) in non-sandbox mode. In
   // sandbox mode, we re-fetch the admin controls from the server once we enter
