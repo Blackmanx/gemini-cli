@@ -299,6 +299,7 @@ export function buildAvailableModels(
         shouldShowPreviewModels,
         useGemini31,
         useLatestFlash,
+        useLatestFlashLite,
       ),
     },
   ];

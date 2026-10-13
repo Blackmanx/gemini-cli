@@ -29,19 +29,22 @@ const HISTORY_TURNS_FOR_CONTEXT = 4;
 const HISTORY_SEARCH_WINDOW = 20;
 
 const FLASH_MODEL = 'flash';
+const FLASH_LITE_MODEL = 'flash-lite';
 const PRO_MODEL = 'pro';
 
 const CLASSIFIER_SYSTEM_PROMPT = `
-You are a specialized Task Routing AI. Your sole function is to analyze the user's request and classify its complexity. Choose between \`${FLASH_MODEL}\` (SIMPLE) or \`${PRO_MODEL}\` (COMPLEX).
-1.  \`${FLASH_MODEL}\`: A fast, efficient model for simple, well-defined tasks.
-2.  \`${PRO_MODEL}\`: A powerful, advanced model for complex, open-ended, or multi-step tasks.
+You are a specialized Task Routing AI. Your sole function is to analyze the user's request and classify its complexity. Choose between \`${FLASH_LITE_MODEL}\` (TRIVIAL), \`${FLASH_MODEL}\` (SIMPLE) or \`${PRO_MODEL}\` (COMPLEX).
+1.  \`${FLASH_LITE_MODEL}\`: a fast, cheap model for bounded, read-only work: reading files, summarizing text, drafting a commit message, questions about an attached image or screenshot.
+2.  \`${FLASH_MODEL}\`: A fast, efficient model for simple, well-defined tasks.
+3.  \`${PRO_MODEL}\`: A powerful, advanced model for complex, open-ended, or multi-step tasks.
 <complexity_rubric>
 A task is COMPLEX (Choose \`${PRO_MODEL}\`) if it meets ONE OR MORE of the following criteria:
 1.  **High Operational Complexity (Est. 4+ Steps/Tool Calls):** Requires dependent actions, significant planning, or multiple coordinated changes.
 2.  **Strategic Planning & Conceptual Design:** Asking "how" or "why." Requires advice, architecture, or high-level strategy.
 3.  **High Ambiguity or Large Scope (Extensive Investigation):** Broadly defined requests requiring extensive investigation.
 4.  **Deep Debugging & Root Cause Analysis:** Diagnosing unknown or complex problems from symptoms.
-A task is SIMPLE (Choose \`${FLASH_MODEL}\`) if it is highly specific, bounded, and has Low Operational Complexity (Est. 1-3 tool calls). Operational simplicity overrides strategic phrasing.
+A task is TRIVIAL (Choose \`${FLASH_LITE_MODEL}\`) if it is read-only and bounded: reading or listing, summarizing, a commit message from a diff, or a question about an attached image.
+A task is SIMPLE (Choose \`${FLASH_MODEL}\`) if it is highly specific, bounded, and has Low Operational Complexity (Est. 1-3 tool calls) that goes beyond reading. Operational simplicity overrides strategic phrasing.
 </complexity_rubric>
 **Output Format:**
 Respond *only* in JSON format according to the following schema. Do not include any text outside the JSON structure.
@@ -54,7 +57,7 @@ Respond *only* in JSON format according to the following schema. Do not include 
     },
     "model_choice": {
       "type": "string",
-      "enum": ["${FLASH_MODEL}", "${PRO_MODEL}"]
+      "enum": ["${FLASH_LITE_MODEL}", "${FLASH_MODEL}", "${PRO_MODEL}"]
     }
   },
   "required": ["reasoning", "model_choice"]
@@ -71,8 +74,8 @@ Respond *only* in JSON format according to the following schema. Do not include 
 *User Prompt:* "list the files in the current directory"
 *Your JSON Output:*
 {
-  "reasoning": "This is a direct command requiring a single tool call (ls). It has Low Operational Complexity (1 step).",
-  "model_choice": "${FLASH_MODEL}"
+  "reasoning": "This is a direct command requiring a single tool call (ls). It is read-only and bounded.",
+  "model_choice": "${FLASH_LITE_MODEL}"
 }
 **Example 3 (High Operational Complexity):**
 *User Prompt:* "I need to add a new 'email' field to the User schema in 'src/models/user.ts', migrate the database, and update the registration endpoint."
@@ -81,12 +84,12 @@ Respond *only* in JSON format according to the following schema. Do not include 
   "reasoning": "This request involves multiple coordinated steps across different files and systems. This meets the criteria for High Operational Complexity (4+ steps).",
   "model_choice": "${PRO_MODEL}"
 }
-**Example 4 (Simple Read):**
+**Example 4 (Trivial Read):**
 *User Prompt:* "Read the contents of 'package.json'."
 *Your JSON Output:*
 {
-  "reasoning": "This is a direct command requiring a single read. It has Low Operational Complexity (1 step).",
-  "model_choice": "${FLASH_MODEL}"
+  "reasoning": "This is a direct command requiring a single read. It is read-only and bounded.",
+  "model_choice": "${FLASH_LITE_MODEL}"
 }
 
 **Example 5 (Deep Debugging):**
@@ -115,7 +118,7 @@ const RESPONSE_SCHEMA = {
     },
     model_choice: {
       type: Type.STRING,
-      enum: [FLASH_MODEL, PRO_MODEL],
+      enum: [FLASH_LITE_MODEL, FLASH_MODEL, PRO_MODEL],
     },
   },
   required: ['reasoning', 'model_choice'],
@@ -123,7 +126,7 @@ const RESPONSE_SCHEMA = {
 
 const ClassifierResponseSchema = z.object({
   reasoning: z.string(),
-  model_choice: z.enum([FLASH_MODEL, PRO_MODEL]),
+  model_choice: z.enum([FLASH_LITE_MODEL, FLASH_MODEL, PRO_MODEL]),
 });
 
 export class ClassifierStrategy implements RoutingStrategy {

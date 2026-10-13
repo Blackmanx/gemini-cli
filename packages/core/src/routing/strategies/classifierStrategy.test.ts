@@ -15,6 +15,7 @@ import {
   isFunctionResponse,
 } from '../../utils/messageInspectors.js';
 import {
+  BASE_GEMINI_FLASH_LITE_MODEL,
   DEFAULT_GEMINI_FLASH_MODEL,
   DEFAULT_GEMINI_MODEL,
   DEFAULT_GEMINI_MODEL_AUTO,
@@ -190,6 +191,34 @@ describe('ClassifierStrategy', () => {
     expect(mockBaseLlmClient.generateJson).toHaveBeenCalledOnce();
     expect(decision).toEqual({
       model: DEFAULT_GEMINI_MODEL,
+      metadata: {
+        source: 'Classifier',
+        latencyMs: expect.any(Number),
+        reasoning: mockApiResponse.reasoning,
+      },
+    });
+  });
+
+  it('should route to FLASH_LITE model for a trivial, read-only task', async () => {
+    const mockApiResponse = {
+      reasoning: 'This is a read-only task.',
+      model_choice: 'flash-lite',
+    };
+    vi.mocked(mockBaseLlmClient.generateJson).mockResolvedValue(
+      mockApiResponse,
+    );
+    mockContext.request = [{ text: 'summarize what src/utils.ts does' }];
+
+    const decision = await strategy.route(
+      mockContext,
+      mockConfig,
+      mockBaseLlmClient,
+      mockLocalLiteRtLmClient,
+    );
+
+    expect(mockBaseLlmClient.generateJson).toHaveBeenCalledOnce();
+    expect(decision).toEqual({
+      model: BASE_GEMINI_FLASH_LITE_MODEL,
       metadata: {
         source: 'Classifier',
         latencyMs: expect.any(Number),

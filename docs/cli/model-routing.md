@@ -40,6 +40,21 @@ command.
 For more details on how to configure local model routing, see
 [`gemini gemma` — Local Model Routing Setup](../core/gemma-setup.md).
 
+### Auto: three tiers by task complexity
+
+When the model is `auto` (the default), each user turn is scored 1-100 by the
+router, and the score picks one of three tiers:
+
+| Score | Tier | Model (with GA access) | Typical work |
+| --- | --- | --- | --- |
+| 1-20 | flash-lite | `gemini-3.5-flash-lite` | reading files, summarizing, commit messages, questions about an attached image |
+| 21-89 | flash | `gemini-3.8-flash` | day-to-day programming and general tasks |
+| 90-100 | pro | `gemini-3.1-pro-preview` | planning, architecture, deep debugging |
+
+The decision is made once per user turn and sticks for the whole agentic
+sequence, so tool calls and responses in the same turn keep the tier that was
+chosen. Plan mode always routes to pro regardless of the score.
+
 ### Model selection precedence
 
 The model used by Gemini CLI is determined by the following order of precedence:

@@ -28,7 +28,14 @@ import { LlmRole } from '../../telemetry/types.js';
 export const HISTORY_TURNS_FOR_CONTEXT = 8;
 
 const FLASH_MODEL = 'flash';
+const FLASH_LITE_MODEL = 'flash-lite';
 const PRO_MODEL = 'pro';
+
+// The rubric's "Trivial / Direct" band ceiling. Scores at or below it are
+// reads, summaries, commit messages and image Q&A — work a flash-lite model
+// does identically for a fraction of the cost. Above it, the resolved
+// classifier threshold still decides between flash and pro.
+export const LITE_SCORE_CEILING = 20;
 
 const RESPONSE_SCHEMA = {
   type: Type.OBJECT,
@@ -51,6 +58,10 @@ You are a specialized Task Routing AI. Your sole function is to analyze the user
 # Complexity Rubric
 **1-20: Trivial / Direct (Low Risk)**
 *   Simple, read-only commands (e.g., "read file", "list dir").
+*   Summarizing or explaining a pasted text or file.
+*   Drafting a commit message or a short status update from a diff.
+*   Questions about an attached image or screenshot ("what does this say",
+    "read the text in this picture").
 *   Exact, explicit instructions with zero ambiguity.
 *   Single-step operations.
 
@@ -68,6 +79,7 @@ You are a specialized Task Routing AI. Your sole function is to analyze the user
 
 **81-100: Extreme / Strategic (Critical Risk)**
 *   "Architect a new system" or "Migrate database".
+*   Planning work: roadmaps, task breakdowns, "how should we approach this".
 *   Highly ambiguous requests ("Make this better").
 *   Tasks requiring deep reasoning, safety checks, or novel invention.
 *   Massive scale changes (10+ files).
@@ -82,6 +94,15 @@ ${JSON.stringify(RESPONSE_SCHEMA, null, 2)}
 # Output Examples
 User: read package.json
 Model: {"complexity_reasoning": "Simple read operation.", "complexity_score": 10}
+
+User: Summarize what this file does in two lines.
+Model: {"complexity_reasoning": "Summarizing a single pasted file.", "complexity_score": 5}
+
+User: Write a commit message for these changes.
+Model: {"complexity_reasoning": "Drafting a commit message from the diff.", "complexity_score": 10}
+
+User: What does this screenshot show? [image attached]
+Model: {"complexity_reasoning": "Reading an attached image.", "complexity_score": 10}
 
 User: Rename the 'data' variable to 'userData' in utils.ts
 Model: {"complexity_reasoning": "Single file, specific edit.", "complexity_score": 30}
@@ -231,7 +252,7 @@ export class NumericalClassifierStrategy implements RoutingStrategy {
   ): Promise<{
     threshold: number;
     groupLabel: string;
-    modelAlias: typeof FLASH_MODEL | typeof PRO_MODEL;
+    modelAlias: typeof FLASH_LITE_MODEL | typeof FLASH_MODEL | typeof PRO_MODEL;
   }> {
     const threshold = await config.getResolvedClassifierThreshold();
     const remoteThresholdValue = await config.getClassifierThreshold();
@@ -243,7 +264,14 @@ export class NumericalClassifierStrategy implements RoutingStrategy {
       groupLabel = 'Default';
     }
 
-    const modelAlias = score >= threshold ? PRO_MODEL : FLASH_MODEL;
+    // Trivial work goes to flash-lite whatever the pro threshold says; the
+    // threshold only splits the rest between flash and pro.
+    const modelAlias =
+      score <= LITE_SCORE_CEILING
+        ? FLASH_LITE_MODEL
+        : score >= threshold
+          ? PRO_MODEL
+          : FLASH_MODEL;
 
     return { threshold, groupLabel, modelAlias };
   }

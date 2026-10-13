@@ -183,6 +183,7 @@ export function getAutoModelDescription(
   hasAccessToPreview: boolean,
   useGemini3_1: boolean = false,
   useLatestFlash: boolean = false,
+  useLatestFlashLite: boolean = false,
 ) {
   const proModel = hasAccessToPreview
     ? useGemini3_1
@@ -194,7 +195,12 @@ export function getAutoModelDescription(
       ? LATEST_GEMINI_FLASH_MODEL
       : PREVIEW_GEMINI_FLASH_MODEL
     : DEFAULT_GEMINI_FLASH_MODEL;
-  return `Let Gemini CLI decide the best model for the task: ${getDisplayString(proModel)}, ${getDisplayString(flashModel)}`;
+  const flashLiteModel = hasAccessToPreview
+    ? useLatestFlashLite
+      ? LATEST_GEMINI_FLASH_LITE_MODEL
+      : BASE_GEMINI_FLASH_LITE_MODEL
+    : DEFAULT_GEMINI_FLASH_LITE_MODEL;
+  return `Let Gemini CLI decide the best model for the task: ${getDisplayString(proModel)}, ${getDisplayString(flashModel)}, ${getDisplayString(flashLiteModel)}`;
 }
 
 /**

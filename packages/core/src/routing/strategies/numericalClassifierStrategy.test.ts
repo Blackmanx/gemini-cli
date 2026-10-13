@@ -21,6 +21,8 @@ import {
   DEFAULT_GEMINI_MODEL_AUTO,
   DEFAULT_GEMINI_MODEL,
   LATEST_GEMINI_FLASH_MODEL,
+  BASE_GEMINI_FLASH_LITE_MODEL,
+  LATEST_GEMINI_FLASH_LITE_MODEL,
 } from '../../config/models.js';
 import { promptIdContext } from '../../utils/promptIdContext.js';
 import type { Content } from '@google/genai';
@@ -186,6 +188,65 @@ describe('NumericalClassifierStrategy', () => {
           reasoning: expect.stringContaining('Score: 80 / Threshold: 90'),
         },
       });
+    });
+
+    it('should route to FLASH_LITE when score is 20 or below', async () => {
+      const mockApiResponse = {
+        complexity_reasoning: 'Read-only task',
+        complexity_score: 10,
+      };
+      vi.mocked(mockBaseLlmClient.generateJson).mockResolvedValue(
+        mockApiResponse,
+      );
+
+      const decision = await strategy.route(
+        mockContext,
+        mockConfig,
+        mockBaseLlmClient,
+        mockLocalLiteRtLmClient,
+      );
+
+      expect(decision?.model).toBe(BASE_GEMINI_FLASH_LITE_MODEL);
+      expect(decision?.metadata.reasoning).toContain('Score: 10');
+    });
+
+    it('should route to FLASH just above the lite ceiling', async () => {
+      const mockApiResponse = {
+        complexity_reasoning: 'Small edit',
+        complexity_score: 21,
+      };
+      vi.mocked(mockBaseLlmClient.generateJson).mockResolvedValue(
+        mockApiResponse,
+      );
+
+      const decision = await strategy.route(
+        mockContext,
+        mockConfig,
+        mockBaseLlmClient,
+        mockLocalLiteRtLmClient,
+      );
+
+      expect(decision?.model).toBe(PREVIEW_GEMINI_FLASH_MODEL);
+    });
+
+    it('should use the latest flash-lite model when available', async () => {
+      mockConfig.hasLatestFlashLiteGAAccess = vi.fn().mockReturnValue(true);
+      const mockApiResponse = {
+        complexity_reasoning: 'Summarize a file',
+        complexity_score: 5,
+      };
+      vi.mocked(mockBaseLlmClient.generateJson).mockResolvedValue(
+        mockApiResponse,
+      );
+
+      const decision = await strategy.route(
+        mockContext,
+        mockConfig,
+        mockBaseLlmClient,
+        mockLocalLiteRtLmClient,
+      );
+
+      expect(decision?.model).toBe(LATEST_GEMINI_FLASH_LITE_MODEL);
     });
 
     it('should route to PRO when score is 90 or above', async () => {
@@ -901,8 +962,8 @@ describe('NumericalClassifierStrategy', () => {
       vi.mocked(mockConfig.getModel).mockReturnValue(PREVIEW_GEMINI_MODEL_AUTO);
 
       const mockApiResponse = {
-        complexity_reasoning: 'Simple task',
-        complexity_score: 10,
+        complexity_reasoning: 'Routine task',
+        complexity_score: 50,
       };
       vi.mocked(mockBaseLlmClient.generateJson).mockResolvedValue(
         mockApiResponse,
