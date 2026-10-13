@@ -424,6 +424,20 @@ install_via_npm() {
        Puedes:  1) volver a ejecutar con sudo,  o
                2) usar el método symlink (no necesita permisos):  --symlink"
   fi
+
+  # El fork también expone el bin 'gemini'. Si otro paquete npm (el oficial
+  # @google/gemini-cli, un nightly u otro fork) ya creó ese bin, npm aborta
+  # con EEXIST. Hay que liberarlo ANTES de instalar: desinstalamos los
+  # paquetes oficiales conocidos y, si aún queda un bin 'gemini' ajeno en el
+  # directorio global, lo eliminamos (vamos a poner el nuestro encima).
+  remove_npm_installs
+  local gbin
+  gbin="$(npm prefix -g 2>/dev/null)/bin/gemini"
+  if [[ -e "$gbin" || -L "$gbin" ]]; then
+    info "Liberando bin global ocupado: ${gbin}"
+    run rm -f "$gbin"
+  fi
+
   info "Instalando vía npm global: ${tgz}"
   run npm install -g "$tgz"
 }
@@ -607,11 +621,14 @@ main() {
   #    viejo. Nunca antes: así un fallo arriba no deja el sistema sin gemini.
   info "Limpiando instalaciones previas…"
   remove_fork_dirs
-  # Otros paquetes npm (los oficiales @google/…) se retiran siempre.
-  remove_npm_installs
-  # Un symlink anterior estorba si ahora usamos npm (sombrearía el binario).
   if [[ "${chosen_method}" == "npm" ]]; then
+    # El método npm ya desinstaló los paquetes oficiales ANTES de instalar
+    # (por el conflicto del bin 'gemini'); aquí solo limpiamos un symlink
+    # sobrante de una instalación previa por symlink.
     remove_symlink
+  else
+    # Método symlink: retira paquetes npm oficiales que sombrearían el binario.
+    remove_npm_installs
   fi
 
   # 9) Configuración: backup + reset SOLO en instalación nueva. En una
