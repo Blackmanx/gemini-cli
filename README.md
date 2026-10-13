@@ -71,7 +71,45 @@ conda activate gemini_env
 npm install -g @google/gemini-cli
 ```
 
-#### Install this fork (`feature/omp-port`) — from the release zip
+#### Install this fork — one command
+
+The `install.sh` script does the whole thing: it detects the latest release,
+backs up `~/.gemini`, removes any older install (npm, symlink or `~/opt`), and
+installs the newest build. It picks `npm` automatically when the global prefix
+is writable and falls back to the no-permissions symlink route otherwise.
+
+```bash
+export GITHUB_TOKEN=$(gh auth token)   # or paste a token with repo access
+curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://raw.githubusercontent.com/Blackmanx/gemini-cli/feature/omp-port/install.sh | bash
+```
+
+The repo is private, so the token is what lets `curl` read the script and lets
+the installer fetch release assets; without it you get a 404. `gh auth token`
+reuses your existing `gh` login, so that is usually all you need.
+
+**On an existing install** the same command updates instead: it compares
+versions and only downloads when a newer release exists, and it leaves
+`~/.gemini` untouched. Useful flags (pass them with `bash -s --`):
+
+| Flag                  | Effect                                              |
+| --------------------- | --------------------------------------------------- |
+| `--force`             | Reinstall even when already on the latest version   |
+| `--version <tag>`     | Install a specific release instead of the latest    |
+| `--npm` / `--symlink` | Force one install method instead of auto-detecting  |
+| `--keep-config`       | Do not reset `~/.gemini` on a fresh install         |
+| `--dry-run`           | Show what would happen without doing it             |
+| `--uninstall`         | Remove the fork (keeps `~/.gemini` and backups)     |
+
+```bash
+curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://raw.githubusercontent.com/Blackmanx/gemini-cli/feature/omp-port/install.sh \
+  | bash -s -- --force --dry-run
+```
+
+Prefer to do it by hand? The next section is the same install, step by step.
+
+#### Or install this fork manually — from the release zip
 
 Every release ships `gemini-cli-bundle.zip`: a self-contained build with no
 runtime dependencies, no clone, and no npm permissions required. This is the
