@@ -26,7 +26,7 @@ const ChecklistTitleDisplay: React.FC<{
     let total = 0;
     let completed = 0;
     for (const item of items) {
-      if (item.status !== 'cancelled') {
+      if (item.status !== 'cancelled' && item.status !== 'abandoned') {
         total += 1;
         if (item.status === 'completed') {
           completed += 1;

@@ -4,11 +4,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { render } from '../../../test-utils/render.js';
+import { render, renderWithProviders } from '../../../test-utils/render.js';
+import { act } from 'react';
 import { describe, it, expect } from 'vitest';
 import { Box } from 'ink';
 import { TodoTray } from './Todo.js';
-import { CoreToolCallStatus, type Todo } from '@google/gemini-cli-core';
+import {
+  CoreToolCallStatus,
+  makeFakeConfig,
+  type Todo,
+  type TodoPhase,
+} from '@google/gemini-cli-core';
 import { UIStateContext, type UIState } from '../../contexts/UIStateContext.js';
 import { type HistoryItem } from '../../types.js';
 
@@ -154,3 +160,76 @@ describe.each([true, false])(
     });
   },
 );
+
+describe('TodoTray phase board (live runtime)', () => {
+  const board = (): TodoPhase[] => [
+    {
+      name: 'Setup',
+      tasks: [
+        { content: 'Install deps', status: 'completed' },
+        { content: 'Scaffold app', status: 'in_progress' },
+      ],
+    },
+    {
+      name: 'Build',
+      tasks: [
+        { content: 'Add API', status: 'pending' },
+        { content: 'Wait on design', status: 'blocked', blocker: 'needs Figma' },
+      ],
+    },
+  ];
+
+  it('expanded renders each phase header, task labels, and a blocker note', async () => {
+    const config = makeFakeConfig();
+    config.getTodoRuntime().setPhases(board());
+    const { lastFrame, unmount } = await renderWithProviders(<TodoTray />, {
+      config,
+      uiState: { showFullTodos: true },
+    });
+    const frame = lastFrame();
+    expect(frame).toContain('Setup');
+    expect(frame).toContain('Build');
+    expect(frame).toContain('Install deps');
+    expect(frame).toContain('Scaffold app');
+    expect(frame).toContain('Add API');
+    expect(frame).toContain('Wait on design — needs Figma');
+    unmount();
+  });
+
+  it('collapsed shows only the active phase’s in-progress task', async () => {
+    const config = makeFakeConfig();
+    config.getTodoRuntime().setPhases(board());
+    const { lastFrame, unmount } = await renderWithProviders(<TodoTray />, {
+      config,
+      uiState: { showFullTodos: false },
+    });
+    const frame = lastFrame();
+    expect(frame).toContain('Scaffold app'); // the in-progress task
+    expect(frame).not.toContain('Install deps'); // completed → hidden when collapsed
+    expect(frame).not.toContain('Add API'); // other phase → hidden when collapsed
+    unmount();
+  });
+
+  it('re-renders when the runtime emits a change', async () => {
+    const config = makeFakeConfig();
+    config.getTodoRuntime().setPhases(board());
+    const { lastFrame, unmount, waitUntilReady } = await renderWithProviders(
+      <TodoTray />,
+      { config, uiState: { showFullTodos: true } },
+    );
+    expect(lastFrame()).toContain('Scaffold app');
+
+    await act(async () => {
+      config.getTodoRuntime().setPhases([
+        { name: 'Done', tasks: [{ content: 'All finished', status: 'completed' }] },
+      ]);
+    });
+    await waitUntilReady();
+
+    const frame = lastFrame();
+    expect(frame).toContain('Done');
+    expect(frame).toContain('All finished');
+    expect(frame).not.toContain('Scaffold app');
+    unmount();
+  });
+});

@@ -583,6 +583,10 @@ export const AppContainer = (props: AppContainerProps) => {
 
       startAutoMemoryIfEnabled(config);
 
+      // Restore session state a previous run persisted (never sent to the
+      // model; the todo board is rehydrated so /resume keeps the checklist).
+      config.restorePersistedTodo(resumedSessionData?.conversation.todo);
+
       const sessionStartSource = resumedSessionData
         ? SessionStartSource.Resume
         : SessionStartSource.Startup;
