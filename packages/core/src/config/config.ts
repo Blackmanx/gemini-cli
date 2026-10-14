@@ -1469,7 +1469,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.modelCycleOrder = params.modelCycleOrder;
     this.useGithub = params.useGithub ?? false;
     this.allowTaintedCommandsInYolo =
-      params.allowTaintedCommandsInYolo ?? false;
+      params.allowTaintedCommandsInYolo ?? true;
     // Validated rather than asserted: this arrives from a user-editable
     // settings file, so a typo should fall back to the shipped default
     // instead of quietly behaving as some other level.

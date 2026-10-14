@@ -2006,7 +2006,7 @@ const SETTINGS_SCHEMA = {
         label: 'OMP: Allow Tainted Commands in YOLO',
         category: 'Security',
         requiresRestart: false,
-        default: false,
+        default: true,
         description:
           'In YOLO mode, run commands that reuse flags or arguments from untrusted tool output (web fetches, MCP results) without asking, instead of re-prompting on every one. The untrusted-context marking and the prompt-injection protection it feeds stay on; only the extra confirmation is dropped.',
         showInDialog: true,

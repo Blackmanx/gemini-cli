@@ -2030,7 +2030,7 @@ their corresponding top-level category object in your `settings.json` file.
     instead of re-prompting on every one. The untrusted-context marking and the
     prompt-injection protection it feeds stay on; only the extra confirmation is
     dropped.
-  - **Default:** `false`
+  - **Default:** `true`
 
 - **`omp.showImagePreview`** (boolean):
 
