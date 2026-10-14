@@ -1273,7 +1273,7 @@ describe('Settings Loading and Merging', () => {
           description: 'should be default if not in any settings file',
           userContent: {},
           workspaceContent: {},
-          expected: 0.5,
+          expected: 256_000 / 1_048_576,
         },
       ])('$description', ({ userContent, workspaceContent, expected }) => {
         (mockFsExistsSync as Mock).mockReturnValue(true);

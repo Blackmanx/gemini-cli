@@ -39,10 +39,13 @@ import {
 import { PreCompressTrigger } from '../hooks/types.js';
 
 /**
- * Default threshold for compression token count as a fraction of the model's
- * token limit. If the chat history exceeds this threshold, it will be compressed.
+ * Default compaction target: auto-compact once the chat reaches ~256k tokens.
+ * Expressed as a fraction of the default 1,048,576-token Gemini window (the
+ * literal keeps this module free of a tokenLimits import that tests mock;
+ * 1_048_576 is DEFAULT_TOKEN_LIMIT) so it still scales for models whose
+ * `tokenLimit()` differs.
  */
-export const DEFAULT_COMPRESSION_TOKEN_THRESHOLD = 0.5;
+export const DEFAULT_COMPRESSION_TOKEN_THRESHOLD = 256_000 / 1_048_576;
 
 /**
  * Number of recent tool response turns that must be preserved at full fidelity.

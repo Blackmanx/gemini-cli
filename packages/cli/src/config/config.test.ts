@@ -2097,7 +2097,8 @@ describe('loadCliConfig compressionThreshold', () => {
     const argv = await parseArguments(createTestMergedSettings());
     const settings = createTestMergedSettings();
     const config = await loadCliConfig(settings, 'test-session', argv);
-    expect(await config.getCompressionThreshold()).toBe(0.5);
+    // Default is ~256k tokens (256_000 over Gemini's 1,048,576-token window).
+    expect(await config.getCompressionThreshold()).toBe(256_000 / 1_048_576);
   });
 });
 

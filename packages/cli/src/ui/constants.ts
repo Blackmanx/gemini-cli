@@ -57,7 +57,10 @@ export const SUBAGENT_MAX_LINES = 15;
 export const MIN_TERMINAL_WIDTH_FOR_FULL_LABEL = 100;
 
 /** Default context usage fraction at which to trigger compression */
-export const DEFAULT_COMPRESSION_THRESHOLD = 0.5;
+// Keep in sync with core DEFAULT_COMPRESSION_TOKEN_THRESHOLD (256k tokens on
+// Gemini's 1,048,576-token window). Only a fallback for the rare case where
+// settings carry no compressionThreshold; the UI normally reads the merged value.
+export const DEFAULT_COMPRESSION_THRESHOLD = 256_000 / 1_048_576;
 
 /** Documentation URL for skills setup and configuration */
 export const SKILLS_DOCS_URL =

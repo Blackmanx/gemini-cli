@@ -11,6 +11,7 @@
 
 import {
   DEFAULT_TRUNCATE_TOOL_OUTPUT_THRESHOLD,
+  DEFAULT_COMPRESSION_TOKEN_THRESHOLD,
   DEFAULT_GEMINI_FLASH_LITE_MODEL,
   DEFAULT_MODEL_CONFIGS,
   EDITOR_OPTIONS,
@@ -1150,9 +1151,9 @@ const SETTINGS_SCHEMA = {
         label: 'Context Compression Threshold',
         category: 'Model',
         requiresRestart: true,
-        default: 0.5 as number,
+        default: DEFAULT_COMPRESSION_TOKEN_THRESHOLD,
         description:
-          'The fraction of context usage at which to trigger context compression (e.g. 0.2, 0.3).',
+          'The fraction of context usage at which to trigger context compression. The default (≈0.244) compacts at ~256k tokens on a 1M-token window.',
         showInDialog: true,
         unit: '%',
       },
