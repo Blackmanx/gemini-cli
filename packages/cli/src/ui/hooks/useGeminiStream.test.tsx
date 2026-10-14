@@ -388,6 +388,8 @@ describe('useGeminiStream', () => {
     })),
     getIdeMode: vi.fn(() => false),
     getEnableHooks: vi.fn(() => false),
+    // The magic keywords notice wrapper calls this before sending the query.
+    getMagicKeywordsSettings: vi.fn(() => undefined),
   } as unknown as Config;
 
   beforeEach(() => {
