@@ -58,7 +58,30 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
   };
 });
 
+// Warm clipboard bridge: by default it is unavailable so WSL tests exercise
+// the one-shot powershell.exe fallback; dedicated tests override it.
+const { mockBridgeGetImagePng, bridgeMock } = vi.hoisted(() => {
+  const mockBridgeGetImagePng = vi.fn();
+  const bridgeMock = {
+    getImagePng: mockBridgeGetImagePng,
+    hasImage: vi.fn(),
+    start: vi.fn(() => Promise.resolve()),
+    warmUp: vi.fn(),
+    stop: vi.fn(),
+    request: vi.fn(),
+    running: false,
+  };
+  return { mockBridgeGetImagePng, bridgeMock };
+});
+vi.mock('./wslClipboardBridge.js', () => ({
+  getWslClipboardBridge: vi.fn(() => bridgeMock),
+  warmUpClipboardBridge: vi.fn(),
+  stopClipboardBridge: vi.fn(),
+  WslClipboardBridge: class {},
+}));
+
 import { spawnAsync } from '@google/gemini-cli-core';
+import { getWslClipboardBridge } from './wslClipboardBridge.js';
 // Keep static imports for stateless functions
 import {
   cleanupOldClipboardImages,
@@ -100,6 +123,14 @@ describe('clipboardUtils', () => {
     delete process.env['WSL_DISTRO_NAME'];
     delete process.env['WSL_INTEROP'];
     delete process.env['WSLLENV'];
+    // Default: bridge unavailable, so WSL saves take the one-shot fallback
+    // (unless a test opts into the bridge explicitly).
+    vi.mocked(getWslClipboardBridge).mockReturnValue(
+      bridgeMock as unknown as ReturnType<typeof getWslClipboardBridge>,
+    );
+    mockBridgeGetImagePng.mockRejectedValue(
+      new Error('clipboard bridge unavailable'),
+    );
 
     // Reset modules to clear internal state (linuxClipboardTool variable)
     vi.resetModules();
@@ -385,6 +416,7 @@ describe('clipboardUtils', () => {
           '-Command',
           expect.stringContaining('ContainsImage'),
         ]),
+        expect.objectContaining({ timeout: expect.any(Number) }),
       );
     });
 
@@ -438,6 +470,65 @@ describe('clipboardUtils', () => {
       await expect(
         clipboardUtils.saveClipboardImage(mockTargetDir),
       ).resolves.toBe(null);
+    });
+
+    it('clipboardHasImage bounds the Windows probe with a timeout', async () => {
+      vi.mocked(spawnAsync).mockResolvedValueOnce({
+        stdout: 'False\r\n',
+        stderr: '',
+      });
+
+      await clipboardUtils.clipboardHasImage();
+
+      expect(spawnAsync).toHaveBeenCalledWith(
+        'powershell.exe',
+        expect.any(Array),
+        expect.objectContaining({ timeout: expect.any(Number) }),
+      );
+    });
+
+    it('saveClipboardImageForPaste uses the warm bridge without spawning powershell', async () => {
+      const png = Buffer.from('bridge-png-bytes');
+      mockBridgeGetImagePng.mockResolvedValue(png);
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      const result =
+        await clipboardUtils.saveClipboardImageForPaste(mockTargetDir);
+
+      expect(result.status).toBe('saved');
+      if (result.status === 'saved') {
+        expect(result.filePath).toContain(mockTempDir);
+        expect(result.filePath).toMatch(/clipboard-\d+\.png$/);
+      }
+      expect(spawnAsync).not.toHaveBeenCalled();
+      expect(fs.writeFile).toHaveBeenCalledWith(
+        expect.stringContaining('clipboard-'),
+        png,
+      );
+    });
+
+    it('saveClipboardImageForPaste reports no-image without falling through when the bridge answers', async () => {
+      mockBridgeGetImagePng.mockResolvedValue(null);
+
+      await expect(
+        clipboardUtils.saveClipboardImageForPaste(mockTargetDir),
+      ).resolves.toEqual({ status: 'no-image' });
+      expect(spawnAsync).not.toHaveBeenCalled();
+    });
+
+    it('saveClipboardImageForPaste falls back to the one-shot save when the bridge fails', async () => {
+      const png = Buffer.from('one-shot-png');
+      vi.mocked(spawnAsync).mockResolvedValueOnce({
+        stdout: `B64:${png.toString('base64')}`,
+        stderr: '',
+      });
+      vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+      const result =
+        await clipboardUtils.saveClipboardImageForPaste(mockTargetDir);
+
+      expect(result.status).toBe('saved');
+      expect(spawnAsync).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -103,6 +103,7 @@ vi.mock('../hooks/useInputHistory.js');
 vi.mock('../hooks/useReverseSearchCompletion.js');
 vi.mock('clipboardy');
 vi.mock('../utils/clipboardUtils.js');
+vi.mock('../utils/wslClipboardBridge.js');
 vi.mock('../hooks/useKittyKeyboardProtocol.js');
 vi.mock('./ListeningIndicator.js', () => ({
   ListeningIndicator: vi.fn(({ color }) => <Text color={color}>~~~ </Text>),
@@ -282,6 +283,10 @@ describe('InputPrompt', () => {
     // Pin the default escape window so ESC tests behave the same on hosts
     // where WSL_DISTRO_NAME widens it (see WSL_ESC_TIMEOUT).
     vi.stubEnv('WSL_DISTRO_NAME', undefined);
+    // Default clipboard state: no image (image tests override per scenario).
+    vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockResolvedValue({
+      status: 'no-image',
+    });
     coreEvents.removeAllListeners();
     vi.spyOn(
       terminalCapabilityManager,
@@ -896,18 +901,19 @@ describe('InputPrompt', () => {
 
   describe('clipboard image paste', () => {
     beforeEach(() => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(false);
-      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(null);
+      vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockResolvedValue({
+        status: 'no-image',
+      });
       vi.mocked(clipboardUtils.cleanupOldClipboardImages).mockResolvedValue(
         undefined,
       );
     });
 
     it('should handle Ctrl+V when clipboard has an image', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(true);
-      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(
-        '/test/.gemini-clipboard/clipboard-123.png',
-      );
+      vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockResolvedValue({
+        status: 'saved',
+        filePath: '/test/.gemini-clipboard/clipboard-123.png',
+      });
 
       const { stdin, unmount } = await renderWithProviders(
         <TestInputPrompt {...props} />,
@@ -918,8 +924,7 @@ describe('InputPrompt', () => {
         stdin.write('\x16'); // Ctrl+V
       });
       await waitFor(() => {
-        expect(clipboardUtils.clipboardHasImage).toHaveBeenCalled();
-        expect(clipboardUtils.saveClipboardImage).toHaveBeenCalledWith(
+        expect(clipboardUtils.saveClipboardImageForPaste).toHaveBeenCalledWith(
           props.config.getTargetDir(),
         );
         expect(clipboardUtils.cleanupOldClipboardImages).toHaveBeenCalledWith(
@@ -931,8 +936,6 @@ describe('InputPrompt', () => {
     });
 
     it('should not insert anything when clipboard has no image', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(false);
-
       const { stdin, unmount } = await renderWithProviders(
         <TestInputPrompt {...props} />,
       );
@@ -941,16 +944,16 @@ describe('InputPrompt', () => {
         stdin.write('\x16'); // Ctrl+V
       });
       await waitFor(() => {
-        expect(clipboardUtils.clipboardHasImage).toHaveBeenCalled();
+        expect(clipboardUtils.saveClipboardImageForPaste).toHaveBeenCalled();
       });
-      expect(clipboardUtils.saveClipboardImage).not.toHaveBeenCalled();
       expect(mockBuffer.setText).not.toHaveBeenCalled();
       unmount();
     });
 
     it('should handle image save failure gracefully', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(true);
-      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(null);
+      vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockResolvedValue({
+        status: 'unavailable',
+      });
 
       const { stdin, unmount } = await renderWithProviders(
         <TestInputPrompt {...props} />,
@@ -960,7 +963,7 @@ describe('InputPrompt', () => {
         stdin.write('\x16'); // Ctrl+V
       });
       await waitFor(() => {
-        expect(clipboardUtils.saveClipboardImage).toHaveBeenCalled();
+        expect(clipboardUtils.saveClipboardImageForPaste).toHaveBeenCalled();
       });
       expect(mockBuffer.setText).not.toHaveBeenCalled();
       unmount();
@@ -972,8 +975,10 @@ describe('InputPrompt', () => {
         '.gemini-clipboard',
         'clipboard-456.png',
       );
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(true);
-      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(imagePath);
+      vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockResolvedValue({
+        status: 'saved',
+        filePath: imagePath,
+      });
 
       // Set initial text and cursor position
       mockBuffer.text = 'Hello world';
@@ -1006,10 +1011,10 @@ describe('InputPrompt', () => {
     });
 
     it('should paste an image with Ctrl+Shift+V without pasting text', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(true);
-      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(
-        '/test/.gemini-clipboard/clipboard-789.png',
-      );
+      vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockResolvedValue({
+        status: 'saved',
+        filePath: '/test/.gemini-clipboard/clipboard-789.png',
+      });
 
       const { stdin, unmount } = await renderWithProviders(
         <TestInputPrompt {...props} />,
@@ -1021,7 +1026,7 @@ describe('InputPrompt', () => {
       });
 
       await waitFor(() => {
-        expect(clipboardUtils.saveClipboardImage).toHaveBeenCalledWith(
+        expect(clipboardUtils.saveClipboardImageForPaste).toHaveBeenCalledWith(
           props.config.getTargetDir(),
         );
         expect(mockBuffer.replaceRangeByOffset).toHaveBeenCalled();
@@ -1031,10 +1036,10 @@ describe('InputPrompt', () => {
     });
 
     it('should paste an image with Alt+Shift+V, which terminals do not steal', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(true);
-      vi.mocked(clipboardUtils.saveClipboardImage).mockResolvedValue(
-        '/test/.gemini-clipboard/clipboard-790.png',
-      );
+      vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockResolvedValue({
+        status: 'saved',
+        filePath: '/test/.gemini-clipboard/clipboard-790.png',
+      });
 
       const { stdin, unmount } = await renderWithProviders(
         <TestInputPrompt {...props} />,
@@ -1047,7 +1052,7 @@ describe('InputPrompt', () => {
       });
 
       await waitFor(() => {
-        expect(clipboardUtils.saveClipboardImage).toHaveBeenCalledWith(
+        expect(clipboardUtils.saveClipboardImageForPaste).toHaveBeenCalledWith(
           props.config.getTargetDir(),
         );
         expect(mockBuffer.replaceRangeByOffset).toHaveBeenCalled();
@@ -1057,7 +1062,6 @@ describe('InputPrompt', () => {
     });
 
     it('should say so when Ctrl+Shift+V finds no image, instead of pasting text', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(false);
       const emitSpy = vi.spyOn(appEvents, 'emit');
 
       const { stdin, unmount } = await renderWithProviders(
@@ -1085,7 +1089,7 @@ describe('InputPrompt', () => {
       const debugLoggerErrorSpy = vi
         .spyOn(debugLogger, 'error')
         .mockImplementation(() => {});
-      vi.mocked(clipboardUtils.clipboardHasImage).mockRejectedValue(
+      vi.mocked(clipboardUtils.saveClipboardImageForPaste).mockRejectedValue(
         new Error('Clipboard error'),
       );
 
@@ -1111,7 +1115,6 @@ describe('InputPrompt', () => {
 
   describe('clipboard text paste', () => {
     it('should insert text from clipboard on Ctrl+V', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(false);
       vi.mocked(clipboardy.read).mockResolvedValue('pasted text');
       vi.mocked(mockBuffer.replaceRangeByOffset).mockClear();
 
@@ -1134,7 +1137,6 @@ describe('InputPrompt', () => {
     });
 
     it('should use OSC 52 when useOSC52Paste setting is enabled', async () => {
-      vi.mocked(clipboardUtils.clipboardHasImage).mockResolvedValue(false);
       const settings = createMockSettings({
         experimental: { useOSC52Paste: true },
       });

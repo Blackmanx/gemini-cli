@@ -3320,6 +3320,13 @@
           "default": false,
           "type": "boolean"
         },
+        "showImagePreview": {
+          "title": "OMP: Show Image Preview",
+          "description": "Show a thumbnail preview above the input for images referenced with @ (for example screenshots pasted from the clipboard). Non-PNG images show a path and size label instead.",
+          "markdownDescription": "Show a thumbnail preview above the input for images referenced with @ (for example screenshots pasted from the clipboard). Non-PNG images show a path and size label instead.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
+          "type": "boolean"
+        },
         "forceLatestFlashLite": {
           "title": "OMP: Show gemini-3.5-flash-lite",
           "description": "Offer gemini-3.5-flash-lite in /model even when the server has not sent its GA flag. Without this the Flash Lite entry silently shows the older 3.1 model instead. Only turn it on if your account is actually served that model.",

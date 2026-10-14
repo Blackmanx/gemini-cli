@@ -64,10 +64,12 @@ import {
 } from '../utils/highlight.js';
 import { useKittyKeyboardProtocol } from '../hooks/useKittyKeyboardProtocol.js';
 import {
-  clipboardHasImage,
-  saveClipboardImage,
+  saveClipboardImageForPaste,
   cleanupOldClipboardImages,
 } from '../utils/clipboardUtils.js';
+import { warmUpClipboardBridge } from '../utils/wslClipboardBridge.js';
+import { useImagePreviews } from '../hooks/useImagePreviews.js';
+import { ImagePreviewDisplay } from './ImagePreviewDisplay.js';
 import {
   isAutoExecutableCommand,
   isSlashCommand,
@@ -240,6 +242,14 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
   const keyMatchers = useKeyMatchers();
   const { stdout } = useStdout();
   const { merged: settings } = useSettings();
+  // Inline previews of @-referenced images (e.g. just pasted screenshots),
+  // toggled from the OMP settings.
+  const showImagePreviewsEnabled = settings.omp?.showImagePreview !== false;
+  const imagePreviews = useImagePreviews(
+    showImagePreviewsEnabled ? buffer.text : '',
+    config.getTargetDir(),
+    showImagePreviewsEnabled,
+  );
   const kittyProtocol = useKittyKeyboardProtocol();
   const isShellFocused = useShellFocusState();
   const {
@@ -531,17 +541,25 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
     return false;
   }, [buffer, popAllMessages, inputHistory]);
 
+  // WSL pays ~1.4s per powershell.exe spawn (interop + assembly load); warm
+  // the clipboard bridge in the background so image pastes are near-instant.
+  useEffect(() => {
+    if (!process.stdin.isTTY || process.env['VITEST']) {
+      return;
+    }
+    warmUpClipboardBridge();
+  }, []);
+
   // Save an image from the clipboard and insert an @path reference at the
   // cursor. Returns true when an image was inserted.
   const insertClipboardImage = useCallback(async (): Promise<boolean> => {
-    if (!(await clipboardHasImage())) {
+    // One call that probes and saves: on WSL a single warm-bridge round-trip
+    // (or a single one-shot spawn as fallback) instead of probe + save.
+    const result = await saveClipboardImageForPaste(config.getTargetDir());
+    if (result.status !== 'saved') {
       return false;
     }
-
-    const imagePath = await saveClipboardImage(config.getTargetDir());
-    if (!imagePath) {
-      return false;
-    }
+    const imagePath = result.filePath;
 
     // Clean up old images
     cleanupOldClipboardImages(config.getTargetDir()).catch(() => {
@@ -1856,6 +1874,9 @@ export const InputPrompt: React.FC<InputPromptProps> = ({
           height={0}
         />
       ) : null}
+      {showImagePreviewsEnabled && imagePreviews.length > 0 && (
+        <ImagePreviewDisplay entries={imagePreviews} />
+      )}
       <HalfLinePaddedBox
         backgroundBaseColor={theme.background.input}
         backgroundOpacity={1}

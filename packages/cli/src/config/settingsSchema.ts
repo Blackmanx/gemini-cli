@@ -2011,6 +2011,16 @@ const SETTINGS_SCHEMA = {
           'In YOLO mode, run commands that reuse flags or arguments from untrusted tool output (web fetches, MCP results) without asking, instead of re-prompting on every one. The untrusted-context marking and the prompt-injection protection it feeds stay on; only the extra confirmation is dropped.',
         showInDialog: true,
       },
+      showImagePreview: {
+        type: 'boolean',
+        label: 'OMP: Show Image Preview',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: true,
+        description:
+          'Show a thumbnail preview above the input for images referenced with @ (for example screenshots pasted from the clipboard). Non-PNG images show a path and size label instead.',
+        showInDialog: true,
+      },
       forceLatestFlashLite: {
         type: 'boolean',
         label: 'OMP: Show gemini-3.5-flash-lite',

@@ -14,6 +14,7 @@ import {
   escapePath,
   Storage,
 } from '@google/gemini-cli-core';
+import { getWslClipboardBridge } from './wslClipboardBridge.js';
 
 /**
  * Supported image file extensions based on Gemini API.
@@ -33,6 +34,18 @@ const PATH_PREFIX_PATTERN = /^([/~.]|[a-zA-Z]:|\\\\)/;
 
 // Track which tool works on Linux to avoid redundant checks/failures
 let linuxClipboardTool: 'wl-paste' | 'xclip' | null = null;
+
+/**
+ * Bound for one-shot clipboard probes: WSL interop or a detached Windows
+ * session can stall, and a paste must never hang the input loop forever.
+ */
+const PROBE_TIMEOUT_MS = 10000;
+
+/** Bound for one-shot clipboard save operations (screenshots can be large). */
+const SAVE_TIMEOUT_MS = 20000;
+
+/** Per-project clipboard images dir; Storage path resolution hits the disk. */
+const clipboardImagesDirCache = new Map<string, string>();
 
 // Cached WSL detection: env vars are stable for the life of the process.
 let wslDetected: boolean | null = null;
@@ -81,13 +94,17 @@ function detectWsl(): boolean {
  */
 async function wslClipboardHasImage(): Promise<boolean | null> {
   try {
-    const { stdout } = await spawnAsync('powershell.exe', [
-      '-NoProfile',
-      '-NonInteractive',
-      '-Command',
-      'Add-Type -AssemblyName System.Windows.Forms; ' +
-        'if ([System.Windows.Forms.Clipboard]::ContainsImage()) { "True" } else { "False" }',
-    ]);
+    const { stdout } = await spawnAsync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        'Add-Type -AssemblyName System.Windows.Forms; ' +
+          'if ([System.Windows.Forms.Clipboard]::ContainsImage()) { "True" } else { "False" }',
+      ],
+      { timeout: PROBE_TIMEOUT_MS },
+    );
     if (stdout.includes('True')) return true;
     if (stdout.includes('False')) return false;
     return null;
@@ -125,7 +142,7 @@ async function saveFileWithWslWindowsClipboard(
       'powershell.exe',
       ['-NoProfile', '-NonInteractive', '-Command', script],
       // Interop can stall when no Windows session is attached; never hang a paste.
-      { timeout: 20000 },
+      { timeout: SAVE_TIMEOUT_MS },
     );
 
     const line = stdout
@@ -190,6 +207,24 @@ async function saveFromCommand(
         resolve(value);
       }
     };
+
+    // Never let a wedged display server hang a paste indefinitely. The timer
+    // is a no-op once `resolved` (unref'd, so it never holds the process).
+    const timeoutTimer = setTimeout(() => {
+      if (resolved) {
+        return;
+      }
+      debugLogger.debug(
+        `${command} timed out after ${SAVE_TIMEOUT_MS}ms saving clipboard output`,
+      );
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        // Already dead.
+      }
+      safeResolve(false);
+    }, SAVE_TIMEOUT_MS);
+    timeoutTimer.unref?.();
 
     child.stdout.pipe(fileStream);
 
@@ -295,11 +330,15 @@ export async function clipboardHasImage(): Promise<boolean> {
 
   if (process.platform === 'win32') {
     try {
-      const { stdout } = await spawnAsync('powershell', [
-        '-NoProfile',
-        '-Command',
-        'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::ContainsImage()',
-      ]);
+      const { stdout } = await spawnAsync(
+        'powershell',
+        [
+          '-NoProfile',
+          '-Command',
+          'Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Clipboard]::ContainsImage()',
+        ],
+        { timeout: PROBE_TIMEOUT_MS },
+      );
       return stdout.trim() === 'True';
     } catch (error) {
       debugLogger.warn('Error checking clipboard for image:', error);
@@ -313,7 +352,9 @@ export async function clipboardHasImage(): Promise<boolean> {
 
   try {
     // Use osascript to check clipboard type
-    const { stdout } = await spawnAsync('osascript', ['-e', 'clipboard info']);
+    const { stdout } = await spawnAsync('osascript', ['-e', 'clipboard info'], {
+      timeout: PROBE_TIMEOUT_MS,
+    });
     const imageRegex =
       /«class PNGf»|TIFF picture|JPEG picture|GIF picture|«class JPEG»|«class TIFF»/;
     return imageRegex.test(stdout);
@@ -379,20 +420,43 @@ const saveFileWithXclip = async (tempFilePath: string) => {
 async function getProjectClipboardImagesDir(
   targetDir: string,
 ): Promise<string> {
+  const cached = clipboardImagesDirCache.get(targetDir);
+  if (cached !== undefined) {
+    return cached;
+  }
   const storage = new Storage(targetDir);
   await storage.initialize();
   const baseDir = storage.getProjectTempDir();
-  return path.join(baseDir, 'images');
+  const imagesDir = path.join(baseDir, 'images');
+  clipboardImagesDirCache.set(targetDir, imagesDir);
+  return imagesDir;
 }
 
+/** Clears the cached clipboard images dir (used by tests). */
+export function clearClipboardImagesDirCache(): void {
+  clipboardImagesDirCache.clear();
+}
+
+/** Why a clipboard image save did (not) happen. */
+export type ClipboardImageSaveResult =
+  | { status: 'saved'; filePath: string }
+  | { status: 'no-image' }
+  | { status: 'unavailable' };
+
 /**
- * Saves the image from clipboard to a temporary file (macOS, Windows, and Linux)
+ * Saves the image from the clipboard to a temporary file in one call,
+ * reporting *why* saving did not happen when it did not.
+ *
+ * On WSL the fast path is the warm clipboard bridge (a single pipe
+ * round-trip, no process spawn); when it cannot answer, one one-shot
+ * `powershell.exe` script both probes and saves. Other platforms probe the
+ * clipboard first and save afterwards.
+ *
  * @param targetDir The target directory to create temp files within
- * @returns The path to the saved image file, or null if no image or error
  */
-export async function saveClipboardImage(
+export async function saveClipboardImageForPaste(
   targetDir: string,
-): Promise<string | null> {
+): Promise<ClipboardImageSaveResult> {
   try {
     const tempDir = await getProjectClipboardImagesDir(targetDir);
     await fs.mkdir(tempDir, { recursive: true });
@@ -404,28 +468,47 @@ export async function saveClipboardImage(
       const tempFilePath = path.join(tempDir, `clipboard-${timestamp}.png`);
 
       if (isWsl()) {
-        if (await saveFileWithWslWindowsClipboard(tempFilePath)) {
-          return tempFilePath;
+        // Fast path: the warm bridge answers in a single pipe round-trip.
+        try {
+          const png = await getWslClipboardBridge().getImagePng();
+          if (png !== null) {
+            await fs.writeFile(tempFilePath, png);
+            return { status: 'saved', filePath: tempFilePath };
+          }
+          // Definitive answer: the Windows clipboard holds no image. Do not
+          // fall through to WSLg's tools, which read a different clipboard.
+          return { status: 'no-image' };
+        } catch (e) {
+          debugLogger.debug(
+            'Windows clipboard bridge unavailable; using one-shot spawn:',
+            e,
+          );
         }
-        // Interop unavailable or no image: fall through to WSLg's tools.
+
+        // Fallback: a single spawn whose script both probes and saves.
+        if (await saveFileWithWslWindowsClipboard(tempFilePath)) {
+          return { status: 'saved', filePath: tempFilePath };
+        }
         try {
           await fs.unlink(tempFilePath);
         } catch {
           /* ignore */
         }
+        // Interop down entirely: fall through to WSLg's tools below.
       }
 
       const tool = getUserLinuxClipboardTool();
+      if (tool === null) {
+        return { status: 'unavailable' };
+      }
 
-      if (tool === 'wl-paste') {
-        if (await saveFileWithWlPaste(tempFilePath)) return tempFilePath;
-        return null;
-      }
-      if (tool === 'xclip') {
-        if (await saveFileWithXclip(tempFilePath)) return tempFilePath;
-        return null;
-      }
-      return null;
+      const saved =
+        tool === 'wl-paste'
+          ? await saveFileWithWlPaste(tempFilePath)
+          : await saveFileWithXclip(tempFilePath);
+      return saved
+        ? { status: 'saved', filePath: tempFilePath }
+        : { status: 'unavailable' };
     }
 
     if (process.platform === 'win32') {
@@ -443,23 +526,23 @@ export async function saveClipboardImage(
         }
       `;
 
-      const { stdout } = await spawnAsync('powershell', [
-        '-NoProfile',
-        '-Command',
-        script,
-      ]);
+      const { stdout } = await spawnAsync(
+        'powershell',
+        ['-NoProfile', '-Command', script],
+        { timeout: SAVE_TIMEOUT_MS },
+      );
 
       if (stdout.trim() === 'success') {
         try {
           const stats = await fs.stat(tempFilePath);
           if (stats.size > 0) {
-            return tempFilePath;
+            return { status: 'saved', filePath: tempFilePath };
           }
         } catch {
           // File doesn't exist
         }
       }
-      return null;
+      return { status: 'unavailable' };
     }
 
     // AppleScript clipboard classes to try, in order of preference.
@@ -491,14 +574,16 @@ export async function saveClipboardImage(
         end try
       `;
 
-      const { stdout } = await spawnAsync('osascript', ['-e', script]);
+      const { stdout } = await spawnAsync('osascript', ['-e', script], {
+        timeout: SAVE_TIMEOUT_MS,
+      });
 
       if (stdout.trim() === 'success') {
         // Verify the file was created and has content
         try {
           const stats = await fs.stat(tempFilePath);
           if (stats.size > 0) {
-            return tempFilePath;
+            return { status: 'saved', filePath: tempFilePath };
           }
         } catch (e) {
           // File doesn't exist, continue to next format
@@ -516,11 +601,26 @@ export async function saveClipboardImage(
     }
 
     // No format worked
-    return null;
+    return { status: 'unavailable' };
   } catch (error) {
     debugLogger.warn('Error saving clipboard image:', error);
-    return null;
+    return { status: 'unavailable' };
   }
+}
+
+/**
+ * Saves the clipboard image to a temporary file, or returns null when there
+ * is no image / saving is unavailable. Thin wrapper over
+ * {@link saveClipboardImageForPaste} for callers that do not care why.
+ *
+ * @param targetDir The target directory to create temp files within
+ * @returns The path to the saved image file, or null if no image or error
+ */
+export async function saveClipboardImage(
+  targetDir: string,
+): Promise<string | null> {
+  const result = await saveClipboardImageForPaste(targetDir);
+  return result.status === 'saved' ? result.filePath : null;
 }
 
 /**

@@ -89,6 +89,13 @@ their corresponding top-level category object in your `settings.json` file.
 
 <!-- SETTINGS-AUTOGEN:START -->
 
+#### `sshProfiles`
+
+- **`sshProfiles`** (object):
+  - **Description:** Saved SSH servers, created with /ssh-add. Passwords are
+    never stored here; they go to the OS keychain.
+  - **Default:** `{}`
+
 #### `policyPaths`
 
 - **`policyPaths`** (array):
@@ -808,7 +815,11 @@ their corresponding top-level category object in your `settings.json` file.
               {
                 "googleSearch": {}
               }
-            ]
+            ],
+            "maxOutputTokens": 8192,
+            "thinkingConfig": {
+              "thinkingBudget": 512
+            }
           }
         }
       },
@@ -1949,6 +1960,15 @@ their corresponding top-level category object in your `settings.json` file.
     APPEND_SYSTEM.md, when present, takes precedence over this.
   - **Default:** `""`
 
+- **`omp.webSearchTimeoutMs`** (number):
+
+  - **Description:** Milliseconds a grounded web search may take before it is
+    abandoned and retried. Raise it when the model sits behind a slow link:
+    grounding is a second round trip on top of the normal one, and a timeout
+    shorter than the actual round trip fails every search rather than merely
+    slowing it down. Minimum 1000.
+  - **Default:** `30000`
+
 - **`omp.magicKeywords.enabled`** (boolean):
 
   - **Description:** Master switch for every magic keyword.
@@ -2012,6 +2032,13 @@ their corresponding top-level category object in your `settings.json` file.
     dropped.
   - **Default:** `false`
 
+- **`omp.showImagePreview`** (boolean):
+
+  - **Description:** Show a thumbnail preview above the input for images
+    referenced with @ (for example screenshots pasted from the clipboard).
+    Non-PNG images show a path and size label instead.
+  - **Default:** `true`
+
 - **`omp.forceLatestFlashLite`** (boolean):
 
   - **Description:** Offer gemini-3.5-flash-lite in /model even when the server
@@ -2053,7 +2080,7 @@ their corresponding top-level category object in your `settings.json` file.
     without asking.
   - **Default:** `false`
 
-- **`omp.headlessHarness`** (string):
+- **`omp.headlessHarness`** (enum):
   - **Description:** How much harness a non-interactive run (gemini -p) sends on
     every request. "full" sends the composed system prompt, the session context
     and every tool schema. "slim" replaces the composed prompt with a short one
@@ -2342,6 +2369,16 @@ their corresponding top-level category object in your `settings.json` file.
   - **Description:** Enable dynamic model configuration (definitions,
     resolutions, and chains) via settings.
   - **Default:** `false`
+  - **Requires restart:** Yes
+
+- **`experimental.agentRouter.enabled`** (boolean):
+
+  - **Description:** The router classifies every request with its own model
+    round trip before the real one — roughly 2.5-5s and one extra API call per
+    turn, doubled again by session accounting. Turn it off to always use the
+    configured default model, which also makes cache reads cover the whole
+    prompt instead of two thirds of it.
+  - **Default:** `true`
   - **Requires restart:** Yes
 
 - **`experimental.gemmaModelRouter.enabled`** (boolean):
