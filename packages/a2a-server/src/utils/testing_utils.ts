@@ -63,6 +63,7 @@ export function createMockConfig(
       getToolsByServer: vi.fn().mockReturnValue([]),
     }),
     getApprovalMode: vi.fn().mockReturnValue(ApprovalMode.DEFAULT),
+    getAllowTaintedCommandsInYolo: vi.fn().mockReturnValue(false),
     getIdeMode: vi.fn().mockReturnValue(false),
     isInteractive: () => true,
     getAllowedTools: vi.fn().mockReturnValue([]),
