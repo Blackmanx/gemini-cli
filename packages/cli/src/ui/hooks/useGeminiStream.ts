@@ -54,6 +54,12 @@ import {
   renderGoalPrompt,
   TRUE_EMPTY_RESPONSE_MESSAGE,
   applyMagicKeywordNotices,
+  TODO_TOOL_NAME,
+  MUTATOR_KINDS,
+  hasIncompleteTodos,
+  buildStopTimeReminder,
+  buildMidRunNudge,
+  isAwaitingUserAnswer,
 } from '@google/gemini-cli-core';
 import type {
   CompletedToolCall,
@@ -771,6 +777,16 @@ export const useGeminiStream = (
   const goalContinuationCountRef = useRef<number>(0);
   const MAX_GOAL_CONTINUATIONS = 3;
   const MAX_AUTO_NUDGE_ATTEMPTS = 2;
+  // Stop-time todo reminder: how many have gone out this user prompt.
+  const todoReminderCountRef = useRef<number>(0);
+  // True once a reminder is out, until a tool result shows the model progressed;
+  // stops consecutive stops from draining the whole reminder budget.
+  const todoReminderAwaitingProgressRef = useRef<boolean>(false);
+  // Mid-run nudge: mutating tool calls since the model last touched the board.
+  const mutationsSinceTodoRef = useRef<number>(0);
+  const midRunNudgeCountRef = useRef<number>(0);
+  const MID_RUN_NUDGE_MUTATION_THRESHOLD = 12;
+  const MAX_MID_RUN_NUDGES = 2;
   const submitQueryRef = useRef<
     | ((
         query: PartListUnion,
@@ -1831,6 +1847,9 @@ export const useGeminiStream = (
         }
       } else {
         const hasVisibleText = geminiMessageBuffer.trim().length > 0;
+        // Whether a prior continuation already re-prompted the model this round,
+        // so the todo reminder never stacks a second submit on top of one.
+        let continued = false;
         if (
           isContinuation &&
           !hasVisibleText &&
@@ -1847,6 +1866,7 @@ export const useGeminiStream = (
             { isContinuation: true },
             prompt_id,
           );
+          continued = true;
         }
 
         // An active goal the model walked away from is not finished. With
@@ -1866,7 +1886,38 @@ export const useGeminiStream = (
               { isContinuation: true },
               prompt_id,
             );
+            continued = true;
           }
+        }
+
+        // Stop-time todo reminder: the model produced a final answer but left
+        // todos incomplete. Re-prompt it, bounded by omp.todo.remindersMax —
+        // but stay quiet when it just asked the user a question or is waiting on
+        // an earlier reminder to show progress.
+        if (
+          !continued &&
+          hasVisibleText &&
+          config.isTodoEnabled() &&
+          config.isTodoRemindersEnabled() &&
+          todoReminderCountRef.current < config.getTodoRemindersMax() &&
+          !todoReminderAwaitingProgressRef.current &&
+          hasIncompleteTodos(config.getTodoPhases()) &&
+          !isAwaitingUserAnswer(geminiMessageBuffer)
+        ) {
+          todoReminderCountRef.current += 1;
+          todoReminderAwaitingProgressRef.current = true;
+          mutationsSinceTodoRef.current = 0;
+          const reminder = buildStopTimeReminder(
+            config.getTodoPhases(),
+            todoReminderCountRef.current,
+            config.getTodoRemindersMax(),
+          );
+          // eslint-disable-next-line @typescript-eslint/no-floating-promises
+          submitQueryRef.current?.(
+            [{ text: reminder }],
+            { isContinuation: true },
+            prompt_id,
+          );
         }
       }
       return StreamProcessingStatus.Completed;
@@ -1934,6 +1985,11 @@ export const useGeminiStream = (
             suppressedToolErrorCountRef.current = 0;
             suppressedToolErrorNoteShownRef.current = false;
             lowVerbosityFailureNoteShownRef.current = false;
+            // Todo reminders restart with each fresh user prompt.
+            todoReminderCountRef.current = 0;
+            todoReminderAwaitingProgressRef.current = false;
+            mutationsSinceTodoRef.current = 0;
+            midRunNudgeCountRef.current = 0;
           }
 
           abortControllerRef.current = new AbortController();
@@ -2350,6 +2406,28 @@ export const useGeminiStream = (
         return;
       }
 
+      // Todo-reminder bookkeeping (omp's TodoTracker.onToolResult): a completed
+      // tool round shows the model made progress, and mutating calls accrue
+      // toward the mid-run nudge until it touches the board again.
+      todoReminderAwaitingProgressRef.current = false;
+      let sawTodoTool = false;
+      let mutatingSuccesses = 0;
+      for (const toolCall of geminiTools) {
+        if (toolCall.request.name === TODO_TOOL_NAME) {
+          sawTodoTool = true;
+        } else if (
+          toolCall.status === CoreToolCallStatus.Success &&
+          MUTATOR_KINDS.includes(toolCall.tool.kind)
+        ) {
+          mutatingSuccesses += 1;
+        }
+      }
+      if (sawTodoTool) {
+        mutationsSinceTodoRef.current = 0;
+      } else {
+        mutationsSinceTodoRef.current += mutatingSuccesses;
+      }
+
       const responsesToSend: Part[] = geminiTools.flatMap(
         (toolCall) => toolCall.response.responseParts,
       );
@@ -2385,6 +2463,20 @@ export const useGeminiStream = (
         }
       }
 
+      // Mid-run nudge: enough mutating calls have accrued without the model
+      // touching the board — reconcile it before it gets too far off.
+      if (
+        config.isTodoEnabled() &&
+        config.isTodoRemindersEnabled() &&
+        midRunNudgeCountRef.current < MAX_MID_RUN_NUDGES &&
+        mutationsSinceTodoRef.current >= MID_RUN_NUDGE_MUTATION_THRESHOLD &&
+        hasIncompleteTodos(config.getTodoPhases())
+      ) {
+        mutationsSinceTodoRef.current = 0;
+        midRunNudgeCountRef.current += 1;
+        responsesToSend.push({ text: buildMidRunNudge(config.getTodoPhases()) });
+      }
+
       const prompt_ids = geminiTools.map(
         (toolCall) => toolCall.request.prompt_id,
       );
@@ -2411,6 +2503,7 @@ export const useGeminiStream = (
       maybeAddLowVerbosityFailureNote,
       setIsResponding,
       toolCalls,
+      config,
     ],
   );
 

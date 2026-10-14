@@ -362,6 +362,12 @@ describe('useGeminiStream', () => {
     getDebugMode: () => false,
     addHistory: vi.fn(),
     getSessionId: vi.fn(() => 'test-session-id'),
+    // Todo feature flags: disabled here so the stop-time/mid-run reminder logic
+    // stays inert in these stream/goal tests, which don't exercise it.
+    isTodoEnabled: vi.fn(() => false),
+    isTodoRemindersEnabled: vi.fn(() => false),
+    getTodoRemindersMax: vi.fn(() => 3),
+    getTodoPhases: vi.fn(() => []),
     setQuotaErrorOccurred: vi.fn(),
     resetBillingTurnState: vi.fn(),
     getQuotaErrorOccurred: vi.fn(() => false),
