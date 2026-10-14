@@ -7,6 +7,7 @@
 import { type ThoughtSummary } from '../utils/thoughtUtils.js';
 import { getProjectHash } from '../utils/paths.js';
 import type { PersistedGoalState } from '../goals/types.js';
+import type { PersistedTodoState } from '../todos/types.js';
 import path from 'node:path';
 import * as fs from 'node:fs';
 import { sanitizeFilenamePart } from '../utils/fileUtils.js';
@@ -1268,6 +1269,22 @@ export class ChatRecordingService {
       this.updateMetadata({ goal: state });
     } catch (error) {
       debugLogger.error('Error saving goal state to chat history.', error);
+    }
+  }
+
+  /**
+   * Stores the session's todo board, or clears it by passing `undefined`.
+   *
+   * Written as metadata rather than as a message, like the goal: a board is
+   * session state, not something the user said, so it must not reach the model
+   * on resume and must not show up in the transcript.
+   */
+  saveTodoState(state: PersistedTodoState | undefined): void {
+    if (!this.conversationFile) return;
+    try {
+      this.updateMetadata({ todo: state });
+    } catch (error) {
+      debugLogger.error('Error saving todo state to chat history.', error);
     }
   }
 

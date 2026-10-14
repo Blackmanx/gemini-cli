@@ -2084,6 +2084,47 @@ const SETTINGS_SCHEMA = {
           },
         },
       },
+      todo: {
+        type: 'object',
+        label: 'OMP: Todo',
+        category: 'Interaction',
+        requiresRestart: false,
+        default: {},
+        description:
+          'The op-based todo list, mutated with small operations instead of being resent whole. Reminders nudge the model to finish incomplete todos.',
+        showInDialog: false,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'OMP: Enable Todo Tool',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description: 'Register the todo tool.',
+            showInDialog: true,
+          },
+          reminders: {
+            type: 'boolean',
+            label: 'OMP: Todo Reminders',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: true,
+            description:
+              'When the model stops with incomplete todos, send it a reminder to continue.',
+            showInDialog: true,
+          },
+          remindersMax: {
+            type: 'number',
+            label: 'OMP: Todo Reminders Max',
+            category: 'Interaction',
+            requiresRestart: false,
+            default: 3,
+            description:
+              'How many stop-time reminders to send before giving up on the list.',
+            showInDialog: true,
+          },
+        },
+      },
       headlessHarness: {
         type: 'enum',
         label: 'OMP: Headless Harness',

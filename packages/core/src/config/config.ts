@@ -14,6 +14,9 @@ import type {
   GoalTokenUsage,
   PersistedGoalState,
 } from '../goals/types.js';
+import { TodoRuntime } from '../todos/runtime.js';
+import type { TodoRuntimeEvent } from '../todos/runtime.js';
+import type { PersistedTodoState, TodoPhase } from '../todos/types.js';
 import { inspect } from 'node:util';
 import process from 'node:process';
 import { z } from 'zod';
@@ -91,6 +94,7 @@ import type { DiscoveryResult } from '../discovery/types.js';
 import { ExitPlanModeTool } from '../tools/exit-plan-mode.js';
 import { EnterPlanModeTool } from '../tools/enter-plan-mode.js';
 import { GoalTool } from '../tools/goal.js';
+import { TodoTool } from '../tools/todo.js';
 import {
   ListBackgroundProcessesTool,
   ReadBackgroundOutputTool,
@@ -136,7 +140,6 @@ import {
 import { shouldAttemptBrowserLaunch } from '../utils/browser.js';
 import type { MCPOAuthConfig } from '../mcp/oauth-provider.js';
 import { checkPathTrust } from '../utils/trust.js';
-import { WriteTodosTool } from '../tools/write-todos.js';
 import {
   StandardFileSystemService,
   type FileSystemService,
@@ -768,6 +771,9 @@ export interface ConfigParameters {
   goalEnabled?: boolean;
   forceLatestFlashLite?: boolean;
   goalContinuation?: boolean;
+  todoEnabled?: boolean;
+  todoReminders?: boolean;
+  todoRemindersMax?: number;
   extensionRegistryURI?: string;
   truncateToolOutputThreshold?: number;
   eventEmitter?: EventEmitter;
@@ -940,6 +946,11 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly goalEnabled: boolean;
   private readonly forceLatestFlashLite: boolean;
   private readonly goalContinuation: boolean;
+  private todoRuntime: TodoRuntime | undefined;
+  private todoEvents: EventEmitter | undefined;
+  private readonly todoEnabled: boolean;
+  private readonly todoReminders: boolean;
+  private readonly todoRemindersMax: number;
   /** Monotonic cumulative usage, the baseline the goal budget is measured from. */
   private cumulativeUsage: GoalTokenUsage = { input: 0, output: 0 };
   private readonly headlessHarness: HeadlessHarness;
@@ -1479,6 +1490,9 @@ export class Config implements McpContext, AgentLoopContext {
     this.goalEnabled = params.goalEnabled ?? true;
     this.forceLatestFlashLite = params.forceLatestFlashLite ?? false;
     this.goalContinuation = params.goalContinuation ?? false;
+    this.todoEnabled = params.todoEnabled ?? true;
+    this.todoReminders = params.todoReminders ?? true;
+    this.todoRemindersMax = params.todoRemindersMax ?? 3;
     this.appendSystem = params.appendSystem;
     this.workspacePoliciesDir = params.workspacePoliciesDir;
     this.enableHooksUI = params.enableHooksUI ?? true;
@@ -4400,6 +4414,66 @@ export class Config implements McpContext, AgentLoopContext {
     });
   }
 
+  /** Whether the op-based `todo` tool is registered this session. */
+  isTodoEnabled(): boolean {
+    return this.todoEnabled;
+  }
+
+  /** Whether the agent nudges the model to finish incomplete todos on stop. */
+  isTodoRemindersEnabled(): boolean {
+    return this.todoReminders;
+  }
+
+  getTodoRemindersMax(): number {
+    return this.todoRemindersMax;
+  }
+
+  getTodoPhases(): TodoPhase[] {
+    return this.getTodoRuntime().getPhases();
+  }
+
+  getTodoRuntime(): TodoRuntime {
+    if (!this.todoRuntime) {
+      this.todoRuntime = new TodoRuntime({
+        persist: (phases) => this.persistTodoState(phases),
+        emit: (event) => this.todoEvents?.emit('todo', event),
+      });
+    }
+    return this.todoRuntime;
+  }
+
+  /** Subscribe to todo-board changes, without a new MessageBusType. */
+  onTodoEvent(listener: (event: TodoRuntimeEvent) => void): () => void {
+    this.todoEvents ??= new EventEmitter();
+    this.todoEvents.on('todo', listener);
+    return () => {
+      this.todoEvents?.off('todo', listener);
+    };
+  }
+
+  /**
+   * Makes the board durable so a resume finds it again. The recording service
+   * lives on the chat, which exists only once a turn has started; a board set
+   * before that is held in memory and written by the first commit after it.
+   */
+  private persistTodoState(phases: TodoPhase[]): void {
+    const client = this.geminiClient;
+    const recording = client?.isInitialized()
+      ? client.getChat().getChatRecordingService()
+      : undefined;
+    recording?.saveTodoState(
+      phases.length === 0 ? undefined : { phases },
+    );
+  }
+
+  /** Reads back a todo board persisted by a previous session. */
+  restorePersistedTodo(persisted: PersistedTodoState | undefined): void {
+    if (!persisted) {
+      return;
+    }
+    this.getTodoRuntime().restore(persisted.phases);
+  }
+
   /**
    * Standing instructions appended to the system prompt.
    *
@@ -4770,9 +4844,9 @@ export class Config implements McpContext, AgentLoopContext {
         registry.registerTool(new AskUserTool(this.messageBus)),
       );
     }
-    if (this.getUseWriteTodos()) {
-      maybeRegister(WriteTodosTool, () =>
-        registry.registerTool(new WriteTodosTool(this.messageBus)),
+    if (this.isTodoEnabled()) {
+      maybeRegister(TodoTool, () =>
+        registry.registerTool(new TodoTool(this, this.messageBus)),
       );
     }
     if (this.isPlanEnabled()) {

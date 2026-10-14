@@ -22,6 +22,7 @@ import {
 } from '../confirmation-bus/types.js';
 import { ApprovalMode } from '../policy/types.js';
 import type { SubagentProgress } from '../agents/types.js';
+import type { TodoBoard } from '../todos/types.js';
 import {
   isBuildFile,
   extractFilePathFromArgs,
@@ -937,6 +938,7 @@ export type ToolResultDisplay =
   | FileDiff
   | AnsiOutput
   | TodoList
+  | TodoBoard
   | SubagentProgress
   | GrepResult
   | ListDirectoryResult

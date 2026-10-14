@@ -18,7 +18,7 @@ import {
   READ_FILE_TOOL_NAME,
   SHELL_TOOL_NAME,
   WRITE_FILE_TOOL_NAME,
-  WRITE_TODOS_TOOL_NAME,
+  TODO_TOOL_NAME,
   GREP_PARAM_TOTAL_MAX_MATCHES,
   GREP_PARAM_INCLUDE_PATTERN,
   GREP_PARAM_EXCLUDE_PATTERN,
@@ -763,7 +763,7 @@ function workflowStepStrategy(options: PrimaryWorkflowsOptions): string {
   if (options.enableWriteTodosTool) {
     return `2. **Strategy:** Formulate a grounded plan based on your research.${
       options.interactive ? ' Share a concise summary of your strategy.' : ''
-    } For complex tasks, break them down into smaller, manageable subtasks and use the ${formatToolName(WRITE_TODOS_TOOL_NAME)} tool to track your progress.`;
+    } For complex tasks, break them down into smaller, manageable subtasks and use the ${formatToolName(TODO_TOOL_NAME)} tool to track your progress.`;
   }
   return `2. **Strategy:** Formulate a grounded plan based on your research.${
     options.interactive ? ' Share a concise summary of your strategy.' : ''

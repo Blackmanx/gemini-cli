@@ -8,6 +8,7 @@ import type { PartListUnion } from '@google/genai';
 import type { Status } from '../scheduler/types.js';
 import type { ToolResultDisplay } from '../tools/tools.js';
 import type { PersistedGoalState } from '../goals/types.js';
+import type { PersistedTodoState } from '../todos/types.js';
 import { type ThoughtSummary } from '../utils/thoughtUtils.js';
 
 export const SESSION_FILE_PREFIX = 'session-';
@@ -104,6 +105,8 @@ export interface ConversationRecord {
   kind?: 'main' | 'subagent';
   /** The session's goal, if set. Session state; never sent to the model. */
   goal?: PersistedGoalState;
+  /** The session's todo board, if any. Session state; never sent to the model. */
+  todo?: PersistedTodoState;
 }
 
 /**

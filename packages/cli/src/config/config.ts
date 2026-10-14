@@ -1175,6 +1175,9 @@ export async function loadCliConfig(
     forceLatestFlashLite: settings.omp?.forceLatestFlashLite,
     goalEnabled: settings.omp?.goal?.enabled,
     goalContinuation: settings.omp?.goal?.continuation,
+    todoEnabled: settings.omp?.todo?.enabled,
+    todoReminders: settings.omp?.todo?.reminders,
+    todoRemindersMax: settings.omp?.todo?.remindersMax,
     modelRoles: settings.model?.roles,
     modelCycleOrder: settings.model?.cycleOrder,
     output: {

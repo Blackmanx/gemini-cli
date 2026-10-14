@@ -87,12 +87,21 @@ export const EDIT_PARAM_ALLOW_MULTIPLE = 'allow_multiple';
 export const WEB_SEARCH_TOOL_NAME = 'google_web_search';
 export const WEB_SEARCH_PARAM_QUERY = 'query';
 
-// -- write_todos --
+// -- write_todos (superseded by `todo`; constants kept for the model-family sets) --
 export const WRITE_TODOS_TOOL_NAME = 'write_todos';
 export const TODOS_PARAM_TODOS = 'todos';
 export const TODOS_PARAM_PHASES = 'phases';
 export const TODOS_ITEM_PARAM_DESCRIPTION = 'description';
 export const TODOS_ITEM_PARAM_STATUS = 'status';
+
+// -- todo (op-based, ported from omp) --
+export const TODO_TOOL_NAME = 'todo';
+export const TODO_PARAM_OP = 'op';
+export const TODO_PARAM_LIST = 'list';
+export const TODO_PARAM_TASK = 'task';
+export const TODO_PARAM_PHASE = 'phase';
+export const TODO_PARAM_ITEMS = 'items';
+export const TODO_PARAM_REASON = 'reason';
 
 // -- web_fetch --
 export const WEB_FETCH_TOOL_NAME = 'web_fetch';

@@ -196,6 +196,10 @@ export {
   renderTrustedObjective,
   remainingTokens,
 } from './goals/runtime.js';
+export * from './todos/types.js';
+export * from './todos/operations.js';
+export * from './todos/runtime.js';
+export * from './todos/reminders.js';
 export * from './resources/resource-registry.js';
 
 // Export prompt logic
@@ -258,7 +262,7 @@ export * from './tools/web-search.js';
 export * from './tools/read-many-files.js';
 export * from './tools/mcp-client.js';
 export * from './tools/mcp-tool.js';
-export * from './tools/write-todos.js';
+export * from './tools/todo.js';
 export * from './tools/trackerTools.js';
 export * from './tools/activate-skill.js';
 export * from './tools/ask-user.js';

@@ -21,7 +21,7 @@ import {
 import { CodebaseInvestigatorAgent } from '../agents/codebase-investigator.js';
 import { isGitRepository } from '../utils/gitUtils.js';
 import {
-  WRITE_TODOS_TOOL_NAME,
+  TODO_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   ENTER_PLAN_MODE_TOOL_NAME,
   GLOB_TOOL_NAME,
@@ -232,7 +232,7 @@ export class PromptProvider {
               enableCodebaseInvestigator:
                 agentRegistry.getDefinition(CodebaseInvestigatorAgent.name) !==
                 undefined,
-              enableWriteTodosTool: enabledToolNames.has(WRITE_TODOS_TOOL_NAME),
+              enableWriteTodosTool: enabledToolNames.has(TODO_TOOL_NAME),
               enableEnterPlanModeTool: enabledToolNames.has(
                 ENTER_PLAN_MODE_TOOL_NAME,
               ),
