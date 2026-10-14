@@ -49,6 +49,7 @@ import { modelCommand } from '../ui/commands/modelCommand.js';
 import { oncallCommand } from '../ui/commands/oncallCommand.js';
 import { permissionsCommand } from '../ui/commands/permissionsCommand.js';
 import { goalCommand } from '../ui/commands/goalCommand.js';
+import { todoCommand } from '../ui/commands/todoCommand.js';
 import { btwCommand } from '../ui/commands/btwCommand.js';
 import { planCommand } from '../ui/commands/planCommand.js';
 import { policiesCommand } from '../ui/commands/policiesCommand.js';
@@ -196,6 +197,7 @@ export class BuiltinCommandLoader implements ICommandLoader {
           ]
         : [mcpCommand]),
       goalCommand,
+      ...(this.config?.isTodoEnabled() ? [todoCommand] : []),
       btwCommand,
       memoryCommand(this.config),
       modelCommand,
