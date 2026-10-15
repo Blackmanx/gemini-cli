@@ -6,6 +6,7 @@
 
 import { debugLogger } from '@google/gemini-cli-core';
 import clipboardy from 'clipboardy';
+import { isWsl } from './clipboardUtils.js';
 import type { SlashCommand } from '../commands/types.js';
 import fs from 'node:fs';
 import type { Writable } from 'node:stream';
@@ -294,7 +295,8 @@ export const getUrlOpenCommand = (): string => {
       openCmd = 'start';
       break;
     case 'linux':
-      openCmd = 'xdg-open';
+      // WSL has no browser of its own; hand the URL to the Windows side.
+      openCmd = isWsl() ? 'wslview' : 'xdg-open';
       break;
     default:
       // Default to xdg-open, which appears to be supported for the less popular operating systems.

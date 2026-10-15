@@ -4,7 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { vi, describe, it, expect, beforeEach, type Mock } from 'vitest';
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from 'vitest';
 import { EventEmitter } from 'node:events';
 import clipboardy from 'clipboardy';
 import {
@@ -26,6 +34,14 @@ vi.mock('clipboardy', () => ({
     write: vi.fn(),
   },
 }));
+
+// Mock WSL detection so the URL-open tests are host-independent (these suites
+// also run on actual WSL dev machines, where the real isWsl() returns true).
+const mockIsWsl = vi.hoisted(() => vi.fn(() => false));
+vi.mock('./clipboardUtils.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./clipboardUtils.js')>();
+  return { ...actual, isWsl: mockIsWsl };
+});
 
 // Mock child_process
 vi.mock('child_process');
@@ -631,9 +647,23 @@ describe('commandUtils', () => {
     describe('on Linux (linux)', () => {
       beforeEach(() => {
         mockProcess.platform = 'linux';
+        mockIsWsl.mockReturnValue(false);
       });
       it('should return xdg-open', () => {
         expect(getUrlOpenCommand()).toBe('xdg-open');
+      });
+    });
+
+    describe('on Linux under WSL', () => {
+      beforeEach(() => {
+        mockProcess.platform = 'linux';
+        mockIsWsl.mockReturnValue(true);
+      });
+      afterEach(() => {
+        mockIsWsl.mockReturnValue(false);
+      });
+      it('should return wslview', () => {
+        expect(getUrlOpenCommand()).toBe('wslview');
       });
     });
 
