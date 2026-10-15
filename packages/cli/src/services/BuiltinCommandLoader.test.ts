@@ -174,6 +174,7 @@ describe('BuiltinCommandLoader', () => {
       getMcpEnabled: vi.fn().mockReturnValue(true),
       getSkillManager: vi.fn().mockReturnValue({
         getAllSkills: vi.fn().mockReturnValue([]),
+        getSkill: vi.fn().mockReturnValue(null),
         isAdminEnabled: vi.fn().mockReturnValue(true),
       }),
       isVoiceModeEnabled: vi.fn().mockReturnValue(true),
@@ -198,6 +199,21 @@ describe('BuiltinCommandLoader', () => {
     const commands = await loader.loadCommands(new AbortController().signal);
     const upgradeCmd = commands.find((c) => c.name === 'upgrade');
     expect(upgradeCmd).toBeDefined();
+  });
+
+  it('should include archify command when the archify skill is discovered', async () => {
+    (
+      mockConfig.getSkillManager().getSkill as Mock
+    ).mockReturnValue({ name: 'archify', disabled: false });
+    const loader = new BuiltinCommandLoader(mockConfig);
+    const commands = await loader.loadCommands(new AbortController().signal);
+    expect(commands.find((c) => c.name === 'archify')).toBeDefined();
+  });
+
+  it('should exclude archify command when the skill is not discovered', async () => {
+    const loader = new BuiltinCommandLoader(mockConfig);
+    const commands = await loader.loadCommands(new AbortController().signal);
+    expect(commands.find((c) => c.name === 'archify')).toBeUndefined();
   });
 
   it('should exclude upgrade command when authType is NOT login_with_google', async () => {
@@ -402,6 +418,7 @@ describe('BuiltinCommandLoader profile', () => {
       getMcpEnabled: vi.fn().mockReturnValue(true),
       getSkillManager: vi.fn().mockReturnValue({
         getAllSkills: vi.fn().mockReturnValue([]),
+        getSkill: vi.fn().mockReturnValue(null),
         isAdminEnabled: vi.fn().mockReturnValue(true),
       }),
       isVoiceModeEnabled: vi.fn().mockReturnValue(true),
