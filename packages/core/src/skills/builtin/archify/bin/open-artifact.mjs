@@ -32,6 +32,52 @@ const OPENERS = {
   },
 };
 
+function isWslEnv() {
+  return Boolean(
+    process.env.WSL_DISTRO_NAME ||
+      process.env.WSL_INTEROP ||
+      process.env.WSLENV !== undefined,
+  );
+}
+
+function toWindowsTarget(target) {
+  // URLs pass through untouched; file paths go through wslpath.
+  if (/^https?:\/\//i.test(target)) return target;
+  try {
+    const converted = spawnSync('wslpath', ['-w', target], {
+      encoding: 'utf8',
+    });
+    const windowsPath = converted?.stdout?.trim();
+    return windowsPath || target;
+  } catch {
+    return target;
+  }
+}
+
+// WSL has no browser or file associations of its own; the URL or file must be
+// handed to the Windows side. `wslview` (wslu) does the path conversion itself;
+// the powershell interop bridge is the always-present fallback and receives the
+// target through a child-only environment variable, never interpolated into
+// executable source.
+const WSL_OPENER = {
+  command: 'wslview',
+  method: 'wslview',
+  timeoutMs: 10000,
+  args: (target) => [target],
+  fallback: {
+    command: 'powershell.exe',
+    method: 'wsl-powershell',
+    timeoutMs: 15000,
+    args: () => [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      'Start-Process -FilePath $env:ARCHIFY_OPEN_TARGET',
+    ],
+    env: (target) => ({ ARCHIFY_OPEN_TARGET: toWindowsTarget(target) }),
+  },
+};
+
 function failureDetails(result, opener, timeoutMs) {
   const error = result?.error;
   if (error?.code === 'ENOENT') {
@@ -77,20 +123,7 @@ function launchTimeout(value, fallback) {
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
 
-function launchTarget(target, options = {}) {
-  const platform = options.platform || process.platform;
-  const opener = OPENERS[platform];
-  if (!opener) {
-    return {
-      requested: true,
-      status: 'unsupported',
-      target,
-      method: null,
-    };
-  }
-
-  const spawn = options.spawn || spawnSync;
-  const timeoutMs = launchTimeout(options.timeoutMs, opener.timeoutMs);
+function attemptLaunch(opener, target, platform, timeoutMs, spawn) {
   let result;
   try {
     const spawnOptions = {
@@ -105,13 +138,52 @@ function launchTarget(target, options = {}) {
         ...process.env,
         ARCHIFY_OPEN_TARGET: target,
       };
+    } else if (opener.env) {
+      spawnOptions.env = {
+        ...process.env,
+        ...opener.env(target),
+      };
     }
     result = spawn(opener.command, opener.args(target), spawnOptions);
   } catch (error) {
     result = { error };
   }
+  return { result, failure: failureDetails(result, opener, timeoutMs) };
+}
 
-  const failure = failureDetails(result, opener, timeoutMs);
+function launchTarget(target, options = {}) {
+  const platform = options.platform || process.platform;
+  const opener =
+    platform === 'linux' && isWslEnv() ? WSL_OPENER : OPENERS[platform];
+  if (!opener) {
+    return {
+      requested: true,
+      status: 'unsupported',
+      target,
+      method: null,
+    };
+  }
+
+  const spawn = options.spawn || spawnSync;
+  const timeoutMs = launchTimeout(options.timeoutMs, opener.timeoutMs);
+
+  let { failure } = attemptLaunch(opener, target, platform, timeoutMs, spawn);
+  let method = opener.method;
+  if (failure && opener.fallback) {
+    const fallback = opener.fallback;
+    const fallbackAttempt = attemptLaunch(
+      fallback,
+      target,
+      platform,
+      launchTimeout(options.timeoutMs, fallback.timeoutMs),
+      spawn,
+    );
+    if (!fallbackAttempt.failure) {
+      failure = null;
+      method = fallback.method;
+    }
+  }
+
   let status = 'opened';
   if (failure?.code === 'opener/unavailable') status = 'unsupported';
   else if (failure) status = 'failed';
@@ -120,7 +192,7 @@ function launchTarget(target, options = {}) {
     requested: true,
     status,
     target,
-    method: opener.method,
+    method,
     ...(failure ? { failure } : {}),
   };
 }

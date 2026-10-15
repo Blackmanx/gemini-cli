@@ -5,15 +5,22 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { openBrowserSecurely } from './secure-browser-launcher.js';
+import {
+  openBrowserSecurely,
+  shouldLaunchBrowser,
+} from './secure-browser-launcher.js';
 
 // Create mock function using vi.hoisted
 const mockExecFile = vi.hoisted(() => vi.fn());
+const mockIsWsl = vi.hoisted(() => vi.fn(() => false));
 
 // Mock modules
 vi.mock('node:child_process');
 vi.mock('node:util', () => ({
   promisify: () => mockExecFile,
+}));
+vi.mock('./windowsContext.js', () => ({
+  isWsl: mockIsWsl,
 }));
 
 describe('secure-browser-launcher', () => {
@@ -22,6 +29,7 @@ describe('secure-browser-launcher', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecFile.mockResolvedValue({ stdout: '', stderr: '' });
+    mockIsWsl.mockReturnValue(false);
     originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
   });
 
@@ -237,6 +245,89 @@ describe('secure-browser-launcher', () => {
         ['https://example.com'],
         expect.any(Object),
       );
+    });
+  });
+
+  describe('WSL', () => {
+    it('should use wslview on WSL instead of xdg-open', async () => {
+      setPlatform('linux');
+      mockIsWsl.mockReturnValue(true);
+
+      await openBrowserSecurely('https://example.com');
+
+      expect(mockExecFile).toHaveBeenCalledWith(
+        'wslview',
+        ['https://example.com'],
+        expect.any(Object),
+      );
+    });
+
+    it('should fall back to the powershell interop bridge when wslview fails', async () => {
+      setPlatform('linux');
+      mockIsWsl.mockReturnValue(true);
+
+      // First call to wslview fails (wslu not installed)
+      mockExecFile.mockRejectedValueOnce(new Error('Command not found'));
+      // Second call to powershell.exe succeeds
+      mockExecFile.mockResolvedValueOnce({ stdout: '', stderr: '' });
+
+      await openBrowserSecurely("https://example.com/'quoted'");
+
+      expect(mockExecFile).toHaveBeenNthCalledWith(
+        1,
+        'wslview',
+        ["https://example.com/'quoted'"],
+        expect.any(Object),
+      );
+      expect(mockExecFile).toHaveBeenNthCalledWith(
+        2,
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-WindowStyle',
+          'Hidden',
+          '-Command',
+          `Start-Process 'https://example.com/''quoted'''`,
+        ],
+        expect.any(Object),
+      );
+    });
+
+    describe('shouldLaunchBrowser', () => {
+      const originalCI = process.env['CI'];
+      const originalDebianFrontend = process.env['DEBIAN_FRONTEND'];
+
+      beforeEach(() => {
+        // These tests are host-independent: neutralize CI markers and any
+        // display variables the dev host may export.
+        delete process.env['CI'];
+        delete process.env['DEBIAN_FRONTEND'];
+        delete process.env['DISPLAY'];
+        delete process.env['WAYLAND_DISPLAY'];
+        delete process.env['MIR_SOCKET'];
+      });
+
+      afterEach(() => {
+        if (originalCI !== undefined) process.env['CI'] = originalCI;
+        if (originalDebianFrontend !== undefined) {
+          process.env['DEBIAN_FRONTEND'] = originalDebianFrontend;
+        }
+      });
+
+      it('should launch even without DISPLAY under WSL', () => {
+        setPlatform('linux');
+        mockIsWsl.mockReturnValue(true);
+
+        expect(shouldLaunchBrowser()).toBe(true);
+      });
+
+      it('should not launch on plain Linux without a display server', () => {
+        setPlatform('linux');
+        mockIsWsl.mockReturnValue(false);
+
+        expect(shouldLaunchBrowser()).toBe(false);
+      });
     });
   });
 });

@@ -8,6 +8,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { platform } from 'node:os';
 import { URL } from 'node:url';
+import { isWsl } from './windowsContext.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -83,7 +84,13 @@ export async function openBrowserSecurely(url: string): Promise<void> {
     case 'linux':
     case 'freebsd':
     case 'openbsd':
-      // Linux and BSD variants
+      // Linux and BSD variants. WSL has no browser of its own: hand the URL
+      // to the Windows side, where the user's default browser lives.
+      if (platformName === 'linux' && isWsl()) {
+        command = 'wslview';
+        args = [url];
+        break;
+      }
       // Try xdg-open first, fall back to other options
       command = 'xdg-open';
       args = [url];
@@ -108,28 +115,50 @@ export async function openBrowserSecurely(url: string): Promise<void> {
   try {
     await execFileAsync(command, args, options);
   } catch (error) {
-    // For Linux, try fallback commands if xdg-open fails
+    // For Linux, try fallback commands if the primary opener fails
     if (
-      (platformName === 'linux' ||
-        platformName === 'freebsd' ||
-        platformName === 'openbsd') &&
-      command === 'xdg-open'
+      platformName === 'linux' ||
+      platformName === 'freebsd' ||
+      platformName === 'openbsd'
     ) {
-      const fallbackCommands = [
-        'gnome-open',
-        'kde-open',
-        'firefox',
-        'chromium',
-        'google-chrome',
-      ];
-
-      for (const fallbackCommand of fallbackCommands) {
+      if (command === 'wslview') {
+        // wslu may not be installed; the Windows interop bridge is always
+        // present in a working WSL setup. The URL is already validated, and
+        // single quotes are escaped for the PowerShell literal.
         try {
-          await execFileAsync(fallbackCommand, [url], options);
+          await execFileAsync(
+            'powershell.exe',
+            [
+              '-NoProfile',
+              '-NonInteractive',
+              '-WindowStyle',
+              'Hidden',
+              '-Command',
+              `Start-Process '${url.replace(/'/g, "''")}'`,
+            ],
+            options,
+          );
           return; // Success!
         } catch {
-          // Try next command
-          continue;
+          // Fall through to the final error below.
+        }
+      } else if (command === 'xdg-open') {
+        const fallbackCommands = [
+          'gnome-open',
+          'kde-open',
+          'firefox',
+          'chromium',
+          'google-chrome',
+        ];
+
+        for (const fallbackCommand of fallbackCommands) {
+          try {
+            await execFileAsync(fallbackCommand, [url], options);
+            return; // Success!
+          } catch {
+            // Try next command
+            continue;
+          }
         }
       }
     }
@@ -169,8 +198,11 @@ export function shouldLaunchBrowser(): boolean {
   // (checked below for Linux).
   const isSSH = !!process.env['SSH_CONNECTION'];
 
-  // On Linux, the presence of a display server is a strong indicator of a GUI.
-  if (platform() === 'linux') {
+  // On Linux, the presence of a display server is a strong indicator of a
+  // GUI. WSL is the exception: it has no display server of its own — the
+  // GUI (and the default browser) lives on the Windows side, reachable
+  // through interop.
+  if (platform() === 'linux' && !isWsl()) {
     // These are environment variables that can indicate a running compositor on Linux.
     const displayVariables = ['DISPLAY', 'WAYLAND_DISPLAY', 'MIR_SOCKET'];
     const hasDisplay = displayVariables.some((v) => !!process.env[v]);

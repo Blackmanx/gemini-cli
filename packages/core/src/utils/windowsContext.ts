@@ -113,10 +113,13 @@ function windowsProfileCachePath(): string {
  */
 export function getCachedWindowsUserProfileRootSync(): string | null {
   try {
-    const parsed = JSON.parse(
+    const parsed: unknown = JSON.parse(
       readFileSync(windowsProfileCachePath(), 'utf8'),
-    ) as { wslProfile?: unknown };
+    );
     if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'wslProfile' in parsed &&
       typeof parsed.wslProfile === 'string' &&
       parsed.wslProfile.startsWith('/mnt/')
     ) {
@@ -180,5 +183,6 @@ This session runs inside WSL, where the Windows drives are mounted under \`/mnt/
 ${userLine}
 - When the user names a Windows folder without a full path, it refers to their own profile: "Downloads" -> \`/mnt/c/Users/<user>/Downloads\`, "Desktop" -> \`/mnt/c/Users/<user>/Desktop\`, "Documents" -> \`/mnt/c/Users/<user>/Documents\`. Go look there directly instead of asking the user for the full path.
 - Documents the user will review in Windows (Word, PowerPoint, Excel, PDF) must be created under the Windows profile — usually the user's Downloads folder — not in the Linux workspace, so the user can open them with Windows applications.
+- WSL has no browser or file associations of its own: to open a file or URL with the user's Windows applications (default browser for an HTML file, PDF viewer, ...), run \`wslview <path-or-url>\`. If \`wslview\` is unavailable, convert file paths with \`wslpath -w <path>\` and run \`explorer.exe <windows-path>\`, or open URLs with \`powershell.exe -Command Start-Process '<url>'\`. Plain \`xdg-open\` does not work here.
 </windows_paths>`;
 }
