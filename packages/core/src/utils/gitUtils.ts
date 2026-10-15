@@ -27,7 +27,7 @@ export function getSafeGitEnv(
     GIT_CONFIG_GLOBAL: devNullPath,
     GIT_CONFIG_SYSTEM: devNullPath,
     GIT_CONFIG_NOSYSTEM: '1',
-    GIT_CONFIG_COUNT: '7',
+    GIT_CONFIG_COUNT: '8',
     GIT_CONFIG_KEY_0: 'credential.helper',
     GIT_CONFIG_VALUE_0: '',
     GIT_CONFIG_KEY_1: 'core.fsmonitor',
@@ -42,6 +42,14 @@ export function getSafeGitEnv(
     GIT_CONFIG_VALUE_5: '',
     GIT_CONFIG_KEY_6: 'sequence.editor',
     GIT_CONFIG_VALUE_6: '',
+    // Fork: GIT_CONFIG_GLOBAL/SYSTEM point at /dev/null, so file-based
+    // credential helpers never load and every https operation dies with
+    // "could not read Username ... terminal prompts disabled". Wire the
+    // host's already-authenticated gh CLI in as the one allowed helper. It
+    // is listed after the empty credential.helper above so the reset clears
+    // any inherited helper first and this entry survives.
+    GIT_CONFIG_KEY_7: 'credential.helper',
+    GIT_CONFIG_VALUE_7: '!gh auth git-credential',
   };
 }
 

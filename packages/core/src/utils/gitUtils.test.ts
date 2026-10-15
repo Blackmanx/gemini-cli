@@ -62,7 +62,7 @@ describe('gitUtils', () => {
     it('should set default security overrides and expected count', () => {
       const safeEnv = getSafeGitEnv({});
       expect(safeEnv['GIT_CONFIG_NOSYSTEM']).toBe('1');
-      expect(safeEnv['GIT_CONFIG_COUNT']).toBe('7');
+      expect(safeEnv['GIT_CONFIG_COUNT']).toBe('8');
       expect(safeEnv['GIT_CONFIG_KEY_0']).toBe('credential.helper');
       expect(safeEnv['GIT_CONFIG_VALUE_0']).toBe('');
       expect(safeEnv['GIT_CONFIG_KEY_1']).toBe('core.fsmonitor');
@@ -77,6 +77,8 @@ describe('gitUtils', () => {
       expect(safeEnv['GIT_CONFIG_VALUE_5']).toBe('');
       expect(safeEnv['GIT_CONFIG_KEY_6']).toBe('sequence.editor');
       expect(safeEnv['GIT_CONFIG_VALUE_6']).toBe('');
+      expect(safeEnv['GIT_CONFIG_KEY_7']).toBe('credential.helper');
+      expect(safeEnv['GIT_CONFIG_VALUE_7']).toBe('!gh auth git-credential');
     });
 
     it('should not configure diff.external to an empty string', () => {

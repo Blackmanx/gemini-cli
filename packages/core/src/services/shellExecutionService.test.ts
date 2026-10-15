@@ -2657,8 +2657,8 @@ describe('ShellExecutionService environment variables', () => {
     expect(cpEnv).toHaveProperty('GIT_CONFIG_KEY_1', 'pull.rebase');
     expect(cpEnv).toHaveProperty('GIT_CONFIG_VALUE_1', 'true');
 
-    // The 7 security overrides should be appended at index 2..8
-    expect(cpEnv).toHaveProperty('GIT_CONFIG_COUNT', '9');
+    // The 8 security overrides should be appended at index 2..9
+    expect(cpEnv).toHaveProperty('GIT_CONFIG_COUNT', '10');
     expect(cpEnv).toHaveProperty('GIT_CONFIG_KEY_2', 'credential.helper');
     expect(cpEnv).toHaveProperty('GIT_CONFIG_VALUE_2', '');
     expect(cpEnv).toHaveProperty('GIT_CONFIG_KEY_3', 'core.fsmonitor');
@@ -2673,8 +2673,13 @@ describe('ShellExecutionService environment variables', () => {
     expect(cpEnv).toHaveProperty('GIT_CONFIG_VALUE_7', '');
     expect(cpEnv).toHaveProperty('GIT_CONFIG_KEY_8', 'sequence.editor');
     expect(cpEnv).toHaveProperty('GIT_CONFIG_VALUE_8', '');
-    expect(cpEnv).not.toHaveProperty('GIT_CONFIG_KEY_9');
-    expect(cpEnv).not.toHaveProperty('GIT_CONFIG_VALUE_9');
+    expect(cpEnv).toHaveProperty('GIT_CONFIG_KEY_9', 'credential.helper');
+    expect(cpEnv).toHaveProperty(
+      'GIT_CONFIG_VALUE_9',
+      '!gh auth git-credential',
+    );
+    expect(cpEnv).not.toHaveProperty('GIT_CONFIG_KEY_10');
+    expect(cpEnv).not.toHaveProperty('GIT_CONFIG_VALUE_10');
     expect(Object.values(cpEnv)).not.toContain('diff.external');
 
     // Ensure child_process exits

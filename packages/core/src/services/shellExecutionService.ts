@@ -615,6 +615,13 @@ export class ShellExecutionService {
       ['core.pager', 'cat'],
       ['core.editor', ''],
       ['sequence.editor', ''],
+      // Fork: GIT_CONFIG_GLOBAL/SYSTEM point at /dev/null, so file-based
+      // credential helpers never load and every https operation dies with
+      // "could not read Username ... terminal prompts disabled". Wire the
+      // host's already-authenticated gh CLI in as the one allowed helper.
+      // Appended after the empty credential.helper above so the reset clears
+      // any inherited helper first and this entry survives.
+      ['credential.helper', '!gh auth git-credential'],
     ];
 
     for (const [overrideKey, overrideVal] of defaultGitOverrides) {
