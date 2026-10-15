@@ -78,6 +78,19 @@ describe('archifyCommand', () => {
     expect(prompt).toContain('`architecture` diagram');
   });
 
+  it('instructs flat .archify delivery with a stable mode-named HTML', async () => {
+    const config = makeFakeConfig();
+    seedArchify(config);
+    const result = await run(config, 'the login flow');
+    expect(result).toHaveProperty('type', 'submit_prompt');
+    const prompt = (result as { content: string }).content;
+    expect(prompt).toContain('.archify/candidate.json');
+    expect(prompt).toContain('architecture.html');
+    expect(prompt).toContain('subdirectory');
+    expect(prompt).toContain('overwrites it');
+    expect(prompt).toContain('leaves the previous file untouched');
+  });
+
   it('submits a prompt that forces activation and passes the request', async () => {
     const config = makeFakeConfig();
     seedArchify(config);
