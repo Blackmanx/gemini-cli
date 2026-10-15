@@ -78,7 +78,7 @@ describe('archifyCommand', () => {
     expect(prompt).toContain('`architecture` diagram');
   });
 
-  it('copies the latest diagram to a stable flat .archify path, keeping history folders', async () => {
+  it('copies the latest diagram to docs/deploy/index.html after a passing finalize', async () => {
     const config = makeFakeConfig();
     seedArchify(config);
     const result = await run(config, 'the login flow');
@@ -86,9 +86,9 @@ describe('archifyCommand', () => {
     const prompt = (result as { content: string }).content;
     expect(prompt).toContain("skill's own folder layout");
     expect(prompt).toContain('copy its output HTML');
-    expect(prompt).toContain('.archify/architecture.html');
-    expect(prompt).toContain('overwrites the previous copy');
-    expect(prompt).toContain('leaves the stable copy untouched');
+    expect(prompt).toContain('docs/deploy/index.html');
+    expect(prompt).toContain('overwrites the previous');
+    expect(prompt).toContain('leaves it untouched');
   });
 
   it('submits a prompt that forces activation and passes the request', async () => {

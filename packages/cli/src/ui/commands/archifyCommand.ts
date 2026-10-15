@@ -17,9 +17,9 @@ import { CommandKind, type SlashCommand } from './types.js';
  * `/archify` alone asks for an architecture diagram of the repository in the
  * working directory. History stays in the skill's timestamped folders under
  * `.archify/`; after each passing `finalize` the latest HTML is also copied
- * to a stable flat path per mode (`.archify/architecture.html`, …),
- * overwritten in place, so that path always serves the newest diagram and a
- * failed run leaves the last good copy untouched.
+ * to `docs/deploy/index.html` (creating the directory if needed), overwritten
+ * in place, so that path always serves the newest diagram and a failed run
+ * leaves the last good copy untouched.
  *
  * The command does not author the diagram itself. It submits a prompt that
  * forces activation first and passes the request through, so the model still
@@ -83,13 +83,11 @@ export const archifyCommand: SlashCommand = {
       '  author the typed JSON candidate, then run `finalize` from the skill',
       '  directory using the absolute path the activation returns. Keep the',
       "  skill's own folder layout for the working files and history.",
-      '- After `finalize` PASSES, copy its output HTML to a stable flat',
-      '  path directly under `.archify/` in the working directory, one name',
-      '  per mode: `.archify/<mode>.html` (usually',
-      '  `.archify/architecture.html`). That copy never goes into a',
-      '  subdirectory and overwrites the previous copy, so the same path',
-      '  always serves the latest diagram. A failing run',
-      '  leaves the stable copy untouched so the last good version remains.',
+      '- After `finalize` PASSES, copy its output HTML to',
+      '  `docs/deploy/index.html` in the working directory (create the',
+      '  directory if it does not exist). That copy overwrites the previous',
+      '  one, so that path always serves the latest diagram. A failing run',
+      '  leaves it untouched so the last good version remains.',
       '- Ground every node and relationship in repository evidence; do not',
       '  invent structure the repository does not show.',
       '- If a `finalize` gate fails, follow the skill repair loop. A non-zero',
