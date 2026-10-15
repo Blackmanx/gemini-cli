@@ -67,11 +67,15 @@ describe('archifyCommand', () => {
     expect(text).toContain('/skills enable archify');
   });
 
-  it('errors without a request and shows usage', async () => {
+  it('maps the current workspace when no request is given', async () => {
     const config = makeFakeConfig();
     seedArchify(config);
-    const text = content(await run(config, '   '));
-    expect(text).toContain('Usage: /archify');
+    const result = await run(config, '   ');
+    expect(result).toHaveProperty('type', 'submit_prompt');
+    const prompt = (result as { content: string }).content;
+    expect(prompt).toContain('activate_skill');
+    expect(prompt).toContain('CURRENT WORKSPACE');
+    expect(prompt).toContain('`architecture` diagram');
   });
 
   it('submits a prompt that forces activation and passes the request', async () => {

@@ -13,7 +13,9 @@ import { CommandKind, type SlashCommand } from './types.js';
  * archify's name and description, and the model calls `activate_skill` on its
  * own when a request matches. This command exists for the other case — the
  * user who already knows what they want drawn and does not want the match to
- * be a judgement call.
+ * be a judgement call. With no arguments it maps the current workspace:
+ * `/archify` alone asks for an architecture diagram of the repository in the
+ * working directory.
  *
  * The command does not author the diagram itself. It submits a prompt that
  * forces activation first and passes the request through, so the model still
@@ -23,7 +25,7 @@ import { CommandKind, type SlashCommand } from './types.js';
 export const archifyCommand: SlashCommand = {
   name: 'archify',
   description:
-    'Create a diagram with the archify skill. Usage: /archify <what to diagram>',
+    'Create a diagram with the archify skill. Usage: /archify [what to diagram; defaults to the current workspace]',
   kind: CommandKind.BUILT_IN,
   autoExecute: true,
   action: async (context, args) => {
@@ -55,26 +57,27 @@ export const archifyCommand: SlashCommand = {
     }
 
     const request = (args ?? '').trim();
-    if (!request) {
-      return {
-        type: 'message',
-        messageType: 'error',
-        content:
-          'Usage: /archify <what to diagram> — e.g. /archify the request path of this API',
-      };
-    }
 
     const prompt = [
       'Activate the built-in `archify` skill with the `activate_skill` tool',
-      '(name: `archify`), then follow its instructions to create this diagram:',
+      '(name: `archify`), then follow its instructions to create a diagram.',
       '',
-      request,
+      ...(request === ''
+        ? [
+            'The target is the CURRENT WORKSPACE — the repository in the',
+            'working directory. Default to an `architecture` diagram of the',
+            'codebase: its main components, how they connect, and the main',
+            'user journey through them. Choose another mode (tree, dataflow,',
+            'sequence, ...) only when the repository makes a different story',
+            'clearly the more useful one.',
+          ]
+        : ['The requested diagram:', '', request]),
       '',
       'Rules:',
       '',
       '- Activate the skill FIRST and follow its SKILL.md workflow exactly:',
       '  author the typed JSON candidate, then run `finalize` from the skill',
-      "  directory using the absolute path the activation returns.",
+      '  directory using the absolute path the activation returns.',
       '- Ground every node and relationship in repository evidence; do not',
       '  invent structure the repository does not show.',
       '- If a `finalize` gate fails, follow the skill repair loop. A non-zero',
