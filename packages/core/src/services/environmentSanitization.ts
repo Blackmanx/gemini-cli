@@ -229,11 +229,12 @@ export function getSecureSanitizationConfig(
   return {
     allowedEnvironmentVariables: [...new Set(allowed)],
     blockedEnvironmentVariables: [...new Set(blocked)],
-    // Redaction must be enabled for secure configurations
+    // Redaction is enabled by default (fork: safe-by-default); a requested
+    // `false` still wins so callers can opt out deliberately.
     enableEnvironmentVariableRedaction:
       requestedConfig.enableEnvironmentVariableRedaction ??
       baseConfig?.enableEnvironmentVariableRedaction ??
-      false,
+      true,
   };
 }
 

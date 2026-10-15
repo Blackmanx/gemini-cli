@@ -2160,8 +2160,11 @@ their corresponding top-level category object in your `settings.json` file.
 - **`security.environmentVariableRedaction.enabled`** (boolean):
 
   - **Description:** Enable redaction of environment variables that may contain
-    secrets.
-  - **Default:** `false`
+    secrets. On by default in this fork; set to `false` to opt out. Note that
+    tool outputs (shell output, file reads, error messages) are additionally
+    scrubbed of credential-shaped values on their way to the model
+    unconditionally. Variables prefixed `GEMINI_CLI_` are always trusted.
+  - **Default:** `true`
   - **Requires restart:** Yes
 
 - **`security.auth.selectedType`** (string):

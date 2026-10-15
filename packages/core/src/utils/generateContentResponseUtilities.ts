@@ -13,12 +13,19 @@ import type {
 import { getResponseText } from './partUtils.js';
 import { supportsMultimodalFunctionResponse } from '../config/models.js';
 import { debugLogger } from './debugLogger.js';
+import { redactText } from '../memory/redact.js';
 import type { Config } from '../config/config.js';
 
 export const BINARY_INJECTION_KEY = '__binary_injection__';
 
 /**
  * Formats tool output for a Gemini FunctionResponse.
+ *
+ * The text is passed through `redactText` on its way to the model: tool
+ * output (shell commands, file reads, error messages) is the main channel
+ * through which real credentials enter the conversation and persisted
+ * transcripts. The redaction is irreversible by design — the model must not
+ * be able to recover the value behind a placeholder.
  */
 function createFunctionResponsePart(
   callId: string,
@@ -29,7 +36,7 @@ function createFunctionResponsePart(
     functionResponse: {
       id: callId,
       name: toolName,
-      response: { output },
+      response: { output: redactText(output) },
     },
   };
 }
@@ -78,6 +85,8 @@ export function convertToFunctionResponse(
         );
       }
       // Handle passthrough case
+      // Note: the nested response object is passed through untouched; real
+      // tool output flows through the text paths above, which are redacted.
       return [
         {
           functionResponse: {
@@ -133,7 +142,10 @@ export function convertToFunctionResponse(
     functionResponse: {
       id: callId,
       name: toolName,
-      response: textParts.length > 0 ? { output: textParts.join('\n') } : {},
+      response:
+        textParts.length > 0
+          ? { output: redactText(textParts.join('\n')) }
+          : {},
     },
   };
 

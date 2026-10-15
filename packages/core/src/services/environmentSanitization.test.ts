@@ -377,9 +377,9 @@ describe('sanitizeEnvironment', () => {
 });
 
 describe('getSecureSanitizationConfig', () => {
-  it('should default enableEnvironmentVariableRedaction to false', () => {
+  it('should default enableEnvironmentVariableRedaction to true', () => {
     const config = getSecureSanitizationConfig();
-    expect(config.enableEnvironmentVariableRedaction).toBe(false);
+    expect(config.enableEnvironmentVariableRedaction).toBe(true);
   });
 
   it('should merge allowed and blocked variables from base and requested configs', () => {

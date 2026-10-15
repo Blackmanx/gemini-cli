@@ -27,6 +27,7 @@ import {
   formatTruncatedToolOutput,
 } from '../utils/fileUtils.js';
 import { convertToFunctionResponse } from '../utils/generateContentResponseUtilities.js';
+import { redactText } from '../memory/redact.js';
 import { truncateToolOutput } from '../utils/tool-utils.js';
 import { MAX_STORED_TOOL_OUTPUT_BYTES } from '../utils/constants.js';
 import {
@@ -441,7 +442,7 @@ export class ToolExecutor {
       const mainPart = responseParts[0];
       if (mainPart?.functionResponse?.response) {
         const respObj = mainPart.functionResponse.response;
-        respObj['error'] = errorMessage;
+        respObj['error'] = redactText(errorMessage);
       }
     } else {
       responseParts = [

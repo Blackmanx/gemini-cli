@@ -229,7 +229,11 @@ import { SkillManager, type SkillDefinition } from '../skills/skillManager.js';
 import { startupProfiler } from '../telemetry/startupProfiler.js';
 import type { AgentDefinition } from '../agents/types.js';
 import { fetchAdminControls } from '../code_assist/admin/admin_controls.js';
-import { isSubpath, resolveToRealPath, hasBlockedPathSegment } from '../utils/paths.js';
+import {
+  isSubpath,
+  resolveToRealPath,
+  hasBlockedPathSegment,
+} from '../utils/paths.js';
 import {
   isWsl,
   getCachedWindowsUserProfileRootSync,
@@ -1249,8 +1253,11 @@ export class Config implements McpContext, AgentLoopContext {
     this.blockedMcpServers = params.blockedMcpServers ?? [];
     this.allowedEnvironmentVariables = params.allowedEnvironmentVariables ?? [];
     this.blockedEnvironmentVariables = params.blockedEnvironmentVariables ?? [];
+    // Fork: redaction is on by default so credential-shaped environment
+    // variables never reach spawned processes; opt out explicitly with
+    // security.environmentVariableRedaction.enabled = false.
     this.enableEnvironmentVariableRedaction =
-      params.enableEnvironmentVariableRedaction ?? false;
+      params.enableEnvironmentVariableRedaction ?? true;
     this.userMemory = params.userMemory ?? '';
     this.geminiMdFileCount = params.geminiMdFileCount ?? 0;
     this.geminiMdFilePaths = params.geminiMdFilePaths ?? [];
@@ -1479,8 +1486,7 @@ export class Config implements McpContext, AgentLoopContext {
     this.modelRoles = params.modelRoles ?? {};
     this.modelCycleOrder = params.modelCycleOrder;
     this.useGithub = params.useGithub ?? false;
-    this.allowTaintedCommandsInYolo =
-      params.allowTaintedCommandsInYolo ?? true;
+    this.allowTaintedCommandsInYolo = params.allowTaintedCommandsInYolo ?? true;
     // Validated rather than asserted: this arrives from a user-editable
     // settings file, so a typo should fall back to the shipped default
     // instead of quietly behaving as some other level.
@@ -4461,9 +4467,7 @@ export class Config implements McpContext, AgentLoopContext {
     const recording = client?.isInitialized()
       ? client.getChat().getChatRecordingService()
       : undefined;
-    recording?.saveTodoState(
-      phases.length === 0 ? undefined : { phases },
-    );
+    recording?.saveTodoState(phases.length === 0 ? undefined : { phases });
   }
 
   /** Reads back a todo board persisted by a previous session. */

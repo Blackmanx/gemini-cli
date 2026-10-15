@@ -34,6 +34,7 @@ import {
   type AnyDeclarativeTool,
 } from '../tools/tools.js';
 import { getToolSuggestion, isParallelizable } from '../utils/tool-utils.js';
+import { redactText } from '../memory/redact.js';
 import { runInDevTraceSpan } from '../telemetry/trace.js';
 import { logToolCall } from '../telemetry/loggers.js';
 import { ToolCallEvent } from '../telemetry/types.js';
@@ -98,7 +99,10 @@ const createErrorResponse = (
       functionResponse: {
         id: request.callId,
         name: request.originalRequestName ?? request.name,
-        response: { error: error.message },
+        // Redacted: error messages routinely embed the failing command or
+        // URL, which can carry credentials. The user-facing display below
+        // stays raw — it only ever reaches the local terminal.
+        response: { error: redactText(error.message) },
       },
     },
   ],

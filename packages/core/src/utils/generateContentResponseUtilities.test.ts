@@ -433,6 +433,80 @@ describe('generateContentResponseUtilities', () => {
         },
       ]);
     });
+
+    describe('credential redaction', () => {
+      const getOutput = (result: Part[]): string => {
+        const output = result[0]?.functionResponse?.response?.['output'];
+        expect(typeof output).toBe('string');
+        return output as string;
+      };
+
+      it('should redact a bare GitHub token printed on its own line', () => {
+        // Shape of `gh auth token` output: just the token, no key= prefix.
+        const token = `gho_${'a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7'}`;
+        const result = convertToFunctionResponse(
+          toolName,
+          callId,
+          `${token}\n`,
+          DEFAULT_GEMINI_MODEL,
+        );
+        const output = getOutput(result);
+        expect(output).not.toContain(token);
+        expect(output).toContain('__gemini_secret_');
+      });
+
+      it('should redact the password line of `gh auth git-credential` output', () => {
+        const token = `gho_${'Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4'}`;
+        const result = convertToFunctionResponse(
+          toolName,
+          callId,
+          `protocol=https\nhost=github.com\nusername=PedroMRodrigo\npassword=${token}\n`,
+          DEFAULT_GEMINI_MODEL,
+        );
+        const output = getOutput(result);
+        expect(output).not.toContain(token);
+        expect(output).toContain('username=PedroMRodrigo');
+      });
+
+      it('should redact an npm auth token from .npmrc-shaped output', () => {
+        const token = `npm_${'aT3sTiNgToKeNaBcDeFgHiJkLmNoPqRsTuVwXyZ'}`;
+        const result = convertToFunctionResponse(
+          toolName,
+          callId,
+          `//registry.npmjs.org/:_authToken=${token}\n`,
+          DEFAULT_GEMINI_MODEL,
+        );
+        const output = getOutput(result);
+        expect(output).not.toContain(token);
+        expect(output).toContain('__gemini_secret_');
+      });
+
+      it('should redact a Google API key from Part-based text output', () => {
+        const key = 'AIzaSyAbCdEfGhIjKlMnOpQrStUvWxYz012345678';
+        const llmContent: Part = { text: `request used key ${key} and failed` };
+        const result = convertToFunctionResponse(
+          toolName,
+          callId,
+          llmContent,
+          DEFAULT_GEMINI_MODEL,
+        );
+        const output = getOutput(result);
+        expect(output).not.toContain(key);
+        expect(output).toContain('__gemini_secret_');
+      });
+
+      it('should leave ordinary code and prose untouched', () => {
+        const llmContent =
+          'const token = getToken();\nnpm install lodash\nSimple text output';
+        const result = convertToFunctionResponse(
+          toolName,
+          callId,
+          llmContent,
+          DEFAULT_GEMINI_MODEL,
+        );
+        expect(getOutput(result)).toBe(llmContent);
+      });
+    });
   });
 
   describe('getCitations', () => {
