@@ -15,10 +15,11 @@ import { CommandKind, type SlashCommand } from './types.js';
  * user who already knows what they want drawn and does not want the match to
  * be a judgement call. With no arguments it maps the current workspace:
  * `/archify` alone asks for an architecture diagram of the repository in the
- * working directory. Delivery is always flat into `.archify/`: a stable
- * mode-named HTML (`.archify/architecture.html`, …) that each passing run
- * overwrites, so the same path always serves the latest diagram and a failed
- * run leaves the previous one untouched.
+ * working directory. History stays in the skill's timestamped folders under
+ * `.archify/`; after each passing `finalize` the latest HTML is also copied
+ * to a stable flat path per mode (`.archify/architecture.html`, …),
+ * overwritten in place, so that path always serves the newest diagram and a
+ * failed run leaves the last good copy untouched.
  *
  * The command does not author the diagram itself. It submits a prompt that
  * forces activation first and passes the request through, so the model still
@@ -80,17 +81,15 @@ export const archifyCommand: SlashCommand = {
       '',
       '- Activate the skill FIRST and follow its SKILL.md workflow exactly:',
       '  author the typed JSON candidate, then run `finalize` from the skill',
-      '  directory using the absolute path the activation returns.',
-      '- Deliver flat into `.archify/` in the working directory: author the',
-      '  candidate at `.archify/candidate.json` and let `finalize` write the',
-      '  HTML directly to `.archify/<mode>.html` (e.g.',
-      '  `.archify/architecture.html`). Do NOT create the skill default',
-      '  `.archify/<type>-<slug>-<timestamp>/` folders or any other',
-      '  subdirectory under `.archify/`.',
-      '- The mode-named HTML is stable across runs: a passing `finalize`',
-      '  overwrites it, so the same path always serves the latest diagram,',
-      '  and a failing run leaves the previous file untouched so the last',
-      '  good architecture remains there.',
+      '  directory using the absolute path the activation returns. Keep the',
+      "  skill's own folder layout for the working files and history.",
+      '- After `finalize` PASSES, copy its output HTML to a stable flat',
+      '  path directly under `.archify/` in the working directory, one name',
+      '  per mode: `.archify/<mode>.html` (usually',
+      '  `.archify/architecture.html`). That copy never goes into a',
+      '  subdirectory and overwrites the previous copy, so the same path',
+      '  always serves the latest diagram. A failing run',
+      '  leaves the stable copy untouched so the last good version remains.',
       '- Ground every node and relationship in repository evidence; do not',
       '  invent structure the repository does not show.',
       '- If a `finalize` gate fails, follow the skill repair loop. A non-zero',
