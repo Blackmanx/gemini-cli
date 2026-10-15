@@ -804,6 +804,8 @@ export const AppContainer = (props: AppContainerProps) => {
         stdout.write(ENTER_SYNCHRONIZED_OUTPUT);
       }
       stdout.write(ansiEscapes.clearTerminal);
+    }
+    if (!isAlternateBuffer || config.getUseTerminalBuffer()) {
       setHistoryRemountKey((prev) => prev + 1);
     }
   }, [
@@ -2053,7 +2055,6 @@ Logging in with Google... Restarting Gemini CLI to continue.
   useEffect(() => {
     const openDebugConsole = () => {
       setShowErrorDetails(true);
-      setConstrainHeight(false);
     };
     appEvents.on(AppEvent.OpenDebugConsole, openDebugConsole);
 
@@ -2391,7 +2392,6 @@ Logging in with Google... Restarting Gemini CLI to continue.
       activePtyId,
       handleSuspend,
       embeddedShellFocused,
-      settings.merged.general.debugKeystrokeLogging,
       refreshStatic,
       setCopyModeEnabled,
       tabFocusTimeoutRef,
@@ -2404,12 +2404,12 @@ Logging in with Google... Restarting Gemini CLI to continue.
       setIsBackgroundTaskListOpen,
       lastOutputTimeRef,
       showTransientMessage,
-      settings.merged.general.devtools,
       showErrorDetails,
       triggerExpandHint,
       keyMatchers,
       isHelpDismissKey,
-      historyManager.history,
+      historyManager,
+      settings.merged,
       pendingHistoryItems,
       toggleAllExpansion,
       dumpCurrentFrame,
