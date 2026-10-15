@@ -2150,6 +2150,57 @@ describe('useGeminiStream', () => {
       expect(result.current.streamingState).toBe(StreamingState.Idle);
     });
 
+    it('should not auto-continue with a todo reminder after cancellation', async () => {
+      let continueStream: () => void;
+      const streamPromise = new Promise<void>((resolve) => {
+        continueStream = resolve;
+      });
+
+      const mockStream = (async function* () {
+        yield { type: 'content', value: 'Partial work done' };
+        // The real client ends the stream normally after an abort: the turn
+        // yields UserCancelled and returns instead of throwing.
+        await streamPromise;
+      })();
+      mockSendMessageStream.mockReturnValue(mockStream);
+
+      // Meet every condition of the stop-time todo reminder so only the
+      // cancellation guard can suppress it.
+      vi.mocked(mockConfig.isTodoEnabled).mockReturnValue(true);
+      vi.mocked(mockConfig.isTodoRemindersEnabled).mockReturnValue(true);
+      vi.mocked(mockConfig.getTodoPhases).mockReturnValue([
+        {
+          name: 'Implementation',
+          tasks: [{ content: 'Write the parser', status: 'in_progress' }],
+        },
+      ]);
+
+      const { result } = await renderTestHook();
+
+      await act(async () => {
+        // eslint-disable-next-line @typescript-eslint/no-floating-promises
+        result.current.submitQuery('work on the todos');
+      });
+
+      await waitFor(() => {
+        expect(result.current.streamingState).toBe(StreamingState.Responding);
+      });
+
+      // Cancel, then let the stream end the way the aborted client stream
+      // does: cleanly, with the partial text already in the buffer.
+      simulateEscapeKeyPress();
+      await act(async () => {
+        continueStream();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+
+      // Without the post-loop cancellation guard the reminder branch would
+      // re-prompt the model behind an invisible request, forcing a second
+      // Esc to stop it.
+      expect(mockSendMessageStream).toHaveBeenCalledTimes(1);
+      expect(result.current.streamingState).toBe(StreamingState.Idle);
+    });
+
     it('should cancel if a tool call is in progress', async () => {
       const toolCalls: TrackedToolCall[] = [
         {

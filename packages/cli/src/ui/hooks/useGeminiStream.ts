@@ -1818,7 +1818,11 @@ export const useGeminiStream = (
           }
           pendingToolCallRequestsRef.current = [];
         }
-      } else {
+      } else if (!turnCancelledRef.current && !signal.aborted) {
+        // A user cancellation ends the stream as a normal completion (the
+        // turn yields UserCancelled and returns), so without this guard the
+        // auto-continuation branches below would re-prompt the model behind
+        // an invisible request right after Esc and demand a second Esc.
         const hasVisibleText = geminiMessageBuffer.trim().length > 0;
         // Whether a prior continuation already re-prompted the model this round,
         // so the todo reminder never stacks a second submit on top of one.
@@ -2450,6 +2454,12 @@ export const useGeminiStream = (
         responsesToSend.push({
           text: buildMidRunNudge(config.getTodoPhases()),
         });
+      }
+
+      // The awaits above leave a window where Esc can land; re-check so the
+      // cancellation is not overwritten by this continuation submit.
+      if (turnCancelledRef.current) {
+        return;
       }
 
       const prompt_ids = geminiTools.map(
