@@ -69,6 +69,9 @@ describe('terminalSetup', () => {
     vi.stubEnv('CURSOR_TRACE_ID', '');
     vi.stubEnv('VSCODE_GIT_ASKPASS_MAIN', '');
     vi.stubEnv('VSCODE_GIT_IPC_HANDLE', '');
+    // Isolate from the real session: dev machines running these suites inside
+    // Windows Terminal would otherwise leak WT_SESSION into every test.
+    vi.stubEnv('WT_SESSION', '');
 
     // Default mocks
     mocks.homedir.mockReturnValue('/home/user');
@@ -245,6 +248,151 @@ describe('terminalSetup', () => {
 
       const result = await shouldPromptForTerminalSetup();
       expect(result).toBe(true);
+    });
+  });
+
+  describe('Windows Terminal', () => {
+    const wtSettingsWithoutBinding = {
+      $schema: 'https://aka.ms/terminal-profiles-schema',
+      defaultProfile: '{9ef397a5-256f-5757-b7ef-9e215905a881}',
+      actions: [{ command: 'paste', id: 'User.paste' }],
+      keybindings: [{ id: 'User.paste', keys: 'ctrl+v' }],
+    };
+
+    const wtSettingsWithBinding = {
+      actions: [
+        {
+          command: { action: 'sendInput', input: '\u001b[13;2u' },
+          id: 'gemini.shiftEnterNewline',
+        },
+      ],
+      keybindings: [{ id: 'gemini.shiftEnterNewline', keys: 'shift+enter' }],
+    };
+
+    beforeEach(() => {
+      vi.stubEnv('WT_SESSION', 'some-guid');
+      vi.stubEnv('LOCALAPPDATA', '/tmp/fake-local-app-data');
+      // Default: no settings.json in any install flavor.
+      mocks.readFile.mockRejectedValue(new Error('ENOENT'));
+    });
+
+    it('adds the Shift+Enter newline binding to settings.json', async () => {
+      mocks.readFile.mockResolvedValue(
+        JSON.stringify(wtSettingsWithoutBinding),
+      );
+
+      const result = await terminalSetup();
+
+      expect(result.success).toBe(true);
+      expect(mocks.copyFile).toHaveBeenCalled(); // timestamped backup first
+      expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+
+      const written = JSON.parse(mocks.writeFile.mock.calls[0][1]);
+      expect(written.actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'gemini.shiftEnterNewline',
+            command: { action: 'sendInput', input: '\u001b[13;2u' },
+          }),
+        ]),
+      );
+      expect(written.keybindings).toEqual(
+        expect.arrayContaining([
+          { id: 'gemini.shiftEnterNewline', keys: 'shift+enter' },
+        ]),
+      );
+      // Existing entries survive the rewrite.
+      expect(written.actions).toEqual(
+        expect.arrayContaining([{ command: 'paste', id: 'User.paste' }]),
+      );
+    });
+
+    it('is idempotent when the binding already exists', async () => {
+      mocks.readFile.mockResolvedValue(JSON.stringify(wtSettingsWithBinding));
+
+      const result = await terminalSetup();
+
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('already configured');
+      expect(mocks.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('does not modify a user-owned shift+enter binding', async () => {
+      mocks.readFile.mockResolvedValue(
+        JSON.stringify({
+          actions: [
+            {
+              command: { action: 'sendInput', input: 'something-else' },
+              id: 'custom.shiftEnter',
+            },
+          ],
+          keybindings: [{ id: 'custom.shiftEnter', keys: 'shift+enter' }],
+        }),
+      );
+
+      const result = await terminalSetup();
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('will not be modified');
+      expect(mocks.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the preview flavor when the stable install is absent', async () => {
+      mocks.readFile
+        .mockRejectedValueOnce(new Error('ENOENT'))
+        .mockResolvedValue(JSON.stringify(wtSettingsWithoutBinding));
+
+      const result = await terminalSetup();
+
+      expect(result.success).toBe(true);
+      expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+    });
+
+    it('prints manual instructions when no settings file is found', async () => {
+      const result = await terminalSetup();
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('manually');
+      expect(result.message).toContain('"keys": "shift+enter"');
+      expect(mocks.writeFile).not.toHaveBeenCalled();
+    });
+
+    it('refuses to rewrite JSONC settings and prints manual instructions', async () => {
+      mocks.readFile.mockResolvedValue(
+        '{\n  // user comment\n  "actions": [],\n}\n',
+      );
+
+      const result = await terminalSetup();
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('cannot be modified automatically');
+      expect(mocks.writeFile).not.toHaveBeenCalled();
+    });
+
+    describe('shouldPromptForTerminalSetup', () => {
+      it('returns true when the shift+enter binding is missing', async () => {
+        mocks.readFile.mockResolvedValue(
+          JSON.stringify(wtSettingsWithoutBinding),
+        );
+
+        await expect(shouldPromptForTerminalSetup()).resolves.toBe(true);
+      });
+
+      it('returns false when the binding is already configured', async () => {
+        mocks.readFile.mockResolvedValue(JSON.stringify(wtSettingsWithBinding));
+
+        await expect(shouldPromptForTerminalSetup()).resolves.toBe(false);
+      });
+
+      it('returns true when the settings file cannot be read', async () => {
+        await expect(shouldPromptForTerminalSetup()).resolves.toBe(true);
+      });
+
+      it('returns false outside Windows Terminal', async () => {
+        vi.stubEnv('WT_SESSION', '');
+
+        await expect(shouldPromptForTerminalSetup()).resolves.toBe(false);
+      });
     });
   });
 });
