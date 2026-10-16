@@ -216,6 +216,35 @@ function blockquote(text: string, icon: string): string[] {
 }
 
 /**
+ * Internal setup blocks injected as the first user turn (environment/date/
+ * directory-tree context, loaded extension/MCP instructions). Same convention
+ * as core's isIgnoredUserContent: not conversation, so the export skips them
+ * (quiet) or folds them away (full) instead of dumping pages of directory
+ * listings into the transcript.
+ */
+const SETUP_CONTEXT_TAGS = [
+  '<session_context>',
+  '<loaded_context>',
+  '<hook_context>',
+];
+
+function isSetupContextText(text: string): boolean {
+  const head = text.slice(0, 100);
+  return SETUP_CONTEXT_TAGS.some((tag) => head.includes(tag));
+}
+
+function renderSetupContext(text: string): string {
+  return [
+    '<details>',
+    '<summary>⚙️ Session context</summary>',
+    '',
+    truncate(text, MAX_RESULT_CHARS),
+    '',
+    '</details>',
+  ].join('\n');
+}
+
+/**
  * Render a session's conversation record as a Markdown transcript.
  * Quiet by default; see {@link RenderOptions.full} for the complete trace.
  */
@@ -268,6 +297,11 @@ export function renderSessionMarkdown(
 
     if (message.type === 'user') {
       if (!text) continue;
+      if (isSetupContextText(text)) {
+        // Quiet mode drops setup context entirely; full mode folds it.
+        if (full) out.push(renderSetupContext(text), '');
+        continue;
+      }
       out.push('## User', time, '', text, '');
       renderedAny = true;
       continue;

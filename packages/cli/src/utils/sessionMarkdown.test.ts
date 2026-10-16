@@ -141,6 +141,52 @@ describe('renderSessionMarkdown', () => {
       expect(md).toContain('- … +5 more');
     });
 
+    it('drops internal session-context setup messages (directory tree dumps)', () => {
+      const setup =
+        '<session_context>\nThis is the Gemini CLI. We are setting up the context for our chat.\n/tmp Directory Structure:\nShowing up to 200 items...\n</session_context>';
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            {
+              id: 'm1',
+              timestamp: '2026-10-16T09:44:17.000Z',
+              type: 'user',
+              content: setup,
+            },
+            {
+              id: 'm2',
+              timestamp: '2026-10-16T09:45:00.000Z',
+              type: 'user',
+              content: 'real question',
+            },
+          ],
+        }),
+      );
+
+      expect(md).not.toContain('Directory Structure');
+      expect(md).toContain('real question');
+      expect(md.match(/## User/g)).toHaveLength(1);
+    });
+
+    it('drops loaded-context blocks even behind a --- separator', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            {
+              id: 'm1',
+              timestamp: '2026-10-16T09:44:17.000Z',
+              type: 'user',
+              content:
+                '---\n\n<loaded_context>\n<project_context>MCP server instructions</project_context>\n</loaded_context>',
+            },
+          ],
+        }),
+      );
+
+      expect(md).not.toContain('MCP server instructions');
+      expect(md).toContain('_This session has no messages._');
+    });
+
     it('hides thoughts, tokens, tool outputs and info/warning notices', () => {
       const md = renderSessionMarkdown(
         baseRecord({
@@ -284,6 +330,27 @@ describe('renderSessionMarkdown', () => {
       expect(md).toContain('**Plan**');
       expect(md).toContain('_Tokens: in 10 · out 5 · cached 3_');
       expect(md).toContain('the answer');
+    });
+
+    it('folds setup context into a collapsed block', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            {
+              id: 'm1',
+              timestamp: '2026-10-16T09:44:17.000Z',
+              type: 'user',
+              content:
+                '<session_context>\n/tmp Directory Structure: Showing up to 200 items...\n</session_context>',
+            },
+          ],
+        }),
+        { full: true },
+      );
+
+      expect(md).toContain('<summary>⚙️ Session context</summary>');
+      expect(md).toContain('Directory Structure');
+      expect(md).not.toContain('## User');
     });
 
     it('renders info and warning notices as blockquotes', () => {
