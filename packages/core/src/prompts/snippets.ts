@@ -237,7 +237,7 @@ Use the following guidelines to optimize your search and read patterns.
 - Combine turns whenever possible by utilizing parallel searching and reading and by requesting enough context by passing context, before, or after to ${GREP_TOOL_NAME}, to enable you to skip using an extra turn reading the file.
 - ${
     options?.enableJfind
-      ? `When the question is *where* something is implemented, call ${JFIND_TOOL_NAME} first with a plain-language description of the behavior (no regex); only fall back to tools like ${GREP_TOOL_NAME} for exact strings or after checking its hits.`
+      ? `When the question is *where* something is implemented, call ${JFIND_TOOL_NAME} first with a plain-language description of the behavior (no regex), scoping its \`path\` to the directory the user named; it judges names and content, so a shell \`find\`, \`ls -R\` or a directory walk is not a substitute. Only fall back to tools like ${GREP_TOOL_NAME} for exact strings or after checking its hits.`
       : `Prefer using tools like ${GREP_TOOL_NAME} to identify points of interest instead of reading lots of files individually.`
   }
 - If you need to read multiple ranges in a file, do so parallel, in as few turns as possible.
@@ -250,7 +250,7 @@ Use the following guidelines to optimize your search and read patterns.
 <examples>
 - **Searching:** ${
     options?.enableJfind
-      ? `to find the code that implements a behavior, call ${JFIND_TOOL_NAME} with a plain-language query (no regex) and start from its strongest hits; `
+      ? `to find the code that implements a behavior, call ${JFIND_TOOL_NAME} with a plain-language query (no regex) and start from its strongest hits, scoping \`path\` to the repository that holds the code (not a parent full of unrelated repositories); `
       : ''
   }utilize search tools like ${GREP_TOOL_NAME} and ${GLOB_TOOL_NAME} with a conservative result count (\`${GREP_PARAM_TOTAL_MAX_MATCHES}\`) and a narrow scope (\`${GREP_PARAM_INCLUDE_PATTERN}\` and \`${GREP_PARAM_EXCLUDE_PATTERN}\` parameters).
 - **Searching and editing:** utilize search tools like ${GREP_TOOL_NAME} with a conservative result count and a narrow scope. Use \`${GREP_PARAM_CONTEXT}\`, \`${GREP_PARAM_BEFORE}\`, and/or \`${GREP_PARAM_AFTER}\` to request enough context to avoid the need to read the file before editing matches.
@@ -748,6 +748,10 @@ function workflowStepResearch(options: PrimaryWorkflowsOptions): string {
     const toolsStr = searchTools.join(' and ');
     const toolOrTools = searchTools.length > 1 ? 'tools' : 'tool';
     searchSentence = ` Use ${toolsStr} search ${toolOrTools} extensively (in parallel if independent) to understand file structures, existing code patterns, and conventions.`;
+  }
+
+  if (options.enableJfind) {
+    searchSentence += ` Start from ${formatToolName(JFIND_TOOL_NAME)} whenever you cannot name the exact string you are looking for ("which code detects X?", "where is Y handled?"), scoped with \`path\` to the directory the user points at.`;
   }
 
   if (options.enableCodebaseInvestigator) {

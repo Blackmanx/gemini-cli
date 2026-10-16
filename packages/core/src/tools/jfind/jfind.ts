@@ -83,7 +83,9 @@ const JFIND_DESCRIPTION =
   'Semantic search: describe a behavior in plain language and get the files and line ranges that implement it. ' +
   'Use FIRST when you do not know where something is; use grep_search when you know the exact string or regex, ' +
   'and glob when you know the file name. ' +
-  'query is plain language, not a regex. Scope to a known subsystem with path when the workspace is large. ' +
+  'Do not walk the tree with a shell `find` or `ls` to locate code: this searches by meaning, not by name. ' +
+  'query is plain language, not a regex. Set path to the directory that holds the code (a repository root or ' +
+  'subsystem); pointing it at a parent of unrelated repositories only adds noise and time. ' +
   'Returns hits strongest first as `path:start-end p snippet`, where p is an absolute 0-1 relevance probability: ' +
   'below ~0.4 is weak evidence, so widen the query or fall back to grep before concluding absence.';
 

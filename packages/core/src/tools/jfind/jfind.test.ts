@@ -12,7 +12,7 @@ import type { Config } from '../../config/config.js';
 import { createMockMessageBus } from '../../test-utils/mock-message-bus.js';
 import { ToolErrorType } from '../tool-error.js';
 import { Kind } from '../tools.js';
-import { JfindTool, type JfindParams } from './jfind.js';
+import { JfindTool, JFIND_DESCRIPTION, type JfindParams } from './jfind.js';
 
 /** The subset of the client call the canned judge actually reads. */
 interface JudgeCallOptions {
@@ -87,6 +87,13 @@ describe('JfindTool', () => {
   it('is a search tool under the jfind name', () => {
     expect(tool.name).toBe('jfind');
     expect(tool.kind).toBe(Kind.Search);
+  });
+
+  it('tells the model not to locate code with a shell find or ls', () => {
+    expect(JFIND_DESCRIPTION).toContain('Do not walk the tree with a shell');
+    expect(JFIND_DESCRIPTION).toContain(
+      'Set path to the directory that holds the code',
+    );
   });
 
   it('returns ranked hits with ranges, gauges, and the token footer', async () => {

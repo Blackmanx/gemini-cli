@@ -6,7 +6,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getCoreSystemPrompt } from './prompts.js';
-import { renderCoreMandates } from '../prompts/snippets.js';
+import {
+  renderCoreMandates,
+  renderPrimaryWorkflows,
+} from '../prompts/snippets.js';
 import { resolvePathFromEnv } from '../prompts/utils.js';
 import { isGitRepository } from '../utils/gitUtils.js';
 import fs from 'node:fs';
@@ -1013,6 +1016,13 @@ describe('renderCoreMandates jfind steering', () => {
       'Prefer using tools like grep_search to identify points of interest',
     );
     expect(prompt).toContain('fall back to tools like grep_search');
+    // A shell directory walk is named as the anti-pattern, and the scope
+    // parameter is pointed at the directory the user named.
+    expect(prompt).toContain('is not a substitute');
+    expect(prompt).toContain('`path` to the directory the user named');
+    expect(prompt).toContain(
+      'scoping `path` to the repository that holds the code',
+    );
   });
 
   it('never mentions jfind when the tool is disabled', () => {
@@ -1024,5 +1034,33 @@ describe('renderCoreMandates jfind steering', () => {
     expect(prompt).toContain(
       '**Searching:** utilize search tools like grep_search and glob',
     );
+  });
+});
+
+describe('renderPrimaryWorkflows jfind steering', () => {
+  const workflowOptions = {
+    interactive: false,
+    topicUpdateNarration: false,
+    enableJfind: false,
+    enableGrep: true,
+    enableGlob: true,
+    enableEnterPlanModeTool: false,
+    enableCodebaseInvestigator: false,
+    enableWriteTodosTool: false,
+  };
+
+  it('names jfind as the first step for concept-level questions', () => {
+    const prompt = renderPrimaryWorkflows({
+      ...workflowOptions,
+      enableJfind: true,
+    });
+    expect(prompt).toContain(
+      'Start from `jfind` whenever you cannot name the exact string',
+    );
+  });
+
+  it('does not mention jfind when the tool is disabled', () => {
+    const prompt = renderPrimaryWorkflows(workflowOptions);
+    expect(prompt).not.toContain('jfind');
   });
 });
