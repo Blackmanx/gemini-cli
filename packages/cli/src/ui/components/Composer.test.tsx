@@ -870,7 +870,7 @@ describe('Composer', () => {
 
       // StatusDisplay (which contains ContextUsageDisplay) should bleed through in minimal mode
       expect(lastFrame()).toContain('StatusDisplay');
-      expect(lastFrame()).toContain('70% used');
+      expect(lastFrame()).toMatch(/\[█+░+\] 70%/);
     });
   });
 

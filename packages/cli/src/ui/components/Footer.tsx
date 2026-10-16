@@ -20,7 +20,10 @@ import { ConsoleSummaryDisplay } from './ConsoleSummaryDisplay.js';
 import process from 'node:process';
 import os from 'node:os';
 import { MemoryUsageDisplay } from './MemoryUsageDisplay.js';
-import { ContextUsageDisplay } from './ContextUsageDisplay.js';
+import {
+  ContextUsageDisplay,
+  contextUsageReservedWidth,
+} from './ContextUsageDisplay.js';
 import { QuotaDisplay } from './QuotaDisplay.js';
 import { DebugProfiler } from './DebugProfiler.js';
 import { useUIState } from '../contexts/UIStateContext.js';
@@ -343,7 +346,7 @@ export const Footer: React.FC = () => {
               terminalWidth={terminalWidth}
             />
           ),
-          10, // "100% used" is 9 chars
+          contextUsageReservedWidth(terminalWidth),
         );
         break;
       }

@@ -257,7 +257,7 @@ describe('<Footer />', () => {
       }),
     });
     expect(lastFrame()).toContain(defaultProps.model);
-    expect(lastFrame()).toMatch(/\d+% used/);
+    expect(lastFrame()).toContain('0% · 1k/1.0M');
     unmount();
   });
 
@@ -521,7 +521,7 @@ describe('<Footer />', () => {
         }),
       });
       expect(lastFrame()).toContain(defaultProps.model);
-      expect(lastFrame()).not.toMatch(/\d+% used/);
+      expect(lastFrame()).not.toContain('14%');
       unmount();
     });
     it('shows the context percentage when hideContextPercentage is false', async () => {
@@ -538,7 +538,7 @@ describe('<Footer />', () => {
         }),
       });
       expect(lastFrame()).toContain(defaultProps.model);
-      expect(lastFrame()).toMatch(/\d+% used/);
+      expect(lastFrame()).toContain('14% · 150k/1.0M');
       unmount();
     });
     it('renders complete footer in narrow terminal (baseline narrow)', async () => {

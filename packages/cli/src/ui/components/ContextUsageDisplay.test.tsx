@@ -5,7 +5,10 @@
  */
 
 import { renderWithProviders } from '../../test-utils/render.js';
-import { ContextUsageDisplay } from './ContextUsageDisplay.js';
+import {
+  ContextUsageDisplay,
+  contextUsageReservedWidth,
+} from './ContextUsageDisplay.js';
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('@google/gemini-cli-core', async (importOriginal) => {
@@ -18,7 +21,7 @@ vi.mock('@google/gemini-cli-core', async (importOriginal) => {
 });
 
 describe('ContextUsageDisplay', () => {
-  it('renders correct percentage used', async () => {
+  it('renders the full context bar with totals on wide terminals', async () => {
     const { lastFrame, unmount } = await renderWithProviders(
       <ContextUsageDisplay
         promptTokenCount={5000}
@@ -26,25 +29,26 @@ describe('ContextUsageDisplay', () => {
         terminalWidth={120}
       />,
     );
-    const output = lastFrame();
-    expect(output).toContain('50% used');
+    expect(lastFrame()).toContain('[█████░░░░░] 50% · 5k/10k');
     unmount();
   });
 
-  it('renders correctly when usage is 0%', async () => {
+  it('renders the bar without totals on medium terminals', async () => {
     const { lastFrame, unmount } = await renderWithProviders(
       <ContextUsageDisplay
-        promptTokenCount={0}
+        promptTokenCount={5000}
         model="gemini-pro"
-        terminalWidth={120}
+        terminalWidth={100}
       />,
+      { width: 100 },
     );
     const output = lastFrame();
-    expect(output).toContain('0% used');
+    expect(output).toContain('[█████░░░░░] 50%');
+    expect(output).not.toContain('·');
     unmount();
   });
 
-  it('renders abbreviated label when terminal width is small', async () => {
+  it('renders only the percentage on narrow terminals', async () => {
     const { lastFrame, unmount } = await renderWithProviders(
       <ContextUsageDisplay
         promptTokenCount={2000}
@@ -55,24 +59,23 @@ describe('ContextUsageDisplay', () => {
     );
     const output = lastFrame();
     expect(output).toContain('20%');
-    expect(output).not.toContain('context used');
+    expect(output).not.toContain('[');
     unmount();
   });
 
-  it('renders 80% correctly', async () => {
+  it('renders an empty gauge at 0%', async () => {
     const { lastFrame, unmount } = await renderWithProviders(
       <ContextUsageDisplay
-        promptTokenCount={8000}
+        promptTokenCount={0}
         model="gemini-pro"
         terminalWidth={120}
       />,
     );
-    const output = lastFrame();
-    expect(output).toContain('80% used');
+    expect(lastFrame()).toContain('[░░░░░░░░░░] 0% · 0/10k');
     unmount();
   });
 
-  it('renders 100% when full', async () => {
+  it('renders a full gauge at 100%', async () => {
     const { lastFrame, unmount } = await renderWithProviders(
       <ContextUsageDisplay
         promptTokenCount={10000}
@@ -80,8 +83,27 @@ describe('ContextUsageDisplay', () => {
         terminalWidth={120}
       />,
     );
-    const output = lastFrame();
-    expect(output).toContain('100% used');
+    expect(lastFrame()).toContain('[██████████] 100% · 10k/10k');
     unmount();
+  });
+
+  it('falls back to the bare percentage when the model is unknown', async () => {
+    const { lastFrame, unmount } = await renderWithProviders(
+      <ContextUsageDisplay
+        promptTokenCount={5000}
+        model={undefined}
+        terminalWidth={120}
+      />,
+    );
+    const output = lastFrame();
+    expect(output).toContain('0%');
+    expect(output).not.toContain('[');
+    unmount();
+  });
+
+  it('reserves the worst-case width per terminal-width tier', () => {
+    expect(contextUsageReservedWidth(120)).toBe(30);
+    expect(contextUsageReservedWidth(100)).toBe(17);
+    expect(contextUsageReservedWidth(80)).toBe(4);
   });
 });
