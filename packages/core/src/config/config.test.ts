@@ -3713,6 +3713,22 @@ describe('Config Quota & Preview Model Access', () => {
         expect(result).toBeNull();
       }
     });
+
+    it('should tell the caller how to widen the workspace when denying a path', () => {
+      const config = new Config(baseParams);
+      const outsidePath = path.resolve(
+        baseParams.targetDir,
+        '..',
+        'elsewhere',
+        'file.ts',
+      );
+      const result = config.validatePathAccess(outsidePath, 'read');
+      expect(result).toContain('Path not in workspace');
+      expect(result).toContain('/directory add <dir>');
+      expect(result).toContain('--include-directories');
+      expect(result).toContain('context');
+      expect(result).toContain('includeDirectories');
+    });
   });
 });
 

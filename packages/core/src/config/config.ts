@@ -3870,7 +3870,12 @@ export class Config implements McpContext, AgentLoopContext {
     const windowsProfileNote = this.windowsUserProfileRoot
       ? ` or the Windows user profile: ${this.windowsUserProfileRoot}`
       : '';
-    return `Path not in workspace: Attempted path "${absolutePath}" resolves outside the allowed workspace directories: ${workspaceDirs.join(', ')} or the project temp directory: ${projectTempDir}${windowsProfileNote}`;
+    return (
+      `Path not in workspace: Attempted path "${absolutePath}" resolves outside the allowed workspace directories: ${workspaceDirs.join(', ')} or the project temp directory: ${projectTempDir}${windowsProfileNote}. ` +
+      'To allow a path, add its directory to the workspace: run /directory add <dir> in the session, ' +
+      'start gemini with --include-directories <dir>, or set "context": {"includeDirectories": ["<dir>"]} ' +
+      'in settings.json (a bare "~" there includes the whole home directory).'
+    );
   }
 
   /**
