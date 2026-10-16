@@ -15,10 +15,10 @@ exports[`<FooterConfigDialog /> > highlights the active item in the preview 1`] 
 │     Sandbox type and trust indicator                                                             │
 │    [✓] model-name                                                                                │
 │     Current model identifier                                                                     │
+│    [✓] context-used                                                                              │
+│     Percentage of context window used                                                            │
 │    [✓] quota                                                                                     │
 │     Percentage of daily limit used (not shown when unavailable)                                  │
-│    [ ] context-used                                                                              │
-│     Percentage of context window used                                                            │
 │    [ ] memory-usage                                                                              │
 │     Memory used by the application                                                               │
 │    [ ] session-id                                                                                │
@@ -40,8 +40,8 @@ exports[`<FooterConfigDialog /> > highlights the active item in the preview 1`] 
 │                                                                                                  │
 │  ┌────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Preview:                                                                                   │  │
-│  │ workspace (/directory)     branch      sandbox     /model              quota        diff   │  │
-│  │ ~/project/path             main        docker      gemini-2.5-pro      42% used     +12 -4 │  │
+│  │ workspace (/directory)   branch   sandbox    /model           context    quota      diff   │  │
+│  │ ~/project/path           main     docker     gemini-2.5-pro   85% used   42% used   +12 -4 │  │
 │  └────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯"
@@ -62,10 +62,10 @@ exports[`<FooterConfigDialog /> > renders correctly with default settings 1`] = 
 │     Sandbox type and trust indicator                                                             │
 │    [✓] model-name                                                                                │
 │     Current model identifier                                                                     │
+│    [✓] context-used                                                                              │
+│     Percentage of context window used                                                            │
 │    [✓] quota                                                                                     │
 │     Percentage of daily limit used (not shown when unavailable)                                  │
-│    [ ] context-used                                                                              │
-│     Percentage of context window used                                                            │
 │    [ ] memory-usage                                                                              │
 │     Memory used by the application                                                               │
 │    [ ] session-id                                                                                │
@@ -87,8 +87,8 @@ exports[`<FooterConfigDialog /> > renders correctly with default settings 1`] = 
 │                                                                                                  │
 │  ┌────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Preview:                                                                                   │  │
-│  │ workspace (/directory)        branch         sandbox        /model                quota    │  │
-│  │ ~/project/path                main           docker         gemini-2.5-pro        42% used │  │
+│  │ workspace (/directory)     branch     sandbox     /model             context      quota    │  │
+│  │ ~/project/path             main       docker      gemini-2.5-pro     85% used     42% used │  │
 │  └────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
@@ -110,10 +110,10 @@ exports[`<FooterConfigDialog /> > renders correctly with default settings 2`] = 
 │     Sandbox type and trust indicator                                                             │
 │    [✓] model-name                                                                                │
 │     Current model identifier                                                                     │
+│    [✓] context-used                                                                              │
+│     Percentage of context window used                                                            │
 │    [✓] quota                                                                                     │
 │     Percentage of daily limit used (not shown when unavailable)                                  │
-│    [ ] context-used                                                                              │
-│     Percentage of context window used                                                            │
 │    [ ] memory-usage                                                                              │
 │     Memory used by the application                                                               │
 │    [ ] session-id                                                                                │
@@ -135,8 +135,8 @@ exports[`<FooterConfigDialog /> > renders correctly with default settings 2`] = 
 │                                                                                                  │
 │  ┌────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Preview:                                                                                   │  │
-│  │ workspace (/directory)        branch         sandbox        /model                quota    │  │
-│  │ ~/project/path                main           docker         gemini-2.5-pro        42% used │  │
+│  │ workspace (/directory)     branch     sandbox     /model             context      quota    │  │
+│  │ ~/project/path             main       docker      gemini-2.5-pro     85% used     42% used │  │
 │  └────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯"
@@ -157,10 +157,10 @@ exports[`<FooterConfigDialog /> > updates the preview when Show footer labels is
 │     Sandbox type and trust indicator                                                             │
 │    [✓] model-name                                                                                │
 │     Current model identifier                                                                     │
+│    [✓] context-used                                                                              │
+│     Percentage of context window used                                                            │
 │    [✓] quota                                                                                     │
 │     Percentage of daily limit used (not shown when unavailable)                                  │
-│    [ ] context-used                                                                              │
-│     Percentage of context window used                                                            │
 │    [ ] memory-usage                                                                              │
 │     Memory used by the application                                                               │
 │    [ ] session-id                                                                                │
@@ -182,7 +182,7 @@ exports[`<FooterConfigDialog /> > updates the preview when Show footer labels is
 │                                                                                                  │
 │  ┌────────────────────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Preview:                                                                                   │  │
-│  │ ~/project/path     ·     main     ·     docker     ·     gemini-2.5-pro     ·     42% used │  │
+│  │ ~/project/path   ·   main   ·   docker   ·    gemini-2.5-pro   ·   85% used   ·   42% used │  │
 │  └────────────────────────────────────────────────────────────────────────────────────────────┘  │
 │                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯"

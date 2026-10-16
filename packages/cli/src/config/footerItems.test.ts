@@ -55,6 +55,27 @@ describe('footerItems', () => {
       expect(items).not.toContain('quota');
     });
 
+    it('does not re-add context-used when hideModelInfo is true', () => {
+      // The default now shows context usage; hiding the model info must still
+      // hide it rather than having the context rule put it back.
+      const settings = createMockSettings({
+        ui: { footer: { hideModelInfo: true, hideContextPercentage: false } },
+      }).merged;
+      const items = deriveItemsFromLegacySettings(settings);
+      expect(items).not.toContain('model-name');
+      expect(items).not.toContain('context-used');
+      expect(items).not.toContain('quota');
+    });
+
+    it('shows context-used by default', () => {
+      const settings = createMockSettings({}).merged;
+      const items = deriveItemsFromLegacySettings(settings);
+      expect(items).toContain('context-used');
+      expect(items.indexOf('context-used')).toBe(
+        items.indexOf('model-name') + 1,
+      );
+    });
+
     it('includes context-used when hideContextPercentage is false', () => {
       const settings = createMockSettings({
         ui: { footer: { hideContextPercentage: false } },
@@ -87,12 +108,9 @@ describe('footerItems', () => {
         },
       }).merged;
       const items = deriveItemsFromLegacySettings(settings);
-      expect(items).toEqual([
-        'git-branch',
-        'sandbox',
-        'context-used',
-        'memory-usage',
-      ]);
+      // hideModelInfo wins over a false hideContextPercentage: hiding the
+      // model info also hides context usage, as its description states.
+      expect(items).toEqual(['git-branch', 'sandbox', 'memory-usage']);
     });
   });
 

@@ -47,17 +47,17 @@
     <text x="891" y="223" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="0" y="240" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="45" y="240" fill="#d7ffd7" textLength="27" lengthAdjust="spacingAndGlyphs">[✓]</text>
-    <text x="72" y="240" fill="#ffffff" textLength="54" lengthAdjust="spacingAndGlyphs"> quota</text>
+    <text x="72" y="240" fill="#ffffff" textLength="117" lengthAdjust="spacingAndGlyphs"> context-used</text>
     <text x="891" y="240" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="0" y="257" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
-    <text x="45" y="257" fill="#afafaf" textLength="540" lengthAdjust="spacingAndGlyphs"> Percentage of daily limit used (not shown when unavailable)</text>
+    <text x="45" y="257" fill="#afafaf" textLength="306" lengthAdjust="spacingAndGlyphs"> Percentage of context window used</text>
     <text x="891" y="257" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="0" y="274" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
-    <text x="45" y="274" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs">[ ]</text>
-    <text x="72" y="274" fill="#ffffff" textLength="117" lengthAdjust="spacingAndGlyphs"> context-used</text>
+    <text x="45" y="274" fill="#d7ffd7" textLength="27" lengthAdjust="spacingAndGlyphs">[✓]</text>
+    <text x="72" y="274" fill="#ffffff" textLength="54" lengthAdjust="spacingAndGlyphs"> quota</text>
     <text x="891" y="274" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="0" y="291" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
-    <text x="45" y="291" fill="#afafaf" textLength="306" lengthAdjust="spacingAndGlyphs"> Percentage of context window used</text>
+    <text x="45" y="291" fill="#afafaf" textLength="540" lengthAdjust="spacingAndGlyphs"> Percentage of daily limit used (not shown when unavailable)</text>
     <text x="891" y="291" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="0" y="308" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="45" y="308" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs">[ ]</text>
@@ -137,13 +137,15 @@
     <text x="0" y="665" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="27" y="665" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="45" y="665" fill="#afafaf" textLength="126" lengthAdjust="spacingAndGlyphs">~/project/path</text>
-    <text x="207" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
-    <text x="270" y="665" fill="#afafaf" textLength="36" lengthAdjust="spacingAndGlyphs">main</text>
-    <text x="342" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
-    <text x="405" y="665" fill="#00cd00" textLength="54" lengthAdjust="spacingAndGlyphs">docker</text>
-    <text x="495" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
-    <text x="558" y="665" fill="#afafaf" textLength="126" lengthAdjust="spacingAndGlyphs">gemini-2.5-pro</text>
-    <text x="720" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
+    <text x="189" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
+    <text x="234" y="665" fill="#afafaf" textLength="36" lengthAdjust="spacingAndGlyphs">main</text>
+    <text x="288" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
+    <text x="333" y="665" fill="#00cd00" textLength="54" lengthAdjust="spacingAndGlyphs">docker</text>
+    <text x="405" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
+    <text x="459" y="665" fill="#afafaf" textLength="126" lengthAdjust="spacingAndGlyphs">gemini-2.5-pro</text>
+    <text x="603" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
+    <text x="648" y="665" fill="#afafaf" textLength="72" lengthAdjust="spacingAndGlyphs">85% used</text>
+    <text x="738" y="665" fill="#afafaf" textLength="27" lengthAdjust="spacingAndGlyphs"> · </text>
     <text x="783" y="665" fill="#afafaf" textLength="72" lengthAdjust="spacingAndGlyphs">42% used</text>
     <text x="864" y="665" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>
     <text x="891" y="665" fill="#333333" textLength="9" lengthAdjust="spacingAndGlyphs">│</text>

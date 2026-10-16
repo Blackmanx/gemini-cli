@@ -111,6 +111,7 @@ export function deriveItemsFromLegacySettings(
     remove(items, 'quota');
   }
   if (
+    !settings.ui.footer.hideModelInfo &&
     !settings.ui.footer.hideContextPercentage &&
     !items.includes('context-used')
   ) {

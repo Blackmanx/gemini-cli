@@ -423,6 +423,14 @@ describe('SettingsSchema', () => {
       expect(setting.description).toBe('Enable local and remote subagents.');
     });
 
+    it('shows context usage and the responding model by default', () => {
+      const schema = getSettingsSchema();
+      expect(
+        schema.ui.properties.footer.properties.hideContextPercentage.default,
+      ).toBe(false);
+      expect(schema.ui.properties.showModelInfoInChat.default).toBe(true);
+    });
+
     it('should have skills setting enabled by default', () => {
       const setting = getSettingsSchema().skills.properties.enabled;
       expect(setting).toBeDefined();
