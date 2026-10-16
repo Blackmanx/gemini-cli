@@ -7,13 +7,29 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { debugLogger } from './debugLogger.js';
-import { resolveToRealPath, hasBlockedPathSegment } from './paths.js';
+import {
+  resolveToRealPath,
+  hasBlockedPathSegment,
+  hasCredentialPathSegment,
+} from './paths.js';
 
 export type Unsubscribe = () => void;
 
 export interface AddDirectoriesResult {
   added: string[];
   failed: Array<{ path: string; error: Error }>;
+}
+
+/** Construction options for {@link WorkspaceContext}. */
+export interface WorkspaceContextOptions {
+  /**
+   * Allow any path on the machine, not only the workspace directories. This is
+   * `context.allowAnyDirectory`: the working directory still anchors path
+   * resolution and searching, while reads and writes elsewhere stop being
+   * refused. The blocked segments (`.git`, `.env*`, `node_modules`, credential
+   * stores) still apply.
+   */
+  unrestricted?: boolean;
 }
 
 /**
@@ -26,19 +42,28 @@ export class WorkspaceContext {
   private initialDirectories: Set<string>;
   private readOnlyPaths = new Set<string>();
   private onDirectoriesChangedListeners = new Set<() => void>();
+  private readonly unrestricted: boolean;
 
   /**
    * Creates a new WorkspaceContext with the given initial directory and optional additional directories.
    * @param targetDir The initial working directory (usually cwd)
    * @param additionalDirectories Optional array of additional directories to include
+   * @param options Optional construction options (unrestricted path access)
    */
   constructor(
     readonly targetDir: string,
     additionalDirectories: string[] = [],
+    options: WorkspaceContextOptions = {},
   ) {
+    this.unrestricted = options.unrestricted ?? false;
     this.addDirectory(targetDir);
     this.addDirectories(additionalDirectories);
     this.initialDirectories = new Set(this.directories);
+  }
+
+  /** Whether any path outside the workspace directories is reachable. */
+  isUnrestricted(): boolean {
+    return this.unrestricted;
   }
 
   /**
@@ -177,13 +202,23 @@ export class WorkspaceContext {
   }
 
   /**
-   * Checks if a given path is within any of the workspace directories.
+   * Checks if a given path is within any of the workspace directories, or,
+   * in unrestricted mode, anywhere on the machine outside a blocked segment.
    * @param pathToCheck The path to validate
    * @returns True if the path is within the workspace, false otherwise
    */
   isPathWithinWorkspace(pathToCheck: string): boolean {
     try {
       const fullyResolvedPath = this.fullyResolvedPath(pathToCheck);
+
+      if (this.unrestricted) {
+        // Any path is reachable, except noise and credential stores: the
+        // promise of the mode is "work anywhere", not "read the user's keys".
+        return !(
+          hasBlockedPathSegment(fullyResolvedPath) ||
+          hasCredentialPathSegment(fullyResolvedPath)
+        );
+      }
 
       for (const dir of this.directories) {
         if (this.isPathWithinRoot(fullyResolvedPath, dir)) {

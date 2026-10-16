@@ -2089,6 +2089,29 @@ describe('loadCliConfig with includeDirectories', () => {
       expected.length - 1,
     );
   });
+
+  it('allows any directory by default and confines again when disabled', async () => {
+    // loadCliConfig builds the workspace from process.cwd(); the beforeEach
+    // stub points at a directory that does not exist, so use a real one.
+    vi.spyOn(process, 'cwd').mockReturnValue(os.tmpdir());
+    const argv = await parseArguments(createTestMergedSettings());
+
+    const defaultConfig = await loadCliConfig(
+      createTestMergedSettings(),
+      'test-session',
+      argv,
+    );
+    expect(defaultConfig.getWorkspaceContext().isUnrestricted()).toBe(true);
+
+    const confinedConfig = await loadCliConfig(
+      createTestMergedSettings({
+        context: { allowAnyDirectory: false },
+      }),
+      'test-session',
+      argv,
+    );
+    expect(confinedConfig.getWorkspaceContext().isUnrestricted()).toBe(false);
+  });
 });
 
 describe('loadCliConfig compressionThreshold', () => {

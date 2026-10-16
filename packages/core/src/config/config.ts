@@ -736,6 +736,13 @@ export interface ConfigParameters {
   cwd: string;
   fileDiscoveryService?: FileDiscoveryService;
   includeDirectories?: string[];
+  /**
+   * Allow tools to read and write anywhere on the machine, not only inside the
+   * working directory and the included directories. Backs the
+   * `context.allowAnyDirectory` setting; blocked segments (`.git`, `.env*`,
+   * `node_modules`) and credential stores stay blocked.
+   */
+  allowAnyDirectory?: boolean;
   bugCommand?: BugCommandSettings;
   model: string;
   disableLoopDetection?: boolean;
@@ -1203,7 +1210,9 @@ export class Config implements McpContext, AgentLoopContext {
 
     this.targetDir = path.resolve(params.targetDir);
     this.folderTrust = params.folderTrust ?? false;
-    this.workspaceContext = new WorkspaceContext(this.targetDir, []);
+    this.workspaceContext = new WorkspaceContext(this.targetDir, [], {
+      unrestricted: params.allowAnyDirectory ?? false,
+    });
     this.pendingIncludeDirectories = params.includeDirectories ?? [];
     this.debugMode = params.debugMode;
     this.question = params.question;

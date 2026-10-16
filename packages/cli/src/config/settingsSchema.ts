@@ -1482,6 +1482,20 @@ const SETTINGS_SCHEMA = {
         showInDialog: false,
         items: { type: 'string' },
       },
+      allowAnyDirectory: {
+        type: 'boolean',
+        label: 'Allow Any Directory',
+        category: 'Context',
+        requiresRestart: false,
+        default: true,
+        description: oneLine`
+          Allow tools to read and write anywhere on the machine, not only inside
+          the working directory and its included directories. Credential stores
+          (such as ~/.ssh and ~/.aws), .git, .env files and node_modules stay
+          blocked. Turn this off to confine access to the workspace again.
+        `,
+        showInDialog: true,
+      },
       includeDirectories: {
         type: 'array',
         label: 'Include Directories',

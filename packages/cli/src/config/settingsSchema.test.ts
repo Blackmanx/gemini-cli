@@ -431,6 +431,14 @@ describe('SettingsSchema', () => {
       expect(schema.ui.properties.showModelInfoInChat.default).toBe(true);
     });
 
+    it('allows any directory by default', () => {
+      const setting = getSettingsSchema().context?.properties.allowAnyDirectory;
+      expect(setting).toBeDefined();
+      expect(setting?.type).toBe('boolean');
+      expect(setting?.default).toBe(true);
+      expect(setting?.showInDialog).toBe(true);
+    });
+
     it('should have skills setting enabled by default', () => {
       const setting = getSettingsSchema().skills.properties.enabled;
       expect(setting).toBeDefined();

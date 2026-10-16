@@ -1043,6 +1043,7 @@ export async function loadCliConfig(
     targetDir: cwd,
     includeDirectoryTree,
     includeDirectories,
+    allowAnyDirectory: settings.context?.allowAnyDirectory !== false,
     loadMemoryFromIncludeDirectories:
       settings.context?.loadMemoryFromIncludeDirectories || false,
     discoveryMaxDirs: settings.context?.discoveryMaxDirs,

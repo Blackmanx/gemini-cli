@@ -58,6 +58,56 @@ describe('WorkspaceContext with real filesystem', () => {
     });
   });
 
+  describe('unrestricted path access', () => {
+    it('admits paths outside the workspace while listing stays anchored', () => {
+      const workspaceContext = new WorkspaceContext(cwd, [], {
+        unrestricted: true,
+      });
+
+      expect(workspaceContext.isUnrestricted()).toBe(true);
+      expect(workspaceContext.isPathWithinWorkspace(otherDir)).toBe(true);
+      expect(
+        workspaceContext.isPathWithinWorkspace('/srv/elsewhere/a.ts'),
+      ).toBe(true);
+      expect(workspaceContext.isPathReadable('/srv/elsewhere/a.ts')).toBe(true);
+      // Searching and completions still start from the workspace directories.
+      expect(workspaceContext.getDirectories()).toEqual([cwd]);
+    });
+
+    it('keeps noise and credential stores blocked', () => {
+      const workspaceContext = new WorkspaceContext(cwd, [], {
+        unrestricted: true,
+      });
+
+      expect(workspaceContext.isPathWithinWorkspace(`${otherDir}/.env`)).toBe(
+        false,
+      );
+      expect(
+        workspaceContext.isPathWithinWorkspace(`${otherDir}/.git/config`),
+      ).toBe(false);
+      expect(
+        workspaceContext.isPathWithinWorkspace(
+          `${otherDir}/node_modules/pkg/index.js`,
+        ),
+      ).toBe(false);
+      expect(
+        workspaceContext.isPathWithinWorkspace('/home/x/.ssh/id_rsa'),
+      ).toBe(false);
+      expect(
+        workspaceContext.isPathWithinWorkspace('/home/x/.gnupg/secring.gpg'),
+      ).toBe(false);
+      expect(
+        workspaceContext.isPathWithinWorkspace('/home/x/.config/gcloud/creds'),
+      ).toBe(false);
+    });
+
+    it('is off by default', () => {
+      const workspaceContext = new WorkspaceContext(cwd, []);
+      expect(workspaceContext.isUnrestricted()).toBe(false);
+      expect(workspaceContext.isPathWithinWorkspace(otherDir)).toBe(false);
+    });
+  });
+
   describe('adding directories', () => {
     it('should add valid directories', () => {
       const workspaceContext = new WorkspaceContext(cwd);

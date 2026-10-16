@@ -3729,6 +3729,53 @@ describe('Config Quota & Preview Model Access', () => {
       expect(result).toContain('context');
       expect(result).toContain('includeDirectories');
     });
+
+    it('should allow any directory when allowAnyDirectory is set', () => {
+      const config = new Config({ ...baseParams, allowAnyDirectory: true });
+      const workspace = config.getWorkspaceContext();
+
+      expect(workspace.isUnrestricted()).toBe(true);
+      // The working directory still anchors the workspace listing ...
+      expect(workspace.getDirectories()).toEqual([
+        path.resolve(baseParams.targetDir),
+      ]);
+      // ... while paths elsewhere are admitted.
+      expect(workspace.isPathWithinWorkspace('/srv/elsewhere/file.ts')).toBe(
+        true,
+      );
+      expect(config.validatePathAccess('/srv/elsewhere/file.ts', 'read')).toBe(
+        null,
+      );
+    });
+
+    it('should keep noise and credential stores blocked when allowAnyDirectory is set', () => {
+      const config = new Config({ ...baseParams, allowAnyDirectory: true });
+      const workspace = config.getWorkspaceContext();
+
+      expect(workspace.isPathWithinWorkspace('/srv/elsewhere/.env')).toBe(
+        false,
+      );
+      expect(
+        workspace.isPathWithinWorkspace('/srv/elsewhere/.git/config'),
+      ).toBe(false);
+      expect(
+        workspace.isPathWithinWorkspace('/srv/elsewhere/node_modules/pkg/a.js'),
+      ).toBe(false);
+      expect(workspace.isPathWithinWorkspace('/home/scout/.ssh/id_rsa')).toBe(
+        false,
+      );
+      expect(
+        workspace.isPathWithinWorkspace('/home/scout/.aws/credentials'),
+      ).toBe(false);
+    });
+
+    it('should stay confined without allowAnyDirectory', () => {
+      const config = new Config(baseParams);
+      expect(config.getWorkspaceContext().isUnrestricted()).toBe(false);
+      expect(
+        config.getWorkspaceContext().isPathWithinWorkspace('/srv/file.ts'),
+      ).toBe(false);
+    });
   });
 });
 

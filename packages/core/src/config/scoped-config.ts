@@ -118,8 +118,9 @@ export function createScopedWorkspaceContext(
 
   // WorkspaceContext's first constructor argument is the primary targetDir.
   // getDirectories() returns targetDir first, so parentDirs[0] is always it.
-  return new WorkspaceContext(parentDirs[0], [
-    ...parentDirs.slice(1),
-    ...additionalDirectories,
-  ]);
+  return new WorkspaceContext(
+    parentDirs[0],
+    [...parentDirs.slice(1), ...additionalDirectories],
+    { unrestricted: parentContext.isUnrestricted() },
+  );
 }

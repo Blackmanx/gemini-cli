@@ -442,8 +442,8 @@
             "hideContextPercentage": {
               "title": "Hide Context Window Percentage",
               "description": "Hides the context window usage percentage.",
-              "markdownDescription": "Hides the context window usage percentage.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `true`",
-              "default": true,
+              "markdownDescription": "Hides the context window usage percentage.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
+              "default": false,
               "type": "boolean"
             }
           },
@@ -487,8 +487,8 @@
         "showModelInfoInChat": {
           "title": "Show Model Info In Chat",
           "description": "Show the model name in the chat for each model turn.",
-          "markdownDescription": "Show the model name in the chat for each model turn.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `false`",
-          "default": false,
+          "markdownDescription": "Show the model name in the chat for each model turn.\n\n- Category: `UI`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
           "type": "boolean"
         },
         "showUserIdentity": {
@@ -2947,6 +2947,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "allowAnyDirectory": {
+          "title": "Allow Any Directory",
+          "description": "Allow tools to read and write anywhere on the machine, not only inside the working directory and its included directories. Credential stores (such as ~/.ssh and ~/.aws), .git, .env files and node_modules stay blocked. Turn this off to confine access to the workspace again.",
+          "markdownDescription": "Allow tools to read and write anywhere on the machine, not only inside the working directory and its included directories. Credential stores (such as ~/.ssh and ~/.aws), .git, .env files and node_modules stay blocked. Turn this off to confine access to the workspace again.\n\n- Category: `Context`\n- Requires restart: `no`\n- Default: `true`",
+          "default": true,
+          "type": "boolean"
         },
         "includeDirectories": {
           "title": "Include Directories",

@@ -375,7 +375,7 @@ their corresponding top-level category object in your `settings.json` file.
 - **`ui.footer.hideContextPercentage`** (boolean):
 
   - **Description:** Hides the context window usage percentage.
-  - **Default:** `true`
+  - **Default:** `false`
 
 - **`ui.hideFooter`** (boolean):
 
@@ -406,7 +406,7 @@ their corresponding top-level category object in your `settings.json` file.
 - **`ui.showModelInfoInChat`** (boolean):
 
   - **Description:** Show the model name in the chat for each model turn.
-  - **Default:** `false`
+  - **Default:** `true`
 
 - **`ui.showUserIdentity`** (boolean):
 
@@ -1746,6 +1746,14 @@ their corresponding top-level category object in your `settings.json` file.
     ```
 
   - **Requires restart:** Yes
+
+- **`context.allowAnyDirectory`** (boolean):
+
+  - **Description:** Allow tools to read and write anywhere on the machine, not
+    only inside the working directory and its included directories. Credential
+    stores (such as ~/.ssh and ~/.aws), .git, .env files and node_modules stay
+    blocked. Turn this off to confine access to the workspace again.
+  - **Default:** `true`
 
 - **`context.includeDirectories`** (array):
 
