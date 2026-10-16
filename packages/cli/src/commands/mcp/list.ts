@@ -27,6 +27,7 @@ import {
 } from '../../config/mcp/index.js';
 import { requestConsentNonInteractive } from '../../config/extensions/consent.js';
 import { promptForSetting } from '../../config/extensions/extensionSettings.js';
+import { sessionMcpServers } from '../../config/parallelSearch.js';
 import { exitCli } from '../utils.js';
 import chalk from 'chalk';
 
@@ -47,7 +48,7 @@ export async function getMcpServersFromConfig(
     requestSetting: promptForSetting,
   });
   const extensions = await extensionManager.loadExtensions();
-  const mcpServers = { ...settings.mcpServers };
+  const mcpServers = { ...sessionMcpServers(settings) };
   for (const extension of extensions) {
     Object.entries(extension.mcpServers || {}).forEach(([key, server]) => {
       if (mcpServers[key]) {

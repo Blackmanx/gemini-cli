@@ -272,6 +272,7 @@ export * from './tools/ask-user.js';
 
 // MCP OAuth
 export { MCPOAuthProvider } from './mcp/oauth-provider.js';
+export { PARALLEL_SEARCH_SERVER_NAME } from './mcp/parallel-search.js';
 export type {
   OAuthToken,
   OAuthCredentials,

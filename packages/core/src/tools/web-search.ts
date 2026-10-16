@@ -22,6 +22,7 @@ import { getResponseText } from '../utils/partUtils.js';
 import { debugLogger } from '../utils/debugLogger.js';
 import { WEB_SEARCH_DEFINITION } from './definitions/coreTools.js';
 import { resolveToolDeclaration } from './definitions/resolver.js';
+import { PARALLEL_SEARCH_SERVER_NAME } from '../mcp/parallel-search.js';
 import { LlmRole } from '../telemetry/llmRole.js';
 import { wrapUntrusted } from '../utils/textUtils.js';
 import type { AgentLoopContext } from '../config/agent-loop-context.js';
@@ -825,6 +826,19 @@ export class WebSearchTool extends BaseDeclarativeTool<
   }
 
   override getSchema(modelId?: string) {
-    return resolveToolDeclaration(WEB_SEARCH_DEFINITION, modelId);
+    const declaration = resolveToolDeclaration(WEB_SEARCH_DEFINITION, modelId);
+    // OMP port: when the Parallel search server is part of the session, steer
+    // the model toward it for current-information queries and position this
+    // built-in Google search as the complement (different index/coverage) or
+    // fallback — both tools stay available; nothing is disabled.
+    const parallelServer =
+      this.context.config.getMcpServers?.()?.[PARALLEL_SEARCH_SERVER_NAME];
+    if (!parallelServer || !declaration.description) {
+      return declaration;
+    }
+    return {
+      ...declaration,
+      description: `${declaration.description}\n\nWhen the \`${PARALLEL_SEARCH_SERVER_NAME}\` MCP server is connected, prefer its \`web_search\` tool for current-information queries (fast, free, returns source links with excerpts); use this built-in Google web search to complement it when you need broader or different index coverage, or as a fallback when Parallel is unavailable or failing.`,
+    };
   }
 }

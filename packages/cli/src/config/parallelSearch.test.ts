@@ -9,6 +9,7 @@ import type { MCPServerConfig } from '@google/gemini-cli-core';
 import {
   PARALLEL_SEARCH_SERVER_NAME,
   PARALLEL_SEARCH_URL,
+  sessionMcpServers,
   withParallelSearchServer,
 } from './parallelSearch.js';
 
@@ -52,5 +53,46 @@ describe('withParallelSearchServer', () => {
       undefined,
     );
     expect(merged[PARALLEL_SEARCH_SERVER_NAME]).toBe(mine);
+  });
+});
+
+describe('sessionMcpServers', () => {
+  it('applies the Parallel default like withParallelSearchServer', () => {
+    const servers = sessionMcpServers({});
+    expect(servers[PARALLEL_SEARCH_SERVER_NAME]?.url).toBe(PARALLEL_SEARCH_URL);
+  });
+
+  it('returns a fresh object and never touches the input map', () => {
+    const input: Record<string, MCPServerConfig> = {
+      local: { command: 'node', args: ['server.js'] },
+    };
+    const resolved = sessionMcpServers({ mcpServers: input });
+    expect(resolved).not.toBe(input);
+    resolved[PARALLEL_SEARCH_SERVER_NAME] = { command: 'mutated' };
+    expect(input).toEqual({ local: { command: 'node', args: ['server.js'] } });
+  });
+
+  it('skips injection when an admin MCP allowlist governs the servers', () => {
+    const input: Record<string, MCPServerConfig> = {
+      allowed: { command: 'ok' },
+    };
+    expect(
+      sessionMcpServers({
+        mcpServers: input,
+        admin: { mcp: { config: { allowed: { command: 'ok' } } } },
+      }),
+    ).toEqual(input);
+  });
+
+  it('skips injection when the admin MCP kill switch is off', () => {
+    expect(sessionMcpServers({ admin: { mcp: { enabled: false } } })).toEqual(
+      {},
+    );
+  });
+
+  it('honors omp.parallelSearch.enabled === false', () => {
+    expect(
+      sessionMcpServers({ omp: { parallelSearch: { enabled: false } } }),
+    ).toEqual({});
   });
 });

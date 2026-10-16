@@ -18,9 +18,10 @@
  * configuration takes precedence").
  */
 import type { MCPServerConfig } from '@google/gemini-cli-core';
+import { PARALLEL_SEARCH_SERVER_NAME } from '@google/gemini-cli-core';
 
 /** Server name under which the default is registered (tools: mcp_parallel-search_*). */
-export const PARALLEL_SEARCH_SERVER_NAME = 'parallel-search';
+export { PARALLEL_SEARCH_SERVER_NAME };
 
 /** Streamable HTTP endpoint of the free tier. No auth, no API key. */
 export const PARALLEL_SEARCH_URL = 'https://search.parallel.ai/mcp';
@@ -49,4 +50,37 @@ export function withParallelSearchServer(
       'Parallel Search (free tier): current web search results with source links, and page fetches. No account or API key required; subject to free-tier rate limits.',
   };
   return merged;
+}
+
+/** Minimal settings shape needed to resolve the session's MCP server map. */
+export interface McpServerHostSettings {
+  mcpServers?: Record<string, MCPServerConfig>;
+  admin?: {
+    mcp?: { enabled?: boolean; config?: Record<string, MCPServerConfig> };
+  };
+  omp?: { parallelSearch?: { enabled?: boolean } };
+}
+
+/**
+ * The MCP server map every session-facing surface should use (runtime config,
+ * `gemini mcp list`, the policy engine): always a fresh object, with the
+ * Parallel default applied unless admin policy already governs MCP — a kill
+ * switch (`admin.mcp.enabled === false`) or an allowlist
+ * (`admin.mcp.config`) leaves the map untouched. Central so no read path can
+ * miss the default and leave the model without Parallel's tools.
+ */
+export function sessionMcpServers(
+  settings: McpServerHostSettings,
+): Record<string, MCPServerConfig> {
+  if (settings.admin?.mcp?.enabled === false) {
+    return { ...settings.mcpServers };
+  }
+  const allowlist = settings.admin?.mcp?.config;
+  if (allowlist && Object.keys(allowlist).length > 0) {
+    return { ...settings.mcpServers };
+  }
+  return withParallelSearchServer(
+    settings.mcpServers,
+    settings.omp?.parallelSearch?.enabled,
+  );
 }

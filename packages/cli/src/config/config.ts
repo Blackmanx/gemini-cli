@@ -65,7 +65,7 @@ import {
 } from './settings.js';
 
 import { loadSandboxConfig } from './sandboxConfig.js';
-import { withParallelSearchServer } from './parallelSearch.js';
+import { sessionMcpServers } from './parallelSearch.js';
 import { resolvePath } from '../utils/resolvePath.js';
 import { isRecord } from '../utils/settingsUtils.js';
 import { RESUME_LATEST } from '../utils/sessionUtils.js';
@@ -940,21 +940,11 @@ export async function loadCliConfig(
 
   const adminAllowlist = settings.admin?.mcp?.config;
   let mcpServerCommand = mcpEnabled ? settings.mcp?.serverCommand : undefined;
-  let mcpServers = mcpEnabled ? settings.mcpServers : {};
-
-  // The omp-port default: Parallel's free, keyless search server joins the
-  // MCP surface unless the user opted out, configured the name themselves,
+  // The omp-port default: `sessionMcpServers` adds Parallel's free, keyless
+  // search server unless the user opted out, configured the name themselves,
   // or an admin allowlist already governs which servers may exist (the
   // allowlist below then still has the last word over everything else).
-  if (
-    mcpEnabled &&
-    (!adminAllowlist || Object.keys(adminAllowlist).length === 0)
-  ) {
-    mcpServers = withParallelSearchServer(
-      mcpServers,
-      settings.omp?.parallelSearch?.enabled,
-    );
-  }
+  let mcpServers = mcpEnabled ? sessionMcpServers(settings) : {};
 
   if (mcpEnabled && adminAllowlist && Object.keys(adminAllowlist).length > 0) {
     const result = applyAdminAllowlist(mcpServers, adminAllowlist);

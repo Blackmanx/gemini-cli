@@ -25,6 +25,10 @@ import { ExtensionStorage } from '../../config/extensions/storage.js';
 import { ExtensionManager } from '../../config/extension-manager.js';
 import { McpServerEnablementManager } from '../../config/mcp/index.js';
 import { createMockSettings } from '../../test-utils/settings.js';
+import {
+  PARALLEL_SEARCH_SERVER_NAME,
+  PARALLEL_SEARCH_URL,
+} from '../../config/parallelSearch.js';
 
 vi.mock('../../config/settings.js', async (importOriginal) => {
   const actual =
@@ -134,11 +138,38 @@ describe('mcp list command', () => {
   });
 
   it('should display message when no servers configured', async () => {
-    mockedLoadSettings.mockReturnValue(createMockSettings({ mcpServers: {} }));
+    mockedLoadSettings.mockReturnValue(
+      createMockSettings({
+        mcpServers: {},
+        omp: { parallelSearch: { enabled: false } },
+      }),
+    );
 
     await listMcpServers();
 
     expect(debugLogger.log).toHaveBeenCalledWith('No MCP servers configured.');
+  });
+
+  it('should list the injected Parallel search server by default', async () => {
+    mockedLoadSettings.mockReturnValue(
+      createMockSettings({ mcpServers: {}, isTrusted: true }),
+    );
+    mockClient.connect.mockResolvedValue(undefined);
+    mockClient.ping.mockResolvedValue(undefined);
+
+    await listMcpServers();
+
+    expect(debugLogger.log).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `parallel-search: ${PARALLEL_SEARCH_URL} (http) - Connected`,
+      ),
+    );
+    expect(mockedCreateTransport).toHaveBeenCalledWith(
+      PARALLEL_SEARCH_SERVER_NAME,
+      expect.objectContaining({ url: PARALLEL_SEARCH_URL }),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('should display different server types with connected status', async () => {
@@ -404,7 +435,13 @@ describe('mcp list command', () => {
         'blocked-server: /test/server  (stdio) - Blocked',
       ),
     );
-    expect(mockedCreateTransport).not.toHaveBeenCalled();
+    // The excluded server never gets a transport; the Parallel default
+    // (not excluded) still does.
+    expect(
+      mockedCreateTransport.mock.calls.some(
+        (call) => call[0] === 'blocked-server',
+      ),
+    ).toBe(false);
   });
 
   it('should display disabled status for servers disabled via enablement manager', async () => {
@@ -527,7 +564,13 @@ describe('mcp list command', () => {
         'blocked-server: /test/server  (stdio) - Blocked',
       ),
     );
-    expect(mockedCreateTransport).not.toHaveBeenCalled();
+    // The excluded server never gets a transport; the Parallel default
+    // (not excluded) still does.
+    expect(
+      mockedCreateTransport.mock.calls.some(
+        (call) => call[0] === 'blocked-server',
+      ),
+    ).toBe(false);
   });
 
   it('should block servers case-insensitively when excluded', async () => {
@@ -565,7 +608,13 @@ describe('mcp list command', () => {
         'blocked-server: /test/server  (stdio) - Blocked',
       ),
     );
-    expect(mockedCreateTransport).not.toHaveBeenCalled();
+    // The excluded server never gets a transport; the Parallel default
+    // (not excluded) still does.
+    expect(
+      mockedCreateTransport.mock.calls.some(
+        (call) => call[0] === 'blocked-server',
+      ),
+    ).toBe(false);
   });
 
   it('should restrict allowed servers to the intersection of all defined allowlists', async () => {

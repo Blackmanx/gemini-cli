@@ -23,6 +23,7 @@ import type { Config } from '../config/config.js';
 import { GeminiClient } from '../core/client.js';
 import { ToolErrorType } from './tool-error.js';
 import { createMockMessageBus } from '../test-utils/mock-message-bus.js';
+import { WEB_SEARCH_DEFINITION } from './definitions/coreTools.js';
 
 // Mock GeminiClient and Config constructor
 vi.mock('../core/client.js');
@@ -514,5 +515,36 @@ describe('grounding timeout budget', () => {
 
   it('keeps the 30s default when nothing is configured', () => {
     expect(WEB_SEARCH_TIMEOUT_MS).toBe(30_000);
+  });
+});
+
+describe('WebSearchTool getSchema with the Parallel search default', () => {
+  const stockDescription = () => WEB_SEARCH_DEFINITION.base.description ?? '';
+
+  it('positions the built-in Google search as the complement when Parallel is connected', () => {
+    const config = {
+      getMcpServers: () => ({
+        'parallel-search': {
+          url: 'https://search.parallel.ai/mcp',
+          type: 'http',
+        },
+      }),
+    } as unknown as Config;
+    (config as unknown as { config: Config }).config = config;
+
+    const tool = new WebSearchTool(config, createMockMessageBus());
+    const description = tool.getSchema().description ?? '';
+
+    expect(description).toContain(stockDescription());
+    expect(description).toContain('prefer its `web_search` tool');
+    expect(description).toContain('complement');
+  });
+
+  it('keeps the stock description when no Parallel server is present', () => {
+    const config = {} as unknown as Config;
+    (config as unknown as { config: Config }).config = config;
+
+    const tool = new WebSearchTool(config, createMockMessageBus());
+    expect(tool.getSchema().description).toBe(stockDescription());
   });
 });

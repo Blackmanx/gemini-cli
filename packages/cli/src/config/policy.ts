@@ -20,6 +20,7 @@ import {
   debugLogger,
 } from '@google/gemini-cli-core';
 import { type Settings } from './settings.js';
+import { sessionMcpServers } from './parallelSearch.js';
 
 /**
  * Temporary flag to automatically accept workspace policies to reduce friction.
@@ -60,7 +61,7 @@ export async function createPolicyEngineConfig(
   const policySettings: PolicySettings = {
     mcp: settings.mcp,
     tools: settings.tools,
-    mcpServers: settings.mcpServers,
+    mcpServers: sessionMcpServers(settings),
     policyPaths: settings.policyPaths,
     adminPolicyPaths: settings.adminPolicyPaths,
     workspacePoliciesDir,

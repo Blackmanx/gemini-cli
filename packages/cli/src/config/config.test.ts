@@ -3807,7 +3807,7 @@ describe('loadCliConfig mcpEnabled', () => {
       },
     });
     const config = await loadCliConfig(settings, 'test-session', argv);
-    expect(config.getMcpServers()[PARALLEL_SEARCH_SERVER_NAME]).toEqual({
+    expect(config.getMcpServers()?.[PARALLEL_SEARCH_SERVER_NAME]).toEqual({
       url: 'https://example.invalid/mcp',
       type: 'http',
     });
