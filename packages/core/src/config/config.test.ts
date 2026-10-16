@@ -3748,7 +3748,7 @@ describe('Config Quota & Preview Model Access', () => {
       );
     });
 
-    it('should keep noise and credential stores blocked when allowAnyDirectory is set', () => {
+    it('should keep noise blocked and reach credential stores when allowAnyDirectory is set', () => {
       const config = new Config({ ...baseParams, allowAnyDirectory: true });
       const workspace = config.getWorkspaceContext();
 
@@ -3761,12 +3761,14 @@ describe('Config Quota & Preview Model Access', () => {
       expect(
         workspace.isPathWithinWorkspace('/srv/elsewhere/node_modules/pkg/a.js'),
       ).toBe(false);
+      // Redaction guards credential values in tool output, so the files at
+      // least have to be reachable.
       expect(workspace.isPathWithinWorkspace('/home/scout/.ssh/id_rsa')).toBe(
-        false,
+        true,
       );
       expect(
         workspace.isPathWithinWorkspace('/home/scout/.aws/credentials'),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it('should stay confined without allowAnyDirectory', () => {

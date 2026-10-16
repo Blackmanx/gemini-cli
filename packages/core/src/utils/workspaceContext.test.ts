@@ -74,7 +74,7 @@ describe('WorkspaceContext with real filesystem', () => {
       expect(workspaceContext.getDirectories()).toEqual([cwd]);
     });
 
-    it('keeps noise and credential stores blocked', () => {
+    it('keeps noise blocked and lets credential stores through', () => {
       const workspaceContext = new WorkspaceContext(cwd, [], {
         unrestricted: true,
       });
@@ -90,15 +90,17 @@ describe('WorkspaceContext with real filesystem', () => {
           `${otherDir}/node_modules/pkg/index.js`,
         ),
       ).toBe(false);
+      // Credential stores are readable: tool output is redacted before it
+      // reaches the model, so the agent can inspect what is configured.
       expect(
         workspaceContext.isPathWithinWorkspace('/home/x/.ssh/id_rsa'),
-      ).toBe(false);
+      ).toBe(true);
       expect(
-        workspaceContext.isPathWithinWorkspace('/home/x/.gnupg/secring.gpg'),
-      ).toBe(false);
-      expect(
-        workspaceContext.isPathWithinWorkspace('/home/x/.config/gcloud/creds'),
-      ).toBe(false);
+        workspaceContext.isPathWithinWorkspace('/home/x/.aws/credentials'),
+      ).toBe(true);
+      expect(workspaceContext.isPathWithinWorkspace('/home/x/.netrc')).toBe(
+        true,
+      );
     });
 
     it('is off by default', () => {

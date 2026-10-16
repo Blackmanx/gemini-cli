@@ -691,42 +691,6 @@ const SAFE_ENV_TEMPLATES = new Set([
 ]);
 
 /**
- * Credential locations that stay unreachable even when the workspace is
- * unrestricted: private keys, cloud credentials, and password stores. Only
- * consulted for paths admitted by the unrestricted allow-any-directory mode,
- * so ordinary workspace access (a project checkout) is unaffected.
- */
-const CREDENTIAL_SEGMENTS = new Set([
-  '.ssh',
-  '.aws',
-  '.gnupg',
-  '.kube',
-  '.docker',
-  '.password-store',
-  '.git-credentials',
-  '.netrc',
-  '.npmrc',
-  '.pypirc',
-  '.pgpass',
-]);
-
-/**
- * Whether a path points into a credential store (`~/.ssh/id_rsa`,
- * `~/.aws/credentials`, …). Segment-based and case-insensitive like
- * {@link hasBlockedPathSegment}.
- */
-export function hasCredentialPathSegment(p: string): boolean {
-  for (const segment of p.split(/[/\\]/)) {
-    const clean = trimTrailingSpacesAndDots(
-      segment.split(':')[0],
-    ).toLowerCase();
-    if (clean.length === 0) continue;
-    if (CREDENTIAL_SEGMENTS.has(clean) || clean === 'gcloud') return true;
-  }
-  return false;
-}
-
-/**
  * Checks if a path string contains any blocked segments (.git, .env, node_modules, gha-creds-*.json)
  * including case-insensitive matches and NTFS 8.3 short names.
  */

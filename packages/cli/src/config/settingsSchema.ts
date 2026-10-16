@@ -1490,9 +1490,10 @@ const SETTINGS_SCHEMA = {
         default: true,
         description: oneLine`
           Allow tools to read and write anywhere on the machine, not only inside
-          the working directory and its included directories. Credential stores
-          (such as ~/.ssh and ~/.aws), .git, .env files and node_modules stay
-          blocked. Turn this off to confine access to the workspace again.
+          the working directory and its included directories. Credential-shaped
+          values in tool output are still redacted before the model sees them,
+          and .git, .env files and node_modules stay blocked. Turn this off to
+          confine access to the workspace again.
         `,
         showInDialog: true,
       },

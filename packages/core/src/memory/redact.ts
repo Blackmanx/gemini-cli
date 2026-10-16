@@ -129,10 +129,12 @@ for (const rule of PROVIDER_RULES) {
  */
 const KEYWORDS: readonly string[] = [
   'password',
+  'passwd',
   'api_key',
   'apikey',
   'secret',
   'token',
+  'pwd',
   'key',
   'tok',
   'sk',
@@ -382,20 +384,56 @@ function keywordSecretEnd(
   return credential ? index : -1;
 }
 
-/** `password=hunter2000` / `apiKey: "abcdefgh"` — the value, not the key. */
+/** Whitespace tolerated between a keyword/separator and its value. */
+const MAX_ASSIGN_SPACES = 4;
+
+/** `index` advanced past up to `max` spaces/tabs. */
+function skipSpaces(input: string, index: number, max: number): number {
+  let skipped = 0;
+  while (
+    skipped < max &&
+    index < input.length &&
+    isSpace(input.charCodeAt(index))
+  ) {
+    index++;
+    skipped++;
+  }
+  return index;
+}
+
+/**
+ * Whether a value looks like a credential rather than code: it mixes letters
+ * and digits, or is a long letter-only run. `getToken()`, `undefined`, `true`
+ * and short words fail both, which is what keeps `const token = getToken();`
+ * readable while `password = hunter2000` is not.
+ */
+function isCredentialValue(
+  length: number,
+  letter: boolean,
+  digit: boolean,
+): boolean {
+  if (letter && digit) {
+    return length >= MIN_SECRET_VALUE_LENGTH;
+  }
+  if (letter) {
+    return length >= MIN_LETTERS_SEGMENT;
+  }
+  return false;
+}
+
+/**
+ * `password = hunter2000` / `apiKey: "abcdefgh"` — the value, not the key.
+ * Whitespace is allowed on both sides of the separator, which is how config
+ * files are actually written (`.env`, `~/.aws/credentials`, ini, yaml); a value
+ * separated by whitespace must then look credential-shaped, so ordinary
+ * assignments in code are left alone.
+ */
 function assignmentSpan(
   input: string,
   start: number,
   keywordLength: number,
 ): SecretSpan | undefined {
-  let index = start + keywordLength;
-  while (
-    index - start - keywordLength < 4 &&
-    index < input.length &&
-    isSpace(input.charCodeAt(index))
-  ) {
-    index++;
-  }
+  let index = skipSpaces(input, start + keywordLength, MAX_ASSIGN_SPACES);
   const separator = input.charCodeAt(index);
   if (separator !== CHAR_EQUALS && separator !== CHAR_COLON) {
     return undefined;
@@ -405,6 +443,8 @@ function assignmentSpan(
     return undefined;
   }
   index++;
+  const spaced = isSpace(input.charCodeAt(index));
+  index = skipSpaces(input, index, MAX_ASSIGN_SPACES);
   if (
     index < input.length &&
     (input.charCodeAt(index) === CHAR_QUOTE ||
@@ -414,6 +454,8 @@ function assignmentSpan(
     index++;
   }
   const valueStart = index;
+  let letter = false;
+  let digit = false;
   while (index < input.length && !isSpace(input.charCodeAt(index))) {
     const code = input.charCodeAt(index);
     if (
@@ -423,9 +465,57 @@ function assignmentSpan(
     ) {
       break;
     }
+    if (code >= CHAR_ZERO && code <= CHAR_NINE) digit = true;
+    else if (!isDelimiter(code)) letter = true;
     index++;
   }
-  if (index - valueStart < MIN_SECRET_VALUE_LENGTH) {
+  const length = index - valueStart;
+  if (
+    spaced
+      ? !isCredentialValue(length, letter, digit)
+      : length < MIN_SECRET_VALUE_LENGTH
+  ) {
+    return undefined;
+  }
+  return { start: valueStart, end: index };
+}
+
+/**
+ * `password hunter2000` — the `.netrc`/`.pgpass` shape, where the value follows
+ * the keyword with only whitespace between them. Matched only from a token-run
+ * start and only when the value itself looks credential-shaped, so prose like
+ * "password authentication failed" is left untouched.
+ */
+function spacedValueSpan(
+  input: string,
+  start: number,
+  keywordLength: number,
+): SecretSpan | undefined {
+  if (start > 0 && isTokenChar(input.charCodeAt(start - 1))) {
+    return undefined;
+  }
+  const afterKeyword = start + keywordLength;
+  if (!isSpace(input.charCodeAt(afterKeyword))) {
+    return undefined;
+  }
+  let index = skipSpaces(input, afterKeyword, MAX_ASSIGN_SPACES);
+  const valueStart = index;
+  let letter = false;
+  let digit = false;
+  while (index < input.length && !isSpace(input.charCodeAt(index))) {
+    const code = input.charCodeAt(index);
+    if (
+      code === CHAR_QUOTE ||
+      code === CHAR_APOSTROPHE ||
+      code === CHAR_BACKTICK
+    ) {
+      break;
+    }
+    if (code >= CHAR_ZERO && code <= CHAR_NINE) digit = true;
+    else if (!isDelimiter(code)) letter = true;
+    index++;
+  }
+  if (!isCredentialValue(index - valueStart, letter, digit)) {
     return undefined;
   }
   return { start: valueStart, end: index };
@@ -537,6 +627,10 @@ function matchSecretSpan(
     const assigned = assignmentSpan(input, index, keyword.length);
     if (assigned) {
       return assigned;
+    }
+    const spaced = spacedValueSpan(input, index, keyword.length);
+    if (spaced) {
+      return spaced;
     }
   }
   return undefined;
