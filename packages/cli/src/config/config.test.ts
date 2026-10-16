@@ -32,6 +32,24 @@ import * as ServerConfig from '@google/gemini-cli-core';
 import { isWorkspaceTrusted } from './trustedFolders.js';
 import { ExtensionManager } from './extension-manager.js';
 import { RESUME_LATEST } from '../utils/sessionUtils.js';
+import {
+  PARALLEL_SEARCH_SERVER_NAME,
+  PARALLEL_SEARCH_URL,
+} from './parallelSearch.js';
+
+/**
+ * The omp-port default MCP server `loadCliConfig` injects (see
+ * parallelSearch.ts): free, keyless Parallel search unless the user opted out
+ * or configured the name themselves.
+ */
+const parallelSearchDefault = {
+  [PARALLEL_SEARCH_SERVER_NAME]: {
+    url: PARALLEL_SEARCH_URL,
+    type: 'http',
+    trust: true,
+    description: expect.stringContaining('Parallel Search'),
+  },
+};
 
 vi.mock('./trustedFolders.js', () => ({
   isWorkspaceTrusted: vi.fn(() => ({ isTrusted: true, source: 'file' })), // Default to trusted
@@ -1525,7 +1543,10 @@ describe('loadCliConfig with allowed-mcp-server-names', () => {
     process.argv = ['node', 'script.js'];
     const argv = await parseArguments(createTestMergedSettings());
     const config = await loadCliConfig(baseSettings, 'test-session', argv);
-    expect(config.getMcpServers()).toEqual(baseSettings.mcpServers);
+    expect(config.getMcpServers()).toEqual({
+      ...baseSettings.mcpServers,
+      ...parallelSearchDefault,
+    });
   });
 
   it('should allow only the specified MCP server', async () => {
@@ -1699,7 +1720,10 @@ describe('loadCliConfig with admin.mcp.config', () => {
       },
     });
     const config = await loadCliConfig(settings, 'test-session', argv);
-    expect(config.getMcpServers()).toEqual(localMcpServers);
+    expect(config.getMcpServers()).toEqual({
+      ...localMcpServers,
+      ...parallelSearchDefault,
+    });
     expect(config.getMcpServerCommand()).toBe('npx -y @mcp/default-server');
   });
 
@@ -3752,9 +3776,56 @@ describe('loadCliConfig mcpEnabled', () => {
     const config = await loadCliConfig(settings, 'test-session', argv);
     expect(config.getMcpEnabled()).toBe(true);
     expect(config.getMcpServerCommand()).toBe('mcp-server');
-    expect(config.getMcpServers()).toEqual({ serverA: { url: 'http://a' } });
+    expect(config.getMcpServers()).toEqual({
+      serverA: { url: 'http://a' },
+      ...parallelSearchDefault,
+    });
     expect(config.getAllowedMcpServers()).toEqual(['serverA']);
     expect(config.getBlockedMcpServers()).toEqual(['serverB']);
+  });
+
+  it('should skip the Parallel default when omp.parallelSearch.enabled is false', async () => {
+    process.argv = ['node', 'script.js'];
+    const argv = await parseArguments(createTestMergedSettings());
+    const settings = createTestMergedSettings({
+      ...mcpSettings,
+      omp: { parallelSearch: { enabled: false } },
+    });
+    const config = await loadCliConfig(settings, 'test-session', argv);
+    expect(config.getMcpServers()).toEqual({ serverA: { url: 'http://a' } });
+  });
+
+  it('should never override a user-configured parallel-search server', async () => {
+    process.argv = ['node', 'script.js'];
+    const argv = await parseArguments(createTestMergedSettings());
+    const settings = createTestMergedSettings({
+      mcpServers: {
+        [PARALLEL_SEARCH_SERVER_NAME]: {
+          url: 'https://example.invalid/mcp',
+          type: 'http',
+        },
+      },
+    });
+    const config = await loadCliConfig(settings, 'test-session', argv);
+    expect(config.getMcpServers()[PARALLEL_SEARCH_SERVER_NAME]).toEqual({
+      url: 'https://example.invalid/mcp',
+      type: 'http',
+    });
+  });
+
+  it('should not inject the Parallel default when an admin allowlist governs', async () => {
+    process.argv = ['node', 'script.js'];
+    const argv = await parseArguments(createTestMergedSettings());
+    const settings = createTestMergedSettings({
+      ...mcpSettings,
+      admin: {
+        mcp: {
+          config: { serverA: { url: 'http://a' } },
+        },
+      },
+    });
+    const config = await loadCliConfig(settings, 'test-session', argv);
+    expect(config.getMcpServers()).toEqual({ serverA: { url: 'http://a' } });
   });
 
   it('should disable MCP when mcpEnabled is false', async () => {
@@ -3790,7 +3861,10 @@ describe('loadCliConfig mcpEnabled', () => {
     const config = await loadCliConfig(settings, 'test-session', argv);
     expect(config.getMcpEnabled()).toBe(true);
     expect(config.getMcpServerCommand()).toBe('mcp-server');
-    expect(config.getMcpServers()).toEqual({ serverA: { url: 'http://a' } });
+    expect(config.getMcpServers()).toEqual({
+      serverA: { url: 'http://a' },
+      ...parallelSearchDefault,
+    });
     expect(config.getAllowedMcpServers()).toEqual(['serverA']);
     expect(config.getBlockedMcpServers()).toEqual(['serverB']);
   });

@@ -2110,6 +2110,14 @@ their corresponding top-level category object in your `settings.json` file.
     tier keeps per-search spend tiny; any model id the endpoint accepts works.
   - **Default:** `"gemini-3.1-flash-lite"`
 
+- **`omp.parallelSearch.enabled`** (boolean):
+
+  - **Description:** Register the free Parallel Search MCP server at startup. A
+    user-configured `parallel-search` server always takes precedence over this
+    default.
+  - **Default:** `true`
+  - **Requires restart:** Yes
+
 - **`omp.headlessHarness`** (enum):
   - **Description:** How much harness a non-interactive run (gemini -p) sends on
     every request. "full" sends the composed system prompt, the session context

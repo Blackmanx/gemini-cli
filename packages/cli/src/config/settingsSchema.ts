@@ -2158,6 +2158,28 @@ const SETTINGS_SCHEMA = {
           },
         },
       },
+      parallelSearch: {
+        type: 'object',
+        label: 'OMP: Parallel Search',
+        category: 'Advanced',
+        requiresRestart: false,
+        default: {},
+        description:
+          'Parallel Search MCP: a free, keyless web-search server (web_search and web_fetch over Streamable HTTP) registered as `parallel-search` at startup. Search queries and fetched URLs are sent to Parallel under its free-tier rate limits; no account or API key is needed. Changes apply from the next session.',
+        showInDialog: false,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'OMP: Enable Parallel Search MCP',
+            category: 'Advanced',
+            requiresRestart: true,
+            default: true,
+            description:
+              'Register the free Parallel Search MCP server at startup. A user-configured `parallel-search` server always takes precedence over this default.',
+            showInDialog: true,
+          },
+        },
+      },
       headlessHarness: {
         type: 'enum',
         label: 'OMP: Headless Harness',

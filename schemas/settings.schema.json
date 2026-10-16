@@ -3430,6 +3430,23 @@
           },
           "additionalProperties": false
         },
+        "parallelSearch": {
+          "title": "OMP: Parallel Search",
+          "description": "Parallel Search MCP: a free, keyless web-search server (web_search and web_fetch over Streamable HTTP) registered as `parallel-search` at startup. Search queries and fetched URLs are sent to Parallel under its free-tier rate limits; no account or API key is needed. Changes apply from the next session.",
+          "markdownDescription": "Parallel Search MCP: a free, keyless web-search server (web_search and web_fetch over Streamable HTTP) registered as `parallel-search` at startup. Search queries and fetched URLs are sent to Parallel under its free-tier rate limits; no account or API key is needed. Changes apply from the next session.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `{}`",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "title": "OMP: Enable Parallel Search MCP",
+              "description": "Register the free Parallel Search MCP server at startup. A user-configured `parallel-search` server always takes precedence over this default.",
+              "markdownDescription": "Register the free Parallel Search MCP server at startup. A user-configured `parallel-search` server always takes precedence over this default.\n\n- Category: `Advanced`\n- Requires restart: `yes`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
         "headlessHarness": {
           "title": "OMP: Headless Harness",
           "description": "How much harness a non-interactive run (gemini -p) sends on every request. \"full\" sends the composed system prompt, the session context and every tool schema. \"slim\" replaces the composed prompt with a short one and drops tool schemas that cannot run headless, but stays a working agent. \"api\" also drops the working tool schemas and the session context, leaving a plain one-shot text call with no file access. Only affects non-interactive runs; interactive is always \"full\".",
