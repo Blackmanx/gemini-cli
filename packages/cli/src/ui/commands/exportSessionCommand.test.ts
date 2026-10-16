@@ -156,6 +156,46 @@ describe('exportSessionCommand', () => {
     });
   });
 
+  it('should accept --full for the complete trace, keeping the path intact', async () => {
+    mockContext.invocation!.args = ' report.md --full ';
+    const mockSessionData: ConversationRecord = {
+      sessionId: 'test-session-id',
+      messages: [
+        {
+          id: 'm1',
+          timestamp: '2026-10-16T10:00:00.000Z',
+          type: 'gemini',
+          content: 'done',
+          tokens: { input: 10, output: 5, cached: 3, total: 18 },
+        },
+      ],
+      projectHash: 'hash',
+      startTime: '2026-10-16T10:00:00.000Z',
+      lastUpdated: '2026-10-16T10:00:00.000Z',
+    };
+    vi.mocked(SessionSelector.prototype.resolveSession).mockResolvedValue({
+      sessionData: mockSessionData,
+      sessionPath: path.join(
+        path.sep,
+        'tmp',
+        'mock-dir',
+        'chats',
+        'session.jsonl',
+      ),
+      displayInfo: 'test',
+    });
+    vi.mocked(fs.access).mockRejectedValue(new Error('Not found'));
+
+    const result = await exportSessionCommand.action!(mockContext, '');
+
+    expect(result).toBeUndefined();
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      path.resolve(process.cwd(), 'report.md'),
+      expect.stringContaining('_Tokens: in 10 · out 5 · cached 3_'),
+      'utf-8',
+    );
+  });
+
   it('should export the session successfully', async () => {
     const mockSessionData: ConversationRecord = {
       sessionId: 'test-session-id',

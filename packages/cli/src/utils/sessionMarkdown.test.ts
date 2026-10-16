@@ -10,6 +10,7 @@ import { CoreToolCallStatus } from '@google/gemini-cli-core';
 import type {
   ConversationRecord,
   MessageRecord,
+  ToolCallRecord,
 } from '@google/gemini-cli-core';
 
 const baseRecord = (
@@ -20,6 +21,24 @@ const baseRecord = (
   startTime: '2026-10-16T10:00:00.000Z',
   lastUpdated: '2026-10-16T10:05:00.000Z',
   messages: [],
+  ...overrides,
+});
+
+const geminiMessage = (overrides: Partial<MessageRecord>): MessageRecord =>
+  ({
+    id: 'm1',
+    timestamp: '2026-10-16T10:00:00.000Z',
+    type: 'gemini',
+    content: '',
+    ...overrides,
+  }) as unknown as MessageRecord;
+
+const toolCall = (overrides: Partial<ToolCallRecord> = {}): ToolCallRecord => ({
+  id: 't1',
+  name: 'read_file',
+  args: { path: 'a.txt' },
+  status: CoreToolCallStatus.Success,
+  timestamp: '2026-10-16T10:00:01.000Z',
   ...overrides,
 });
 
@@ -80,156 +99,217 @@ describe('renderSessionMarkdown', () => {
     expect(md).toContain('- **Goal:** Ship the release _(goal)_');
   });
 
-  it('renders tool calls as collapsible details with args and result', () => {
-    const md = renderSessionMarkdown(
-      baseRecord({
-        messages: [
-          {
-            id: 'm1',
-            timestamp: '2026-10-16T10:00:00.000Z',
-            type: 'gemini',
-            content: '',
-            toolCalls: [
-              {
-                id: 't1',
-                name: 'read_file',
-                args: { path: 'a.txt' },
-                status: CoreToolCallStatus.Success,
-                timestamp: '2026-10-16T10:00:01.000Z',
-                result: 'file contents here',
-              },
-            ],
-          },
-        ],
-      }),
-    );
+  describe('quiet mode (default)', () => {
+    it("groups a turn's tool calls into one compact collapsible list", () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            geminiMessage({
+              content: 'working on it',
+              toolCalls: [
+                toolCall({ name: 'read_file', args: { path: 'a.txt' } }),
+                toolCall({
+                  id: 't2',
+                  name: 'run_shell_command',
+                  args: { command: 'npm test' },
+                  status: CoreToolCallStatus.Error,
+                }),
+              ],
+            }),
+          ],
+        }),
+      );
 
-    expect(md).toContain('<details>');
-    expect(md).toContain('<summary><code>read_file</code> — success</summary>');
-    expect(md).toContain('**Arguments**');
-    expect(md).toContain('```json\n{\n  "path": "a.txt"\n}\n```');
-    expect(md).toContain('**Result**');
-    expect(md).toContain('file contents here');
-    expect(md).toContain('</details>');
-  });
+      expect(md).toContain('<summary>🔧 2 tool calls</summary>');
+      expect(md).toContain('`read_file` — a.txt ✓');
+      expect(md).toContain('`run_shell_command` — npm test ❌');
+      expect(md).not.toContain('**Arguments**');
+      expect(md).not.toContain('**Result**');
+      // One details block for the whole turn, not one per call.
+      expect(md.match(/<details>/g)).toHaveLength(1);
+      expect(md).toContain('working on it');
+    });
 
-  it('renders FileDiff-style results as a diff fence', () => {
-    const md = renderSessionMarkdown(
-      baseRecord({
-        messages: [
-          {
-            id: 'm1',
-            timestamp: '2026-10-16T10:00:00.000Z',
-            type: 'gemini',
-            content: '',
-            toolCalls: [
-              {
-                id: 't1',
-                name: 'edit',
-                args: {},
-                status: CoreToolCallStatus.Success,
-                timestamp: '2026-10-16T10:00:01.000Z',
-                resultDisplay: {
-                  fileName: 'a.txt',
-                  filePath: '/tmp/a.txt',
-                  fileDiff: '+new line',
-                  originalContent: null,
-                  newContent: 'new line',
+    it('caps long tool-call lists', () => {
+      const calls = Array.from({ length: 25 }, (_, i) =>
+        toolCall({ id: `t${i}`, args: { path: `f${i}.txt` } }),
+      );
+      const md = renderSessionMarkdown(
+        baseRecord({ messages: [geminiMessage({ toolCalls: calls })] }),
+      );
+
+      expect(md).toContain('- … +5 more');
+    });
+
+    it('hides thoughts, tokens, tool outputs and info/warning notices', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            geminiMessage({
+              content: 'the answer',
+              thoughts: [
+                {
+                  timestamp: '2026-10-16T10:00:01.000Z',
+                  subject: 'Plan',
+                  description: 'think about it',
                 },
-              },
-            ],
-          },
-        ],
-      }),
-    );
+              ],
+              toolCalls: [toolCall({ result: 'noisy output' })],
+              tokens: { input: 10, output: 5, cached: 3, total: 18 },
+            }),
+            {
+              id: 'm2',
+              timestamp: '2026-10-16T10:02:00.000Z',
+              type: 'info',
+              content: 'saved',
+            },
+            {
+              id: 'm3',
+              timestamp: '2026-10-16T10:03:00.000Z',
+              type: 'warning',
+              content: 'careful',
+            },
+            {
+              id: 'm4',
+              timestamp: '2026-10-16T10:04:00.000Z',
+              type: 'error',
+              content: 'boom',
+            },
+          ],
+        }),
+      );
 
-    expect(md).toContain('```diff\n+new line\n```');
+      expect(md).toContain('the answer');
+      expect(md).not.toContain('💭 Thinking');
+      expect(md).not.toContain('_Tokens:');
+      expect(md).not.toContain('noisy output');
+      expect(md).not.toContain('ℹ️ saved');
+      expect(md).not.toContain('⚠️ careful');
+      // Errors still earn their place.
+      expect(md).toContain('> ❌ boom');
+    });
   });
 
-  it('truncates long tool results', () => {
-    const md = renderSessionMarkdown(
-      baseRecord({
-        messages: [
-          {
-            id: 'm1',
-            timestamp: '2026-10-16T10:00:00.000Z',
-            type: 'gemini',
-            content: '',
-            toolCalls: [
-              {
-                id: 't1',
-                name: 'read_file',
-                args: {},
-                status: CoreToolCallStatus.Success,
-                timestamp: '2026-10-16T10:00:01.000Z',
-                result: 'x'.repeat(5000),
-              },
-            ],
-          },
-        ],
-      }),
-    );
+  describe('full mode', () => {
+    it('renders tool calls with args and result', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            geminiMessage({
+              toolCalls: [
+                toolCall({
+                  name: 'read_file',
+                  args: { path: 'a.txt' },
+                  result: 'file contents here',
+                }),
+              ],
+            }),
+          ],
+        }),
+        { full: true },
+      );
 
-    expect(md).toContain('… (truncated, 1000 more characters)');
-  });
+      expect(md).toContain(
+        '<summary><code>read_file</code> — success</summary>',
+      );
+      expect(md).toContain('**Arguments**');
+      expect(md).toContain('```json\n{\n  "path": "a.txt"\n}\n```');
+      expect(md).toContain('**Result**');
+      expect(md).toContain('file contents here');
+    });
 
-  it('renders thoughts collapsed and a tokens line', () => {
-    const md = renderSessionMarkdown(
-      baseRecord({
-        messages: [
-          {
-            id: 'm1',
-            timestamp: '2026-10-16T10:00:00.000Z',
-            type: 'gemini',
-            content: 'the answer',
-            thoughts: [
-              {
-                timestamp: '2026-10-16T10:00:01.000Z',
-                subject: 'Plan',
-                description: 'think about it',
-              },
-            ],
-            tokens: { input: 10, output: 5, cached: 3, total: 18 },
-          },
-        ],
-      }),
-    );
+    it('renders FileDiff-style results as a diff fence', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            geminiMessage({
+              toolCalls: [
+                toolCall({
+                  name: 'edit',
+                  args: {},
+                  resultDisplay: {
+                    fileName: 'a.txt',
+                    filePath: '/tmp/a.txt',
+                    fileDiff: '+new line',
+                    originalContent: null,
+                    newContent: 'new line',
+                  },
+                }),
+              ],
+            }),
+          ],
+        }),
+        { full: true },
+      );
 
-    expect(md).toContain('<summary>💭 Thinking</summary>');
-    expect(md).toContain('**Plan**');
-    expect(md).toContain('_Tokens: in 10 · out 5 · cached 3_');
-    expect(md).toContain('the answer');
-  });
+      expect(md).toContain('```diff\n+new line\n```');
+    });
 
-  it('renders info/error/warning messages as blockquotes', () => {
-    const md = renderSessionMarkdown(
-      baseRecord({
-        messages: [
-          {
-            id: 'm1',
-            timestamp: '2026-10-16T10:00:00.000Z',
-            type: 'info',
-            content: 'saved',
-          },
-          {
-            id: 'm2',
-            timestamp: '2026-10-16T10:00:01.000Z',
-            type: 'error',
-            content: 'boom',
-          },
-          {
-            id: 'm3',
-            timestamp: '2026-10-16T10:00:02.000Z',
-            type: 'warning',
-            content: 'careful',
-          },
-        ],
-      }),
-    );
+    it('truncates long tool results', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            geminiMessage({
+              toolCalls: [toolCall({ args: {}, result: 'x'.repeat(5000) })],
+            }),
+          ],
+        }),
+        { full: true },
+      );
 
-    expect(md).toContain('> ℹ️ saved');
-    expect(md).toContain('> ❌ boom');
-    expect(md).toContain('> ⚠️ careful');
+      expect(md).toContain('… (truncated, 1000 more characters)');
+    });
+
+    it('renders thoughts collapsed and a tokens line', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            geminiMessage({
+              content: 'the answer',
+              thoughts: [
+                {
+                  timestamp: '2026-10-16T10:00:01.000Z',
+                  subject: 'Plan',
+                  description: 'think about it',
+                },
+              ],
+              tokens: { input: 10, output: 5, cached: 3, total: 18 },
+            }),
+          ],
+        }),
+        { full: true },
+      );
+
+      expect(md).toContain('<summary>💭 Thinking</summary>');
+      expect(md).toContain('**Plan**');
+      expect(md).toContain('_Tokens: in 10 · out 5 · cached 3_');
+      expect(md).toContain('the answer');
+    });
+
+    it('renders info and warning notices as blockquotes', () => {
+      const md = renderSessionMarkdown(
+        baseRecord({
+          messages: [
+            {
+              id: 'm1',
+              timestamp: '2026-10-16T10:00:00.000Z',
+              type: 'info',
+              content: 'saved',
+            },
+            {
+              id: 'm2',
+              timestamp: '2026-10-16T10:00:02.000Z',
+              type: 'warning',
+              content: 'careful',
+            },
+          ],
+        }),
+        { full: true },
+      );
+
+      expect(md).toContain('> ℹ️ saved');
+      expect(md).toContain('> ⚠️ careful');
+    });
   });
 
   it('skips empty messages and non-text parts', () => {

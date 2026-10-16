@@ -6,22 +6,50 @@
 
 /**
  * Renders a ConversationRecord as a readable Markdown transcript — the
- * "pretty" counterpart of the raw JSON session export. Session metadata heads
- * the document, tool calls collapse into <details> blocks, thoughts stay
- * available but out of the way, and per-turn token usage is summarized.
+ * "pretty" counterpart of the raw JSON session export.
+ *
+ * The default is a quiet, conversation-first transcript: user and assistant
+ * text verbatim, tool calls grouped into a single compact collapsible block
+ * per turn (name, one-line argument hint, status glyph), errors kept as
+ * blockquotes. `full` opts into the complete trace: per-tool arguments and
+ * results, thinking excerpts, per-turn token usage, and every CLI notice.
  */
-import type {
-  ConversationRecord,
-  MessageRecord,
-  ToolCallRecord,
+import {
+  CoreToolCallStatus,
+  type Status,
+  type ConversationRecord,
+  type MessageRecord,
+  type ToolCallRecord,
 } from '@google/gemini-cli-core';
 
-/** Longest pretty-printed tool arguments block before truncation. */
+export interface RenderOptions {
+  /** Include the complete trace (tool args/results, thoughts, tokens, notices). */
+  full?: boolean;
+}
+
+/** Longest pretty-printed tool arguments block before truncation (full mode). */
 const MAX_ARGS_CHARS = 1200;
-/** Longest tool result excerpt before truncation. */
+/** Longest tool result excerpt before truncation (full mode). */
 const MAX_RESULT_CHARS = 4000;
-/** Longest single thought excerpt before truncation. */
+/** Longest single thought excerpt before truncation (full mode). */
 const MAX_THOUGHT_CHARS = 1000;
+/** Most tool-call lines listed per turn in quiet mode. */
+const MAX_QUIET_TOOL_LINES = 20;
+/** Longest argument hint in a quiet-mode tool line. */
+const MAX_ARG_HINT_CHARS = 60;
+
+/** Argument keys worth surfacing as the one-line hint, in priority order. */
+const ARG_HINT_KEYS = [
+  'query',
+  'path',
+  'file_path',
+  'filePath',
+  'url',
+  'command',
+  'pattern',
+  'prompt',
+  'description',
+];
 
 function truncate(text: string, limit: number): string {
   if (text.length <= limit) return text;
@@ -106,6 +134,51 @@ function renderToolCall(call: ToolCallRecord): string {
   return lines.join('\n');
 }
 
+/** One-line argument hint for a quiet-mode tool line. */
+function summarizeCallArgs(call: ToolCallRecord): string {
+  for (const key of ARG_HINT_KEYS) {
+    const value: unknown = call.args[key];
+    if (typeof value === 'string' && value.trim()) {
+      return truncate(value.trim().replace(/\s+/g, ' '), MAX_ARG_HINT_CHARS);
+    }
+    if (typeof value === 'number') return String(value);
+  }
+  return '';
+}
+
+function statusGlyph(status: Status): string {
+  switch (status) {
+    case CoreToolCallStatus.Success:
+      return '✓';
+    case CoreToolCallStatus.Error:
+      return '❌';
+    case CoreToolCallStatus.Cancelled:
+      return '⊘';
+    default:
+      return '·';
+  }
+}
+
+/** Quiet mode: all of a turn's tool calls as one compact collapsible list. */
+function renderQuietToolBlock(calls: ToolCallRecord[]): string | undefined {
+  if (calls.length === 0) return undefined;
+  const label =
+    calls.length === 1 ? '1 tool call' : `${calls.length} tool calls`;
+  const lines = ['<details>', `<summary>🔧 ${label}</summary>`, ''];
+  const shown = calls.slice(0, MAX_QUIET_TOOL_LINES);
+  for (const call of shown) {
+    const hint = summarizeCallArgs(call);
+    lines.push(
+      `- \`${call.name}\`${hint ? ` — ${hint}` : ''} ${statusGlyph(call.status)}`,
+    );
+  }
+  if (calls.length > shown.length) {
+    lines.push(`- … +${calls.length - shown.length} more`);
+  }
+  lines.push('', '</details>');
+  return lines.join('\n');
+}
+
 function renderThoughts(message: MessageRecord): string | undefined {
   const thoughts = message.type === 'gemini' ? message.thoughts : undefined;
   if (!thoughts || thoughts.length === 0) return undefined;
@@ -144,8 +217,13 @@ function blockquote(text: string, icon: string): string[] {
 
 /**
  * Render a session's conversation record as a Markdown transcript.
+ * Quiet by default; see {@link RenderOptions.full} for the complete trace.
  */
-export function renderSessionMarkdown(record: ConversationRecord): string {
+export function renderSessionMarkdown(
+  record: ConversationRecord,
+  options: RenderOptions = {},
+): string {
+  const full = options.full === true;
   const out: string[] = ['# Gemini CLI conversation', ''];
 
   const started = formatTimestamp(record.startTime);
@@ -196,20 +274,27 @@ export function renderSessionMarkdown(record: ConversationRecord): string {
     }
 
     if (message.type === 'gemini') {
-      const thoughts = renderThoughts(message);
-      const toolCalls = (message.toolCalls ?? []).map(renderToolCall);
-      const tokensLine = renderTokensLine(message);
-      if (!text && !thoughts && toolCalls.length === 0) continue;
+      const thoughts = full ? renderThoughts(message) : undefined;
+      const tokensLine = full ? renderTokensLine(message) : undefined;
+      const toolCalls = message.toolCalls ?? [];
+      const toolBlocks = full
+        ? toolCalls.map(renderToolCall)
+        : (() => {
+            const block = renderQuietToolBlock(toolCalls);
+            return block ? [block] : [];
+          })();
+      if (!text && !thoughts && toolBlocks.length === 0) continue;
       out.push('## Assistant', time, '');
       if (thoughts) out.push(thoughts, '');
       if (text) out.push(text, '');
-      for (const toolCall of toolCalls) out.push(toolCall, '');
+      for (const toolBlock of toolBlocks) out.push(toolBlock, '');
       if (tokensLine) out.push(tokensLine, '');
       renderedAny = true;
       continue;
     }
 
-    if (text) {
+    // Notices: errors always earn their place; info/warning only in full mode.
+    if (text && (full || message.type === 'error')) {
       const icon =
         message.type === 'error'
           ? '❌'

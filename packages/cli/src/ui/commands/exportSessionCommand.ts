@@ -19,14 +19,17 @@ import { renderSessionMarkdown } from '../../utils/sessionMarkdown.js';
 export const exportSessionCommand: SlashCommand = {
   name: 'export-session',
   description:
-    'Export the current session to a file (.md for a readable Markdown transcript, .json for the raw session data)',
+    'Export the current session to a file (.md for a readable Markdown transcript, .json for the raw session data; add --full for the complete trace with tool outputs, thinking and tokens)',
   kind: CommandKind.BUILT_IN,
   autoExecute: true,
   action: async (
     context: CommandContext,
   ): Promise<SlashCommandActionReturn | void> => {
     const { ui } = context;
-    const args = context.invocation?.args.trim();
+    const rawArgs = context.invocation?.args.trim() ?? '';
+    // `--full` opts into the complete trace; everything else is the path.
+    const full = /(^|\s)--full(?=\s|$)/.test(rawArgs);
+    const args = rawArgs.replace(/(^|\s)--full(?=\s|$)/g, '').trim();
     const sessionId = context.services.agentContext?.config.getSessionId();
     if (!sessionId) {
       return {
@@ -71,7 +74,7 @@ export const exportSessionCommand: SlashCommand = {
       // Format follows the file extension: .md/.markdown renders a readable
       // transcript, anything else keeps the historical raw JSON dump.
       const payload = /\.(md|markdown)$/i.test(targetPath)
-        ? renderSessionMarkdown(sessionData)
+        ? renderSessionMarkdown(sessionData, { full })
         : JSON.stringify(sessionData, null, 2);
 
       await fs.writeFile(targetPath, payload, 'utf-8');
