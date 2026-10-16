@@ -1020,7 +1020,7 @@ export async function loadCliConfig(
   // absent rather than half-wired.
   const sshProfiles = loadedSettings
     ? new SshProfileService({
-        read: () => loadedSettings.merged as unknown as Record<string, unknown>,
+        read: () => loadedSettings.merged as Record<string, unknown>,
         writeProfiles: (profiles: Record<string, unknown>) =>
           loadedSettings.setValue(SettingScope.User, 'sshProfiles', profiles),
       })
@@ -1178,6 +1178,8 @@ export async function loadCliConfig(
     todoEnabled: settings.omp?.todo?.enabled,
     todoReminders: settings.omp?.todo?.reminders,
     todoRemindersMax: settings.omp?.todo?.remindersMax,
+    jfindEnabled: settings.omp?.jfind?.enabled,
+    jfindJudgeModel: settings.omp?.jfind?.judgeModel,
     modelRoles: settings.model?.roles,
     modelCycleOrder: settings.model?.cycleOrder,
     output: {

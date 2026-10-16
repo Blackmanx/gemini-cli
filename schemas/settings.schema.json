@@ -741,9 +741,9 @@
         },
         "compressionThreshold": {
           "title": "Context Compression Threshold",
-          "description": "The fraction of context usage at which to trigger context compression (e.g. 0.2, 0.3).",
-          "markdownDescription": "The fraction of context usage at which to trigger context compression (e.g. 0.2, 0.3).\n\n- Category: `Model`\n- Requires restart: `yes`\n- Default: `0.5`",
-          "default": 0.5,
+          "description": "The fraction of context usage at which to trigger context compression. The default (≈0.244) compacts at ~256k tokens on a 1M-token window.",
+          "markdownDescription": "The fraction of context usage at which to trigger context compression. The default (≈0.244) compacts at ~256k tokens on a 1M-token window.\n\n- Category: `Model`\n- Requires restart: `yes`\n- Default: `0.244140625`",
+          "default": 0.244140625,
           "type": "number"
         },
         "disableLoopDetection": {
@@ -3371,6 +3371,61 @@
               "markdownDescription": "When the model stops with a goal still active, send it another turn instead of waiting for you. Off by default: it spends tokens without asking.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `false`",
               "default": false,
               "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "todo": {
+          "title": "OMP: Todo",
+          "description": "The op-based todo list, mutated with small operations instead of being resent whole. Reminders nudge the model to finish incomplete todos.",
+          "markdownDescription": "The op-based todo list, mutated with small operations instead of being resent whole. Reminders nudge the model to finish incomplete todos.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `{}`",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "title": "OMP: Enable Todo Tool",
+              "description": "Register the todo tool.",
+              "markdownDescription": "Register the todo tool.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "reminders": {
+              "title": "OMP: Todo Reminders",
+              "description": "When the model stops with incomplete todos, send it a reminder to continue.",
+              "markdownDescription": "When the model stops with incomplete todos, send it a reminder to continue.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "remindersMax": {
+              "title": "OMP: Todo Reminders Max",
+              "description": "How many stop-time reminders to send before giving up on the list.",
+              "markdownDescription": "How many stop-time reminders to send before giving up on the list.\n\n- Category: `Interaction`\n- Requires restart: `no`\n- Default: `3`",
+              "default": 3,
+              "type": "number"
+            }
+          },
+          "additionalProperties": false
+        },
+        "jfind": {
+          "title": "OMP: Jfind",
+          "description": "Semantic search (`jfind` tool): describe behavior in plain language and get the files and line ranges that implement it, judged by a small model. Each call spends a bounded, small number of judge-model tokens. Changes apply from the next session.",
+          "markdownDescription": "Semantic search (`jfind` tool): describe behavior in plain language and get the files and line ranges that implement it, judged by a small model. Each call spends a bounded, small number of judge-model tokens. Changes apply from the next session.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `{}`",
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "title": "OMP: Enable Jfind",
+              "description": "Register the jfind tool. Optional: disable to keep its schema out of the model prompt entirely.",
+              "markdownDescription": "Register the jfind tool. Optional: disable to keep its schema out of the model prompt entirely.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `true`",
+              "default": true,
+              "type": "boolean"
+            },
+            "judgeModel": {
+              "title": "OMP: Jfind Judge Model",
+              "description": "Model answering the jfind relevance questions. The cheapest tier keeps per-search spend tiny; any model id the endpoint accepts works.",
+              "markdownDescription": "Model answering the jfind relevance questions. The cheapest tier keeps per-search spend tiny; any model id the endpoint accepts works.\n\n- Category: `Advanced`\n- Requires restart: `no`\n- Default: `gemini-3.1-flash-lite`",
+              "default": "gemini-3.1-flash-lite",
+              "type": "string"
             }
           },
           "additionalProperties": false

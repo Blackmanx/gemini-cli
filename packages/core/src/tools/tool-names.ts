@@ -216,6 +216,9 @@ export const GITHUB_DISPLAY_NAME = 'GitHub';
 export const AST_GREP_TOOL_NAME = 'ast_grep';
 export const AST_GREP_DISPLAY_NAME = 'AST Grep';
 
+export const JFIND_TOOL_NAME = 'jfind';
+export const JFIND_DISPLAY_NAME = 'Jfind';
+
 export const LSP_TOOL_NAME = 'lsp';
 export const LSP_EDIT_TOOL_NAME = 'lsp_edit';
 export const LSP_DISPLAY_NAME = 'LanguageServer';

@@ -1638,6 +1638,38 @@ describe('Server Config (config.ts)', () => {
       expect(registeredTools).toContain('AskUserTool');
     });
 
+    it('should register JfindTool by default (omp.jfind.enabled)', async () => {
+      const config = new Config(baseParams);
+      await config.initialize();
+
+      const registerToolMock = (
+        (await vi.importMock('../tools/tool-registry')) as {
+          ToolRegistry: { prototype: { registerTool: Mock } };
+        }
+      ).ToolRegistry.prototype.registerTool;
+
+      const registeredTools = registerToolMock.mock.calls.map(
+        (call) => call[0].constructor.name,
+      );
+      expect(registeredTools).toContain('JfindTool');
+    });
+
+    it('should not register JfindTool when omp.jfind.enabled is false', async () => {
+      const config = new Config({ ...baseParams, jfindEnabled: false });
+      await config.initialize();
+
+      const registerToolMock = (
+        (await vi.importMock('../tools/tool-registry')) as {
+          ToolRegistry: { prototype: { registerTool: Mock } };
+        }
+      ).ToolRegistry.prototype.registerTool;
+
+      const registeredTools = registerToolMock.mock.calls.map(
+        (call) => call[0].constructor.name,
+      );
+      expect(registeredTools).not.toContain('JfindTool');
+    });
+
     describe('with minified tool class names', () => {
       beforeEach(() => {
         Object.defineProperty(
@@ -3761,9 +3793,8 @@ describe('Config JIT Initialization', () => {
   // initialize(); keep that (and its background interop call) out of these
   // tests. The field under test is set directly instead.
   vi.mock('../utils/windowsContext.js', async (importOriginal) => {
-    const actual = await importOriginal<
-      typeof import('../utils/windowsContext.js')
-    >();
+    const actual =
+      await importOriginal<typeof import('../utils/windowsContext.js')>();
     return { ...actual, isWsl: () => false };
   });
 

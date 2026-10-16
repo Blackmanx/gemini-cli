@@ -2126,6 +2126,38 @@ const SETTINGS_SCHEMA = {
           },
         },
       },
+      jfind: {
+        type: 'object',
+        label: 'OMP: Jfind',
+        category: 'Advanced',
+        requiresRestart: false,
+        default: {},
+        description:
+          'Semantic search (`jfind` tool): describe behavior in plain language and get the files and line ranges that implement it, judged by a small model. Each call spends a bounded, small number of judge-model tokens. Changes apply from the next session.',
+        showInDialog: false,
+        properties: {
+          enabled: {
+            type: 'boolean',
+            label: 'OMP: Enable Jfind',
+            category: 'Advanced',
+            requiresRestart: false,
+            default: true,
+            description:
+              'Register the jfind tool. Optional: disable to keep its schema out of the model prompt entirely.',
+            showInDialog: true,
+          },
+          judgeModel: {
+            type: 'string',
+            label: 'OMP: Jfind Judge Model',
+            category: 'Advanced',
+            requiresRestart: false,
+            default: 'gemini-3.1-flash-lite',
+            description:
+              'Model answering the jfind relevance questions. The cheapest tier keeps per-search spend tiny; any model id the endpoint accepts works.',
+            showInDialog: true,
+          },
+        },
+      },
       headlessHarness: {
         type: 'enum',
         label: 'OMP: Headless Harness',

@@ -71,6 +71,7 @@ import { LearnTool } from '../tools/learn.js';
 import { ManageSkillTool } from '../skills/managedSkillsTools.js';
 import { getManagedSkillsDir } from '../skills/managedSkills.js';
 import { GithubTool } from '../tools/github.js';
+import { JfindTool } from '../tools/jfind/jfind.js';
 import { onPeerMessage } from '../agents/peerBus.js';
 import { listAgents } from '../agents/agentRegistry.js';
 import {
@@ -786,6 +787,10 @@ export interface ConfigParameters {
   useTts?: boolean;
   useMemory?: boolean;
   useGithub?: boolean;
+  /** Whether the judge-backed `jfind` semantic search tool is registered. */
+  jfindEnabled?: boolean;
+  /** Model that answers `jfind` relevance questions; cheapest tier by default. */
+  jfindJudgeModel?: string;
   appendSystem?: string;
   allowTaintedCommandsInYolo?: boolean;
   headlessHarness?: string;
@@ -943,6 +948,8 @@ export class Config implements McpContext, AgentLoopContext {
   private readonly modelRoles: Readonly<Record<string, string>>;
   private readonly modelCycleOrder: readonly string[] | undefined;
   private readonly useGithub: boolean;
+  private readonly jfindEnabled: boolean;
+  private readonly jfindJudgeModel: string;
   private readonly allowTaintedCommandsInYolo: boolean;
   private goalRuntime: GoalRuntime | undefined;
   private goalModeState: GoalModeState | undefined;
@@ -1486,6 +1493,8 @@ export class Config implements McpContext, AgentLoopContext {
     this.modelRoles = params.modelRoles ?? {};
     this.modelCycleOrder = params.modelCycleOrder;
     this.useGithub = params.useGithub ?? false;
+    this.jfindEnabled = params.jfindEnabled ?? true;
+    this.jfindJudgeModel = params.jfindJudgeModel ?? 'gemini-3.1-flash-lite';
     this.allowTaintedCommandsInYolo = params.allowTaintedCommandsInYolo ?? true;
     // Validated rather than asserted: this arrives from a user-editable
     // settings file, so a typo should fall back to the shipped default
@@ -4299,6 +4308,16 @@ export class Config implements McpContext, AgentLoopContext {
     return this.useGithub;
   }
 
+  /** Whether the judge-backed `jfind` semantic search tool is registered this session. */
+  isJfindEnabled(): boolean {
+    return this.jfindEnabled;
+  }
+
+  /** The model that answers `jfind` relevance questions. */
+  getJfindJudgeModel(): string {
+    return this.jfindJudgeModel;
+  }
+
   /**
    * Whether YOLO mode runs commands that reuse flags or arguments from
    * untrusted tool output without asking for confirmation.
@@ -4788,6 +4807,14 @@ export class Config implements McpContext, AgentLoopContext {
     maybeRegister(GlobTool, () =>
       registry.registerTool(new GlobTool(this, this.messageBus)),
     );
+
+    // The judge-backed semantic search. Read-only, and cheap per call with
+    // the flash-lite judge, so it stays on unless `omp.jfind.enabled` opts out.
+    if (this.isJfindEnabled()) {
+      maybeRegister(JfindTool, () =>
+        registry.registerTool(new JfindTool(this, this.messageBus)),
+      );
+    }
     maybeRegister(ActivateSkillTool, () =>
       registry.registerTool(new ActivateSkillTool(this, this.messageBus)),
     );

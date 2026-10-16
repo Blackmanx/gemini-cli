@@ -572,8 +572,9 @@ their corresponding top-level category object in your `settings.json` file.
 - **`model.compressionThreshold`** (number):
 
   - **Description:** The fraction of context usage at which to trigger context
-    compression (e.g. 0.2, 0.3).
-  - **Default:** `0.5`
+    compression. The default (≈0.244) compacts at ~256k tokens on a 1M-token
+    window.
+  - **Default:** `0.244140625`
   - **Requires restart:** Yes
 
 - **`model.disableLoopDetection`** (boolean):
@@ -2080,6 +2081,35 @@ their corresponding top-level category object in your `settings.json` file.
     without asking.
   - **Default:** `false`
 
+- **`omp.todo.enabled`** (boolean):
+
+  - **Description:** Register the todo tool.
+  - **Default:** `true`
+
+- **`omp.todo.reminders`** (boolean):
+
+  - **Description:** When the model stops with incomplete todos, send it a
+    reminder to continue.
+  - **Default:** `true`
+
+- **`omp.todo.remindersMax`** (number):
+
+  - **Description:** How many stop-time reminders to send before giving up on
+    the list.
+  - **Default:** `3`
+
+- **`omp.jfind.enabled`** (boolean):
+
+  - **Description:** Register the jfind tool. Optional: disable to keep its
+    schema out of the model prompt entirely.
+  - **Default:** `true`
+
+- **`omp.jfind.judgeModel`** (string):
+
+  - **Description:** Model answering the jfind relevance questions. The cheapest
+    tier keeps per-search spend tiny; any model id the endpoint accepts works.
+  - **Default:** `"gemini-3.1-flash-lite"`
+
 - **`omp.headlessHarness`** (enum):
   - **Description:** How much harness a non-interactive run (gemini -p) sends on
     every request. "full" sends the composed system prompt, the session context
@@ -2160,11 +2190,8 @@ their corresponding top-level category object in your `settings.json` file.
 - **`security.environmentVariableRedaction.enabled`** (boolean):
 
   - **Description:** Enable redaction of environment variables that may contain
-    secrets. On by default in this fork; set to `false` to opt out. Note that
-    tool outputs (shell output, file reads, error messages) are additionally
-    scrubbed of credential-shaped values on their way to the model
-    unconditionally. Variables prefixed `GEMINI_CLI_` are always trusted.
-  - **Default:** `true`
+    secrets.
+  - **Default:** `false`
   - **Requires restart:** Yes
 
 - **`security.auth.selectedType`** (string):
