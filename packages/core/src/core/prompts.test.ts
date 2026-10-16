@@ -1023,11 +1023,17 @@ describe('renderCoreMandates jfind steering', () => {
     expect(prompt).toContain(
       'scoping `path` to the repository that holds the code',
     );
+    // A dedicated, early mandate names the first tool call and the tools that
+    // are not a substitute for it.
+    expect(prompt).toContain('## Locating Code');
+    expect(prompt).toContain('the first tool call is jfind');
+    expect(prompt).toContain('list_directory');
   });
 
   it('never mentions jfind when the tool is disabled', () => {
     const prompt = renderCoreMandates(baseOptions);
     expect(prompt).not.toContain('jfind');
+    expect(prompt).not.toContain('## Locating Code');
     expect(prompt).toContain(
       'Prefer using tools like grep_search to identify points of interest',
     );
