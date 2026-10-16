@@ -100,8 +100,12 @@ describe('JfindTool', () => {
     expect(result.llmContent).toContain('src/login.ts');
     expect(result.llmContent).toMatch(/src\/login\.ts:\d+(-\d+)?\s+0\.90\s/);
     expect(result.llmContent).toContain('judge tokens');
+    expect(result.llmContent).toContain('judge tokens (gemini-3.1-flash-lite)');
     expect(result.returnDisplay).toContain('█');
     expect(result.returnDisplay).toContain('src/login.ts');
+    expect(result.returnDisplay).toContain(
+      'judge tokens (gemini-3.1-flash-lite)',
+    );
   });
 
   it('scopes the search and the report to an explicit path', async () => {

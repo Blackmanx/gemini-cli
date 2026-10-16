@@ -8,7 +8,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { fileScore, grepIndex, idf } from './lexical.js';
+import { candidatePenalty, fileScore, grepIndex, idf } from './lexical.js';
 import type { FileEntry } from './tree.js';
 
 describe('grepIndex', () => {
@@ -92,5 +92,30 @@ describe('fileScore', () => {
     );
     // No body occurrence, but the file name itself matches: 2 weight units.
     expect(fileScore([0], weights, 'src/authenticate.ts', keywords)).toBe(2);
+  });
+});
+
+describe('candidatePenalty', () => {
+  it('keeps ordinary source files at full weight', () => {
+    expect(candidatePenalty('src/api/routers/usuarios.py')).toBe(1);
+    expect(candidatePenalty('lib/services/user_service.ts')).toBe(1);
+    expect(candidatePenalty('docs/scripts/alta_usuario.sh')).toBe(1);
+  });
+
+  it('demotes tool output, cache, and vendor trees', () => {
+    expect(candidatePenalty('graphify-out/2026-10-05/GRAPH_REPORT.md')).toBe(
+      0.3,
+    );
+    expect(candidatePenalty('svc/cache/ast/abc.json')).toBe(0.3);
+    expect(candidatePenalty('third_party/lib/code.py')).toBe(0.3);
+    expect(candidatePenalty('src/tmp/scratch.ts')).toBe(0.3);
+  });
+
+  it('demotes prose and rendered reports but keeps them searchable', () => {
+    expect(candidatePenalty('docs/guide.md')).toBe(0.5);
+    expect(candidatePenalty('site/index.html')).toBe(0.5);
+    expect(candidatePenalty('notes.rst')).toBe(0.5);
+    // A file merely containing `-out` is not a generated directory.
+    expect(candidatePenalty('src/check-out.ts')).toBe(1);
   });
 });

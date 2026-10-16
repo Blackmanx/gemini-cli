@@ -8,7 +8,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { Config } from '../../config/config.js';
 import { LlmRole } from '../../telemetry/llmRole.js';
 import type { GenerateContentResponse } from '@google/genai';
-import { GeminiJudge, parseJudgeAnswers, type Judge } from './judge.js';
+import {
+  GeminiJudge,
+  judgeGenerateConfig,
+  parseJudgeAnswers,
+  type Judge,
+} from './judge.js';
 
 interface MockClient {
   generateContent: ReturnType<typeof vi.fn>;
@@ -43,6 +48,41 @@ function response(
 }
 
 describe('parseJudgeAnswers', () => {
+  it('answers positionally from `scores`, clamping into [0,1]', () => {
+    const { answers } = parseJudgeAnswers(
+      JSON.stringify({ scores: [1.7, -0.2, 0.42] }),
+      ['e000', 'e001', 'e002'],
+    );
+    expect(answers.get('e000')).toBe(1);
+    expect(answers.get('e001')).toBe(0);
+    expect(answers.get('e002')).toBe(0.42);
+  });
+
+  it('ignores extra positional scores and drops non-numeric ones', () => {
+    const { answers } = parseJudgeAnswers(
+      JSON.stringify({ scores: [0.5, 'high', 0.25, 0.9] }),
+      ['e000', 'e001', 'e002'],
+    );
+    expect([...answers.entries()]).toEqual([
+      ['e000', 0.5],
+      ['e002', 0.25],
+    ]);
+  });
+
+  it('still accepts keyed `items` rows for responses that ignore the schema', () => {
+    const { answers } = parseJudgeAnswers(
+      JSON.stringify({
+        items: [
+          { k: 'e000', p: 0.9 },
+          { k: 'e001', p: 0.2 },
+        ],
+      }),
+      ['e000', 'e001'],
+    );
+    expect(answers.get('e000')).toBe(0.9);
+    expect(answers.get('e001')).toBe(0.2);
+  });
+
   it('clamps probabilities into [0,1] and keeps only requested keys', () => {
     const { answers } = parseJudgeAnswers(
       JSON.stringify({
@@ -75,15 +115,18 @@ describe('parseJudgeAnswers', () => {
     expect(answers.get('e002')).toBe(0.3);
   });
 
-  it('throws on non-JSON bodies and on objects without an items array', () => {
+  it('throws on non-JSON bodies and on objects with neither array', () => {
     expect(() => parseJudgeAnswers('not json', [])).toThrow(
       'judge returned invalid JSON',
     );
     expect(() => parseJudgeAnswers('{"foo": 1}', [])).toThrow(
-      'missing an `items` array',
+      'missing a `scores` array',
     );
     expect(() => parseJudgeAnswers('[1,2]', [])).toThrow(
-      'missing an `items` array',
+      'missing a `scores` array',
+    );
+    expect(() => parseJudgeAnswers('{"scores": "high"}', [])).toThrow(
+      'missing a `scores` array',
     );
   });
 });
@@ -123,6 +166,26 @@ describe('GeminiJudge', () => {
     expect(call.contents[0].parts[0].text).toBe('state-a');
     expect(call.role).toBe(LlmRole.UTILITY_TOOL);
     expect(call.maxAttempts).toBe(2);
+  });
+
+  it('answers positionally when the model returns a `scores` array', async () => {
+    mock.generateContent.mockResolvedValue({
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [{ text: JSON.stringify({ scores: [0.9, 0.42] }) }],
+          },
+        },
+      ],
+    } as unknown as GenerateContentResponse);
+    const judge = new GeminiJudge(mock.config, 'gemini-3.1-flash-lite');
+    const answer = await judge.judge(
+      { prompt: 'state-scores', keys: ['e000', 'e001'] },
+      {},
+    );
+    expect(answer.answers.get('e000')).toBe(0.9);
+    expect(answer.answers.get('e001')).toBe(0.42);
   });
 
   it('serves an identical repeat prompt from cache without a second request', async () => {
@@ -172,6 +235,14 @@ describe('GeminiJudge', () => {
     expect(override.match).toEqual({ overrideScope: 'jfind' });
     expect(override.modelConfig.generateContentConfig.responseMimeType).toBe(
       'application/json',
+    );
+    // The judge must not pay for reasoning: Gemini 3 takes a low level, and
+    // an earlier judge model takes a zero budget.
+    expect(override.modelConfig.generateContentConfig.thinkingConfig).toEqual({
+      thinkingLevel: 'LOW',
+    });
+    expect(judgeGenerateConfig('gemini-2.5-flash-lite').thinkingConfig).toEqual(
+      { thinkingBudget: 0 },
     );
   });
 

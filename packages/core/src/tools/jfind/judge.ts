@@ -17,11 +17,14 @@
  *
  * Cost controls: the cheapest tier is the default model, `temperature: 0`
  * plus a response schema keeps output tokens to a few tokens per entry, the
- * output cap is a guardrail rather than a budget, and an in-session cache
- * makes an identical repeat search free.
+ * output cap is a guardrail rather than a budget, thinking is turned off so a
+ * mechanical estimate does not pay for reasoning tokens, and an in-session
+ * cache makes an identical repeat search free.
  */
 import type { GenerateContentConfig } from '@google/genai';
+import { ThinkingLevel } from '@google/genai';
 import type { Config } from '../../config/config.js';
+import { supportsModernFeatures } from '../../config/models.js';
 import { LlmRole } from '../../telemetry/llmRole.js';
 import { getErrorMessage } from '../../utils/errors.js';
 import { getResponseText } from '../../utils/partUtils.js';
@@ -44,41 +47,45 @@ export interface Judge {
 /** Model-config override scope: every jfind judge call resolves through it. */
 const JFIND_OVERRIDE_SCOPE = 'jfind';
 
-/** The judge answers with exactly one `{k, p}` item per requested entry key. */
+/** The judge answers with one probability per requested entry key, in question order. */
 const BATCH_RESPONSE_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
-    items: {
+    scores: {
       type: 'array',
       items: {
-        type: 'object',
-        properties: {
-          k: { type: 'string', description: 'question key, e.g. e017' },
-          p: {
-            type: 'number',
-            description: 'calibrated probability in [0, 1]',
-          },
-        },
-        required: ['k', 'p'],
-        additionalProperties: false,
+        type: 'number',
+        description: 'calibrated probability in [0, 1]',
       },
+      description:
+        'one probability per question key, in the same order the questions are listed',
     },
   },
-  required: ['items'],
+  required: ['scores'],
   additionalProperties: false,
 };
 
 /**
- * Temperature 0, strict JSON, and a small output cap. The cap is a
- * guardrail, not a budget: a full 64-entry batch is a few hundred output
- * tokens; anything larger means a malformed answer and is retried.
+ * Temperature 0, strict JSON, a small output cap, and no thinking. The judge
+ * is a mechanical estimator, not a reasoner: the chat-base-3 thinking default
+ * alone adds seconds of wall time to every batch. A full 64-entry batch as one
+ * number per entry is a few hundred output tokens; the cap is a guardrail, not
+ * a budget, and anything larger means a malformed answer that gets retried.
+ * Positional `scores` instead of keyed rows keeps a batch at roughly a third
+ * of the output tokens. Gemini 3 models take a thinking level; earlier models
+ * take a zero budget.
  */
-const JUDGE_GENERATE_CONFIG: GenerateContentConfig = {
-  temperature: 0,
-  maxOutputTokens: 4096,
-  responseMimeType: 'application/json',
-  responseJsonSchema: BATCH_RESPONSE_SCHEMA,
-};
+export function judgeGenerateConfig(model: string): GenerateContentConfig {
+  return {
+    temperature: 0,
+    maxOutputTokens: 4096,
+    responseMimeType: 'application/json',
+    responseJsonSchema: BATCH_RESPONSE_SCHEMA,
+    thinkingConfig: supportsModernFeatures(model)
+      ? { thinkingLevel: ThinkingLevel.LOW }
+      : { thinkingBudget: 0 },
+  };
+}
 
 const SYSTEM_INSTRUCTION =
   'You are a relevance judge for semantic code search. For every question key, estimate p: ' +
@@ -87,7 +94,8 @@ const SYSTEM_INSTRUCTION =
   'the `criteria` given in the state exactly. When two adjacent values are both defensible, ' +
   'favor the higher one when the entry could plausibly contain any part of the subject — the ' +
   'caller prunes on these answers, so a plausible match missed is worse than a weak match kept. ' +
-  'Answer only through the JSON schema, one item per question key, no commentary.';
+  'Answer only through the JSON schema: `scores` holds one probability per question key, in the ' +
+  'same order the questions are listed, no commentary.';
 
 /** Scopes that already carry the judge override, so repeat constructions do not stack it. */
 const overrideRegistered = new WeakSet<object>();
@@ -114,8 +122,11 @@ function isArray(value: unknown): value is unknown[] {
 
 /**
  * Parse a judge response body: one finite `[0,1]` probability per requested
- * key; malformed rows are dropped rather than failing the whole batch.
- * @throws {Error} when the body is not JSON or has no `items` array.
+ * key. The primary shape is positional — `scores[i]` answers `keys[i]`, so a
+ * 64-entry batch costs a third of the output tokens of keyed rows — and keyed
+ * `items` rows are still accepted for responses that ignore the schema.
+ * Malformed entries are dropped rather than failing the whole batch.
+ * @throws {Error} when the body is not JSON or carries neither array.
  */
 export function parseJudgeAnswers(
   text: string,
@@ -128,14 +139,26 @@ export function parseJudgeAnswers(
     throw new Error(`judge returned invalid JSON: ${getErrorMessage(error)}`);
   }
   if (!isRecord(parsed)) {
-    throw new Error('judge response is missing an `items` array');
+    throw new Error('judge response is missing a `scores` array');
   }
+  const answers = new Map<string, number>();
+
+  const scores = parsed['scores'];
+  if (isArray(scores)) {
+    for (let i = 0; i < keys.length && i < scores.length; i++) {
+      const value = scores[i];
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        answers.set(keys[i], Math.min(1, Math.max(0, value)));
+      }
+    }
+    return { answers };
+  }
+
   const items = parsed['items'];
   if (!isArray(items)) {
-    throw new Error('judge response is missing an `items` array');
+    throw new Error('judge response is missing a `scores` array');
   }
   const requested = new Set(keys);
-  const answers = new Map<string, number>();
   for (const row of items) {
     if (!isRecord(row)) continue;
     const { k, p } = row;
@@ -160,7 +183,7 @@ export class GeminiJudge implements Judge {
     if (!overrideRegistered.has(service)) {
       service.registerRuntimeModelOverride({
         match: { overrideScope: JFIND_OVERRIDE_SCOPE },
-        modelConfig: { generateContentConfig: JUDGE_GENERATE_CONFIG },
+        modelConfig: { generateContentConfig: judgeGenerateConfig(model) },
       });
       overrideRegistered.add(service);
     }

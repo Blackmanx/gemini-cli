@@ -128,3 +128,26 @@ export function fileScore(
   }
   return score;
 }
+
+/**
+ * Tool output, cache, and vendored trees: directories whose files repeat every
+ * keyword of the query simply because they mirror the whole project.
+ */
+const GENERATED_DIR_RE =
+  /(^|\/)[^/]+-out(\/|$)|(^|\/)(cache|caches|vendor|generated|third[_-]party|tmp|temp)(?=\/|$)/;
+
+/** Prose and rendered reports: they describe the subject; they rarely implement it. */
+const PROSE_EXT_RE = /\.(?:md|markdown|rst|adoc|html?|tex)$/i;
+
+/**
+ * Candidate-ranking weight for noise-heavy paths, in `[0.3, 1]`. Generated
+ * dumps and prose stay searchable — a report can be the answer, and a name
+ * judgment still decides — but they must not crowd the lexical shortlist the
+ * way a generated mirror of the repository does. Applies only where
+ * candidates are picked for judging, never to any judgment itself.
+ */
+export function candidatePenalty(rel: string): number {
+  if (GENERATED_DIR_RE.test(rel)) return 0.3;
+  if (PROSE_EXT_RE.test(rel)) return 0.5;
+  return 1;
+}

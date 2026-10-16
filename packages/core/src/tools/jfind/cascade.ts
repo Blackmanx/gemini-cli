@@ -25,7 +25,7 @@
 import * as path from 'node:path';
 import type { Judge } from './judge.js';
 import { keywords as deriveKeywords } from './keywords.js';
-import { fileScore, grepIndex, idf } from './lexical.js';
+import { candidatePenalty, fileScore, grepIndex, idf } from './lexical.js';
 import {
   type HeatRange,
   mergeHeat,
@@ -55,8 +55,13 @@ import { type FileEntry, listFiles, type SearchRoot } from './tree.js';
 const PARALLEL = 8;
 /** Files per filename-ranking request. */
 const NAME_BATCH = 64;
-/** Lexically ranked files that receive a filename judgment. */
-const CANDIDATES = 128;
+/**
+ * Lexically ranked files that receive a filename judgment. Sized so a
+ * generated report mirroring every query keyword cannot crowd the actual
+ * implementation out of the pool: the name wave judges by semantics, but it
+ * can only judge what reached the shortlist.
+ */
+const CANDIDATES = 256;
 /** Files whose content is read and sketched. */
 const FILES = 20;
 /** Windows kept per read file. */
@@ -77,8 +82,12 @@ const READ_LIMIT = 4 * 1024 * 1024;
 const SKETCH_STATE_BYTES = 18_000;
 /** Hard cap on sketch cards per request. */
 const SKETCH_CARDS_MAX = 48;
-/** Passage state budget per verification request, tags included. */
-const VERIFY_STATE_BYTES = 24 * 1024;
+/**
+ * Complete passages verified per request. Verification text is verbatim and
+ * larger than a sketch, so fewer fit; packing them across files (rather than
+ * one request per file) is what keeps a search at three dependent waves.
+ */
+const VERIFY_PASSAGES = 6;
 /** Distinct failure messages retained for the report. */
 const FAILURES_KEPT = 5;
 
@@ -253,12 +262,13 @@ class Cascade {
     const ranked = entries
       .map((entry, node) => ({
         node,
-        lex: fileScore(
-          index.perFileKw.get(entry.rel) ?? noCounts,
-          weights,
-          entry.rel,
-          keywords,
-        ),
+        lex:
+          fileScore(
+            index.perFileKw.get(entry.rel) ?? noCounts,
+            weights,
+            entry.rel,
+            keywords,
+          ) * candidatePenalty(entry.rel),
       }))
       .sort(
         (a, b) => b.lex - a.lex || compareRel(entries[a.node], entries[b.node]),
@@ -393,36 +403,29 @@ class Cascade {
       .filter((candidate) => candidate.score >= CUTOFF)
       .slice(0, FULL_LIMIT);
     this.stats.windowsPruned += cards.length - survivors.length;
-    const chosen = new Map<number, number[]>();
-    for (const { f, p } of survivors) {
-      const list = chosen.get(f);
-      if (list) list.push(p);
-      else chosen.set(f, [p]);
-    }
 
-    // Wave 3: verification of complete passages, grouped per file.
+    // Wave 3: verification of complete passages, packed across files (bounded
+    // passages per request), strongest first.
     const verifyJobs: Array<{
-      f: number;
-      passages: Passage[];
+      batch: Array<{ f: number; p: number }>;
       request: JudgeRequest;
     }> = [];
-    for (const f of [...chosen.keys()].sort((a, b) => a - b)) {
-      const rel = entries[files[f].node].rel;
-      const ps = chosen.get(f)!.sort((a, b) => a - b);
-      for (const group of chunks(
-        ps,
-        Math.max(1, Math.floor(VERIFY_STATE_BYTES / WINDOW_BYTES)),
-      )) {
-        const passages = group.map((p) => files[f].passages[p]);
-        verifyJobs.push({
-          f,
-          passages,
-          request: passageBatch(query, rel, passages),
-        });
-      }
+    for (const group of chunks(survivors, VERIFY_PASSAGES)) {
+      verifyJobs.push({
+        batch: group,
+        request: passageBatch(
+          query,
+          group.map(({ f, p }) => ({
+            fileKey: `f${f}`,
+            rel: entries[files[f].node].rel,
+            content: plainContent(files[f].passages[p]),
+          })),
+        ),
+      });
     }
+    const verifiedFiles = new Set(survivors.map(({ f }) => f)).size;
     onProgress?.(
-      `verifying ${survivors.length} passages in ${chosen.size} files`,
+      `verifying ${survivors.length} passages in ${verifiedFiles} files`,
     );
     const results = new Map<
       number,
@@ -433,17 +436,18 @@ class Cascade {
         this.fail('verification', outcome.error);
         return;
       }
-      let entry = results.get(job.f);
-      if (!entry) {
-        entry = { score: 0, heat: [], lines: 0, bytes: 0 };
-        results.set(job.f, entry);
-      }
-      job.passages.forEach((passage, k) => {
+      job.batch.forEach(({ f, p }, k) => {
+        let entry = results.get(f);
+        if (!entry) {
+          entry = { score: 0, heat: [], lines: 0, bytes: 0 };
+          results.set(f, entry);
+        }
         const score = probability(outcome, passageKey(k));
         if (score === undefined) {
           this.stats.errors++;
           return;
         }
+        const passage = files[f].passages[p];
         const text = plainContent(passage);
         entry.score = Math.max(entry.score, score);
         entry.heat.push({

@@ -17,7 +17,6 @@
  * identical searches.
  */
 import { type FileEntry, renderTree } from './tree.js';
-import { type Passage, plainContent } from './passages.js';
 
 /** One judgment request: a prompt (state + questions) and the keys it must be answered for. */
 export interface JudgeRequest {
@@ -34,7 +33,7 @@ const TREE_FORMAT =
 const FILE_CRITERIA = {
   // Generated implementation is still implementation. File provenance must
   // not itself be negative evidence for source-code searches.
-  no: 'The file is unrelated by name and location; generated executable implementation can still be relevant.',
+  no: 'The file is unrelated by name and location; generated executable implementation can still be relevant, but documentation or reports that only describe the subject rank below files that perform it.',
   yes: 'A file at this path plausibly contains code, text, or data matching the search.',
 };
 
@@ -44,12 +43,12 @@ const FOLDER_CRITERIA = {
 };
 
 const SKETCH_CRITERIA = {
-  no: 'Unrelated code; mere mentions, declarations, call sites, tests or configuration without implementation.',
+  no: 'Unrelated code; mere mentions, declarations, call sites, tests or configuration without implementation. Prose that only discusses the subject ranks below code that performs it.',
   yes: 'Likely substantive implementation, definition or explanation of any part of the requested behavior. A matching helper for one step counts. Excerpts omit most source: favor recall.',
 };
 
 const PASSAGE_CRITERIA = {
-  no: 'This passage only mentions, calls, imports, tests, or configures the subject, or contains unrelated code sharing keywords.',
+  no: 'This passage only mentions, calls, imports, tests, or configures the subject, or contains unrelated code sharing keywords; documentation or reports that discuss the subject rank below code implementing it.',
   yes: 'This passage contains an implementation, definition, or substantive explanation of an important part of the search. A helper implementing one requested step counts even when other steps are elsewhere.',
 };
 
@@ -71,7 +70,7 @@ function buildRequest(
   const keys = Object.keys(questions);
   const list = keys.map((key) => `- ${key}: ${questions[key]}`);
   return {
-    prompt: `${JSON.stringify(state)}\n\nQuestions:\n${list.join('\n')}\n\nReturn one calibrated probability per question key.`,
+    prompt: `${JSON.stringify(state)}\n\nQuestions:\n${list.join('\n')}\n\nReturn \`scores\`: one calibrated probability per question key, in question order.`,
     keys,
   };
 }
@@ -135,22 +134,34 @@ export function sketchBatch(
   );
 }
 
-/** Verification of complete passages from one file, judged independently. */
+/** One surviving passage to verify: its file and its complete verbatim text. */
+export interface PassageCard {
+  fileKey: string;
+  rel: string;
+  content: string;
+}
+
+/**
+ * Verification of complete passages from any file, judged independently and
+ * packed across files exactly like a sketch batch: the same mixed-file state
+ * shape, with complete passage text instead of a sketch.
+ */
 export function passageBatch(
   query: string,
-  rel: string,
-  passages: readonly Passage[],
+  cards: readonly PassageCard[],
 ): JudgeRequest {
-  const entries: Record<string, string> = {};
+  const files: Record<string, string> = {};
+  const passages: Record<string, [string, string]> = {};
   const questions: Record<string, string> = {};
-  passages.forEach((passage, k) => {
+  cards.forEach((card, k) => {
     const key = passageKey(k);
-    entries[key] = plainContent(passage);
+    files[card.fileKey] = card.rel;
+    passages[key] = [card.fileKey, card.content];
     questions[key] =
-      `Does \`passages.${key}\` (file "${rel}") substantively implement, define, or explain part of "${query}"? Apply \`criteria\`.`;
+      `Does \`passages.${key}\` (file "${card.rel}") substantively implement, define, or explain part of "${query}"? Apply \`criteria\`.`;
   });
   return buildRequest(
-    { criteria: PASSAGE_CRITERIA, file: rel, passages: entries, search: query },
+    { criteria: PASSAGE_CRITERIA, files, passages, search: query },
     questions,
   );
 }

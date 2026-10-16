@@ -132,13 +132,17 @@ function formatRange(rel: string, start: number, end: number): string {
   return `${rel}:${start === end ? String(start) : `${start}-${end}`}`;
 }
 
-function statsFooter(result: CascadeResult, elapsedMs: number): string {
+function statsFooter(
+  result: CascadeResult,
+  elapsedMs: number,
+  judgeModel: string,
+): string {
   const { stats } = result;
   const tokens = stats.inputTokens + stats.outputTokens;
   return (
     `listed ${formatCount(stats.listed)} · judged ${formatCount(stats.judged)} · ` +
     `read ${stats.filesRead} files (${formatBytes(stats.fileBytes)}) · ` +
-    `${stats.requests} requests · ${formatCount(tokens)} judge tokens · ` +
+    `${stats.requests} requests · ${formatCount(tokens)} judge tokens (${judgeModel}) · ` +
     `${formatDuration(elapsedMs)} wall / ${formatDuration(stats.apiMs)} api`
   );
 }
@@ -149,6 +153,7 @@ function buildReport(
   scope: string,
   result: CascadeResult,
   elapsedMs: number,
+  judgeModel: string,
 ): string {
   const { hits, threshold, stats } = result;
   const where = scope === '' ? '' : ` in ${scope}`;
@@ -172,7 +177,7 @@ function buildReport(
       }
     }
   }
-  out.push('', statsFooter(result, elapsedMs));
+  out.push('', statsFooter(result, elapsedMs, judgeModel));
   if (stats.failures.length > 0) {
     out.push(
       `${stats.errors} of ${stats.requests} judge requests failed:`,
@@ -188,6 +193,7 @@ function buildDisplay(
   hits: readonly FindHit[],
   result: CascadeResult,
   elapsedMs: number,
+  judgeModel: string,
 ): string {
   const out: string[] = [];
   if (hits.length === 0) {
@@ -207,7 +213,7 @@ function buildDisplay(
   out.push(
     `${stats.requests} requests · ${formatCount(
       stats.inputTokens + stats.outputTokens,
-    )} judge tokens · ${formatDuration(elapsedMs)}`,
+    )} judge tokens (${judgeModel}) · ${formatDuration(elapsedMs)}`,
   );
   if (stats.failures.length > 0) {
     out.push(`${stats.errors} of ${stats.requests} judge requests failed`);
@@ -257,10 +263,8 @@ class JfindToolInvocation extends BaseToolInvocation<JfindParams, ToolResult> {
     }
 
     const timeout = AbortSignal.timeout(JFIND_TIMEOUT_MS);
-    const judge = new GeminiJudge(
-      this.config,
-      this.config.getJfindJudgeModel(),
-    );
+    const judgeModel = this.config.getJfindJudgeModel();
+    const judge = new GeminiJudge(this.config, judgeModel);
     let result: CascadeResult;
     try {
       result = await runCascade({
@@ -292,6 +296,7 @@ class JfindToolInvocation extends BaseToolInvocation<JfindParams, ToolResult> {
       scope,
       result,
       elapsedMs,
+      judgeModel,
     );
     // Every judge request failing means the model saw nothing usable; flag it
     // as an error so a dead judge cannot masquerade as "no results".
@@ -305,6 +310,7 @@ class JfindToolInvocation extends BaseToolInvocation<JfindParams, ToolResult> {
         result.hits,
         result,
         elapsedMs,
+        judgeModel,
       ),
       ...(allFailed
         ? {
