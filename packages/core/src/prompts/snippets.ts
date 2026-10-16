@@ -33,6 +33,7 @@ import {
   TRACKER_LIST_TASKS_TOOL_NAME,
   TRACKER_UPDATE_TASK_TOOL_NAME,
   AGENT_TOOL_NAME,
+  JFIND_TOOL_NAME,
 } from '../tools/tool-names.js';
 import type { HierarchicalMemory } from '../config/memory.js';
 import { DEFAULT_CONTEXT_FILENAME } from '../tools/memoryTool.js';
@@ -66,6 +67,7 @@ export interface CoreMandatesOptions {
   hasHierarchicalMemory: boolean;
   contextFilenames?: string[];
   topicUpdateNarration: boolean;
+  enableJfind?: boolean;
 }
 
 export interface PrimaryWorkflowsOptions {
@@ -75,6 +77,7 @@ export interface PrimaryWorkflowsOptions {
   enableEnterPlanModeTool: boolean;
   enableGrep: boolean;
   enableGlob: boolean;
+  enableJfind?: boolean;
   approvedPlan?: { path: string };
   taskTracker?: string;
   topicUpdateNarration: boolean;
@@ -232,7 +235,11 @@ Consider the following when estimating the cost of your approach:
 Use the following guidelines to optimize your search and read patterns.
 <guidelines>
 - Combine turns whenever possible by utilizing parallel searching and reading and by requesting enough context by passing context, before, or after to ${GREP_TOOL_NAME}, to enable you to skip using an extra turn reading the file.
-- Prefer using tools like ${GREP_TOOL_NAME} to identify points of interest instead of reading lots of files individually.
+- ${
+    options?.enableJfind
+      ? `When the question is *where* something is implemented, call ${JFIND_TOOL_NAME} first with a plain-language description of the behavior (no regex); only fall back to tools like ${GREP_TOOL_NAME} for exact strings or after checking its hits.`
+      : `Prefer using tools like ${GREP_TOOL_NAME} to identify points of interest instead of reading lots of files individually.`
+  }
 - If you need to read multiple ranges in a file, do so parallel, in as few turns as possible.
 - It is more important to reduce extra turns, but please also try to minimize unnecessarily large file reads and search results, when doing so doesn't result in extra turns. Do this by always providing conservative limits and scopes to tools like ${READ_FILE_TOOL_NAME} and ${GREP_TOOL_NAME}.
 - ${EDIT_TOOL_NAME} fails if ${EDIT_PARAM_OLD_STRING} is ambiguous, causing extra turns. Take care to read enough with ${READ_FILE_TOOL_NAME} and ${GREP_TOOL_NAME} to make the edit unambiguous.
@@ -241,7 +248,11 @@ Use the following guidelines to optimize your search and read patterns.
 </guidelines>
 
 <examples>
-- **Searching:** utilize search tools like ${GREP_TOOL_NAME} and ${GLOB_TOOL_NAME} with a conservative result count (\`${GREP_PARAM_TOTAL_MAX_MATCHES}\`) and a narrow scope (\`${GREP_PARAM_INCLUDE_PATTERN}\` and \`${GREP_PARAM_EXCLUDE_PATTERN}\` parameters).
+- **Searching:** ${
+    options?.enableJfind
+      ? `to find the code that implements a behavior, call ${JFIND_TOOL_NAME} with a plain-language query (no regex) and start from its strongest hits; `
+      : ''
+  }utilize search tools like ${GREP_TOOL_NAME} and ${GLOB_TOOL_NAME} with a conservative result count (\`${GREP_PARAM_TOTAL_MAX_MATCHES}\`) and a narrow scope (\`${GREP_PARAM_INCLUDE_PATTERN}\` and \`${GREP_PARAM_EXCLUDE_PATTERN}\` parameters).
 - **Searching and editing:** utilize search tools like ${GREP_TOOL_NAME} with a conservative result count and a narrow scope. Use \`${GREP_PARAM_CONTEXT}\`, \`${GREP_PARAM_BEFORE}\`, and/or \`${GREP_PARAM_AFTER}\` to request enough context to avoid the need to read the file before editing matches.
 - **Understanding:** minimize turns needed to understand a file. It's most efficient to read small files in their entirety.
 - **Large files:** utilize search tools like ${GREP_TOOL_NAME} and/or ${READ_FILE_TOOL_NAME} called in parallel with '${READ_FILE_PARAM_START_LINE}' and '${READ_FILE_PARAM_END_LINE}' to reduce the impact on context. Minimize extra turns, unless unavoidable due to the file being too large.
@@ -727,6 +738,7 @@ function workflowStepResearch(options: PrimaryWorkflowsOptions): string {
   }
 
   const searchTools: string[] = [];
+  if (options.enableJfind) searchTools.push(formatToolName(JFIND_TOOL_NAME));
   if (options.enableGrep) searchTools.push(formatToolName(GREP_TOOL_NAME));
   if (options.enableGlob) searchTools.push(formatToolName(GLOB_TOOL_NAME));
 

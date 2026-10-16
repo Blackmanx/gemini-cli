@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getCoreSystemPrompt } from './prompts.js';
+import { renderCoreMandates } from '../prompts/snippets.js';
 import { resolvePathFromEnv } from '../prompts/utils.js';
 import { isGitRepository } from '../utils/gitUtils.js';
 import fs from 'node:fs';
@@ -989,5 +990,39 @@ describe('resolvePathFromEnv helper function', () => {
 
       consoleSpy.mockRestore();
     });
+  });
+});
+
+describe('renderCoreMandates jfind steering', () => {
+  const baseOptions = {
+    interactive: false,
+    hasSkills: false,
+    hasHierarchicalMemory: false,
+    topicUpdateNarration: true,
+  };
+
+  it('steers search guidelines toward jfind when the tool is enabled', () => {
+    const prompt = renderCoreMandates({ ...baseOptions, enableJfind: true });
+    // Both the <guidelines> bullet and the <examples> Searching bullet
+    // must prefer the semantic search for "where is X implemented" queries.
+    expect(prompt).toContain('call jfind first');
+    expect(prompt).toContain('call jfind with a plain-language query');
+    // The original grep-first bullet is replaced by the jfind-first one,
+    // which still keeps grep_search as the exact-string fallback.
+    expect(prompt).not.toContain(
+      'Prefer using tools like grep_search to identify points of interest',
+    );
+    expect(prompt).toContain('fall back to tools like grep_search');
+  });
+
+  it('never mentions jfind when the tool is disabled', () => {
+    const prompt = renderCoreMandates(baseOptions);
+    expect(prompt).not.toContain('jfind');
+    expect(prompt).toContain(
+      'Prefer using tools like grep_search to identify points of interest',
+    );
+    expect(prompt).toContain(
+      '**Searching:** utilize search tools like grep_search and glob',
+    );
   });
 });

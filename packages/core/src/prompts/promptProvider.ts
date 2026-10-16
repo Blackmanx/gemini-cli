@@ -26,6 +26,7 @@ import {
   ENTER_PLAN_MODE_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
+  JFIND_TOOL_NAME,
   AGENT_TOOL_NAME,
 } from '../tools/tool-names.js';
 import { resolveModel, supportsModernFeatures } from '../config/models.js';
@@ -198,6 +199,7 @@ export class PromptProvider {
           hasHierarchicalMemory,
           contextFilenames,
           topicUpdateNarration: isTopicUpdateNarrationEnabled,
+          enableJfind: enabledToolNames.has(JFIND_TOOL_NAME),
         })),
         subAgents: this.withSection(
           'agentContexts',
@@ -238,6 +240,7 @@ export class PromptProvider {
               ),
               enableGrep: enabledToolNames.has(GREP_TOOL_NAME),
               enableGlob: enabledToolNames.has(GLOB_TOOL_NAME),
+              enableJfind: enabledToolNames.has(JFIND_TOOL_NAME),
               approvedPlan: approvedPlanPath
                 ? { path: approvedPlanPath }
                 : undefined,
