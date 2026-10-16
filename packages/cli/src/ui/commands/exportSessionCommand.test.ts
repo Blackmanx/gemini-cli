@@ -47,15 +47,101 @@ describe('exportSessionCommand', () => {
     } as unknown as CommandContext;
   });
 
-  it('should return error if no path is provided', async () => {
+  it('should default to a timestamped Markdown file when no path is provided', async () => {
     mockContext.invocation!.args = '   ';
+    const mockSessionData: ConversationRecord = {
+      sessionId: 'test-session-id',
+      messages: [
+        {
+          id: 'm1',
+          timestamp: '2026-10-16T10:00:00.000Z',
+          type: 'user',
+          content: 'hello world',
+        },
+      ],
+      projectHash: 'hash',
+      startTime: '2026-10-16T10:00:00.000Z',
+      lastUpdated: '2026-10-16T10:00:00.000Z',
+    };
+    vi.mocked(SessionSelector.prototype.resolveSession).mockResolvedValue({
+      sessionData: mockSessionData,
+      sessionPath: path.join(
+        path.sep,
+        'tmp',
+        'mock-dir',
+        'chats',
+        'session.jsonl',
+      ),
+      displayInfo: 'test',
+    });
+    vi.mocked(fs.access).mockRejectedValue(new Error('Not found'));
+
     const result = await exportSessionCommand.action!(mockContext, '');
 
-    expect(result).toEqual({
-      type: 'message',
-      messageType: 'error',
-      content: expect.stringContaining('Please provide a file path'),
+    expect(result).toBeUndefined();
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /gemini-session-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.md$/,
+      ),
+      expect.stringContaining('## User'),
+      'utf-8',
+    );
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('hello world'),
+      'utf-8',
+    );
+  });
+
+  it('should export a Markdown transcript when the path ends with .md', async () => {
+    mockContext.invocation!.args = '  notes.md  ';
+    const mockSessionData: ConversationRecord = {
+      sessionId: 'test-session-id',
+      messages: [
+        {
+          id: 'm1',
+          timestamp: '2026-10-16T10:00:00.000Z',
+          type: 'user',
+          content: 'do the thing',
+        },
+        {
+          id: 'm2',
+          timestamp: '2026-10-16T10:00:05.000Z',
+          type: 'gemini',
+          content: 'done!',
+          model: 'gemini-3.1-flash-lite',
+        },
+      ],
+      projectHash: 'hash',
+      startTime: '2026-10-16T10:00:00.000Z',
+      lastUpdated: '2026-10-16T10:00:05.000Z',
+    };
+    vi.mocked(SessionSelector.prototype.resolveSession).mockResolvedValue({
+      sessionData: mockSessionData,
+      sessionPath: path.join(
+        path.sep,
+        'tmp',
+        'mock-dir',
+        'chats',
+        'session.jsonl',
+      ),
+      displayInfo: 'test',
     });
+    vi.mocked(fs.access).mockRejectedValue(new Error('Not found'));
+
+    const result = await exportSessionCommand.action!(mockContext, '');
+
+    expect(result).toBeUndefined();
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      path.resolve(process.cwd(), 'notes.md'),
+      expect.stringContaining('# Gemini CLI conversation'),
+      'utf-8',
+    );
+    expect(fs.writeFile).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.stringContaining('`gemini-3.1-flash-lite`'),
+      'utf-8',
+    );
   });
 
   it('should return error if sessionId is missing', async () => {
