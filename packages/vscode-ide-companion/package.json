@@ -2,7 +2,7 @@
   "name": "gemini-cli-vscode-ide-companion",
   "displayName": "Gemini CLI Companion",
   "description": "Enable Gemini CLI with direct access to your IDE workspace.",
-  "version": "0.66.0-24206fe73",
+  "version": "0.66.0-76d5b9fd1",
   "publisher": "google",
   "icon": "assets/icon.png",
   "repository": {
