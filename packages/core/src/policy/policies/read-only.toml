@@ -31,6 +31,10 @@
 toolName = [
   "glob",
   "grep_search",
+  # Judge-backed semantic search (OMP): read-only, so it joins the band that
+  # keeps it advertised and auto-allowed in every mode (in non-interactive
+  # anything unlisted is DENIED and dropped from the tool prompt).
+  "jfind",
   "list_directory",
   "read_file",
   "google_web_search",

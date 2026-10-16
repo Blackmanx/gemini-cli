@@ -1121,6 +1121,77 @@ priority = 100
         await fs.rm(tempPolicyDir, { recursive: true, force: true });
       }
     });
+
+    it('keeps jfind advertised and allowed in every mode via the read-only band', async () => {
+      const readOnlyTomlPath = path.resolve(
+        __dirname,
+        'policies',
+        'read-only.toml',
+      );
+      const planTomlPath = path.resolve(__dirname, 'policies', 'plan.toml');
+
+      const tempPolicyDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'jfind-policy-test-'),
+      );
+      try {
+        await fs.writeFile(
+          path.join(tempPolicyDir, 'read-only.toml'),
+          await fs.readFile(readOnlyTomlPath, 'utf-8'),
+        );
+        await fs.writeFile(
+          path.join(tempPolicyDir, 'plan.toml'),
+          await fs.readFile(planTomlPath, 'utf-8'),
+        );
+        const getPolicyTier = () => 1; // Default tier
+        const result = await loadPoliciesFromToml(
+          [tempPolicyDir],
+          getPolicyTier,
+        );
+
+        // Non-interactive: the default decision is DENY and denied tools are
+        // dropped from the model's tool prompt entirely (this is how jfind was
+        // invisible to `-p` runs). The read-only band must rescue it.
+        const headless = new PolicyEngine({
+          rules: result.rules,
+          nonInteractive: true,
+          defaultDecision: PolicyDecision.DENY,
+        });
+        const excluded = headless.getExcludedTools(
+          new Map(),
+          new Set(['jfind', 'grep_search', 'replace']),
+        );
+        expect(
+          excluded.has('jfind'),
+          'jfind must stay advertised in non-interactive mode',
+        ).toBe(false);
+        expect(
+          excluded.has('replace'),
+          'mutating tools must stay excluded (guards against a vacuous pass)',
+        ).toBe(true);
+        const headlessCheck = await headless.check(
+          { name: 'jfind' },
+          undefined,
+        );
+        expect(
+          headlessCheck.decision,
+          'jfind should be ALLOW, not default DENY, in non-interactive mode',
+        ).toBe(PolicyDecision.ALLOW);
+
+        // Plan Mode: the catch-all deny (priority 40) must not outrank the
+        // read-only band (priority 50), same as read_file.
+        const plan = new PolicyEngine({
+          rules: result.rules,
+          approvalMode: ApprovalMode.PLAN,
+        });
+        const planCheck = await plan.check({ name: 'jfind' }, undefined);
+        expect(
+          planCheck.decision,
+          'jfind should be ALLOWED in Plan Mode via the read-only band',
+        ).toBe(PolicyDecision.ALLOW);
+      } finally {
+        await fs.rm(tempPolicyDir, { recursive: true, force: true });
+      }
+    });
   });
 
   describe('validateMcpPolicyToolNames', () => {
