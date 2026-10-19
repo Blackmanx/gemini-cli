@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Turn an corporate .dotx template into a .docx officecli can open.
+"""Turn a .dotx template into a .docx officecli can open.
 
 This is the only thing that is not officecli's job. It refuses .dotx outright -
-"Unsupported file type: .dotx" - and no plugin ships for it, while the corporate
-Word templates all arrive as .dotx.
+"Unsupported file type: .dotx" - and no plugin ships for it, while Word
+templates arrive as .dotx.
 
 Everything else about these documents is done with officecli; see SKILL.md.
 
 Usage:
-    from_dotx.py assets/templates/documentacion-proyecto.dotx informe.docx
+    from_dotx.py plantilla.dotx informe.docx
 """
 from __future__ import annotations
 

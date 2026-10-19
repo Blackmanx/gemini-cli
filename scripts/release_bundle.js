@@ -158,7 +158,7 @@ const version = shouldStamp
 // ^v(\d*)(\.(\d*)?\.(\d*)?)?-?(?:[a-zA-Z0-9]*)?$ - dots are allowed only in
 // the numeric core, and the suffix permits a single dash followed by
 // alphanumerics. An npm version may legally contain dots and dashes in its
-// pre-release (`0.63.0-0adc74b84`), so the suffix is flattened to plain
+// pre-release (`0.66.0-0adc74b84`), so the suffix is flattened to plain
 // alphanumerics; anything else is rejected with HTTP 422.
 const versionCore = version.split('-')[0];
 const versionSuffix = version.slice(versionCore.length + 1);

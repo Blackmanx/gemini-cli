@@ -32,6 +32,9 @@ const TEST_ENV = {
   GEMINI_MEMORY_MONITOR_INTERVAL: '100',
 };
 
+const largeChatFixturePath = join(__dirname, 'large-chat-session.json');
+const hasLargeChatFixture = existsSync(largeChatFixturePath);
+
 describe('Memory Usage Tests', () => {
   let harness: MemoryTestHarness;
   let rig: TestRig;
@@ -206,7 +209,9 @@ describe('Memory Usage Tests', () => {
     }
   });
 
-  describe('Large Chat Scenarios', () => {
+  // The 54 MB upstream fixture is not shipped in this snapshot; fetch it from
+  // the upstream repository to run these scenarios.
+  describe.skipIf(!hasLargeChatFixture)('Large Chat Scenarios', () => {
     let sharedResumeResponsesPath: string;
     let sharedActiveResponsesPath: string;
     let sharedHistoryPath: string;

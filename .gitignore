@@ -73,3 +73,8 @@ conductor/
 # Release bundle artifacts (see scripts/release_bundle.js)
 /release/
 /gemini-cli-bundle.zip
+
+# Upstream performance fixture (54 MB). Not shipped here: fetch it from
+# google-gemini/gemini-cli (memory-tests/large-chat-session.json) to run the
+# large-chat memory/perf scenarios, which skip when it is missing.
+memory-tests/large-chat-session.json

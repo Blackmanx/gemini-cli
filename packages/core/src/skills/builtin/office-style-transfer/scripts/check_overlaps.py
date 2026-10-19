@@ -2,7 +2,7 @@
 """Report where a .pptx prints text over text, over a shape, or off the slide.
 
 This is the check that stands between a filled deck and the screenshot the
-customer sees. Every shape in the corporate templates is sized for the label it
+customer sees. Every shape in a real template is sized for the label it
 shipped with, so writing a real sentence into a card title grows the text out
 of the box and straight over the paragraph underneath it. Nothing errors; the
 deck only looks wrong when it is rendered.

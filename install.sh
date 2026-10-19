@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 #
-# install.sh — Instalador / actualizador de Gemini CLI (fork corporate).
+# install.sh — Instalador / actualizador de Gemini CLI (fork).
 #
 # Detecta la última release del fork, hace backup de ~/.gemini, elimina
 # versiones previas (npm global, symlink, otras carpetas en ~/opt) y
 # reinstala. Si el fork ya está instalado, solo actualiza si hay versión nueva.
 #
-# Instalación rápida (repo privado: requiere un token de GitHub con acceso):
-#   export GITHUB_TOKEN=ghp_...   # o usa `gh auth token`
-#   curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
-#     https://raw.githubusercontent.com/Blackmanx/gemini-cli/feature/omp-port/install.sh | bash
+# Instalación rápida (repo público: sin token):
+#   curl -fsSL https://raw.githubusercontent.com/Blackmanx/gemini-cli/main/install.sh | bash
+#
+# Ajusta Blackmanx/gemini-cli a donde esté alojado el fork, o exporta GEMINI_REPO.
 #
 # Uso:
 #   bash install.sh                 # instala / actualiza a la última release
@@ -28,7 +28,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Configuración
 # ---------------------------------------------------------------------------
-REPO="Blackmanx/gemini-cli"
+REPO="${GEMINI_REPO:-Blackmanx/gemini-cli}"
 API_URL="https://api.github.com/repos/${REPO}"
 
 INSTALL_ROOT="${GEMINI_INSTALL_ROOT:-${HOME}/opt}"          # donde viven las carpetas gemini-cli-<version>
@@ -87,12 +87,10 @@ usage() {
   # Here-doc estático (no lee $0): así funciona también con `curl | bash`,
   # donde $0 es "bash" y no hay fichero del que leer.
   cat <<'EOF'
-install.sh — Instalador / actualizador de Gemini CLI (fork corporate).
+install.sh — Instalador / actualizador de Gemini CLI (fork).
 
-Instalación rápida (repo privado: requiere un token de GitHub con acceso):
-  export GITHUB_TOKEN=ghp_...   # o usa `gh auth token`
-  curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
-    https://raw.githubusercontent.com/Blackmanx/gemini-cli/feature/omp-port/install.sh | bash
+Instalación rápida (repo público: sin token):
+  curl -fsSL https://raw.githubusercontent.com/Blackmanx/gemini-cli/main/install.sh | bash
 
 Uso:
   bash install.sh                 # instala / actualiza a la última release
@@ -223,16 +221,16 @@ normalize_tag() {  # quita la 'v' inicial si existe
   printf '%s' "${v#v}"
 }
 
-# El tag de git es "0.70.0-dbc7786a6" pero el CLI reporta
-# "0.70.0-dbc7786a6" (punto tras ""). Ambos significan lo mismo.
-# canonical() unifica para comparar; tag_to_version() convierte el tag al
-# formato de versión (para nombrar directorios y mostrar en pantalla).
+# El tag de git es "v0.66.0-dbc7786a6" y el CLI reporta "0.66.0-dbc7786a6":
+# el prefijo 'v' es lo único que difiere. canonical() unifica para comparar;
+# tag_to_version() convierte el tag al formato de versión (para nombrar
+# directorios y mostrar en pantalla).
 canonical() {
-  printf '%s' "$1" | sed 's/-\./-/g'
+  printf '%s' "$1"
 }
 
 tag_to_version() {
-  printf '%s' "$1" | sed -E 's/-([0-9a-fA-F])/-\1/'
+  printf '%s' "$1"
 }
 
 get_latest_release() {
@@ -240,8 +238,8 @@ get_latest_release() {
   if ! json="$(gh_curl "${API_URL}/releases/latest")"; then
     die "No se pudo consultar la última release de ${REPO}.
        ¿Hay conexión a Internet? ¿GitHub accesible?
-       El repo es privado: necesitas un token. Exporta GITHUB_TOKEN o
-       instala/authentica 'gh' (gh auth login) y reintenta."
+       Si el repo no es público, exporta GITHUB_TOKEN o autentica 'gh'
+       (gh auth login) y reintenta."
   fi
   local tag
   tag="$(json_tag "$json")"
@@ -554,8 +552,8 @@ main() {
   local target_version
   target_version="$(tag_to_version "$(normalize_tag "${target_tag}")")"
 
-  # 3) ¿Necesita actualizar? (compara en forma canónica por si el CLI reporta
-  #    la versión sin el punto tras "").
+  # 3) ¿Necesita actualizar? (compara en forma canónica el tag con la versión
+  #    instalada).
   if [[ "${FORCE}" == false && -n "${INSTALLED_VERSION}" \
         && "$(canonical "$(normalize_tag "${INSTALLED_VERSION}")")" == "$(canonical "${target_version}")" ]]; then
     success "Ya tienes la última versión (${INSTALLED_VERSION}). Usa --force para reinstalar."

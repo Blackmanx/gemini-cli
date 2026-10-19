@@ -1,6 +1,6 @@
 ---
 name: office-style-transfer
-description: Generate a PPTX, DOCX or XLSX that looks like it was made with the same template the user hands you — reusing that file's theme, fonts, colours, layouts, styles and decorative art, and never rebuilding from scratch. Use when the user provides an existing Office file (a .pptx, .docx or .xlsx, often a .potx/.dotx/.xltx template renamed, or a file from a network share) as the style reference for a new deck, document or spreadsheet, or asks to "generate a presentation/document/excel with the same style/look/branding as this one". If the user hands an explicit file — a path, a pasted file, "desde este documento", "con el estilo de este" — THIS skill wins over office-docs and pptd-slides even when the request also names corporate, an acta or a corporate template: the handed file is the template.
+description: Generate a PPTX, DOCX or XLSX that looks like it was made with the same template the user hands you — reusing that file's theme, fonts, colours, layouts, styles and decorative art, and never rebuilding from scratch. Use when the user provides an existing Office file (a .pptx, .docx or .xlsx, often a .potx/.dotx/.xltx template renamed, or a file from a network share) as the style reference for a new deck, document or spreadsheet, or asks to "generate a presentation/document/excel with the same style/look/branding as this one". If the user hands an explicit file — a path, a pasted file, "desde este documento", "con el estilo de este" — THIS skill wins over the template-based skills even when the request also names a corporate template: the handed file is the template.
 ---
 
 # Office style transfer
@@ -31,16 +31,16 @@ officecli close out.pptx          # release any resident before editing
 ## One source, one output
 
 The file the user hands is the ONLY template for the job. A request like "haz
-un acta de reunión de la empresa desde este documento" names two skills at once — the
-bundled department templates (office-docs) also carry an acta — and the
-temptation is to restart the work with the bundled one halfway through. Don't.
-The handed file wins even when the request names corporate, an acta or a corporate
-look; the bundled templates belong to jobs where the user hands no file.
+un acta de reunión desde este documento" names two skills at once — the
+template-based skills also cover an acta — and the temptation is to restart the
+work with a project template halfway through. Don't. The handed file wins even
+when the request names a corporate look; the project's own templates belong to
+jobs where the user hands no file.
 
 Never restart finished (or half-finished) work with a different template, and
 never mix the two sources: one document comes from one file. If the reference
 file genuinely cannot carry the requested content, say so and ask before
-switching — silently starting a second document from the department templates
+switching — silently starting a second document from a project template
 is the failure mode this rule exists to prevent.
 
 ## Where the output goes

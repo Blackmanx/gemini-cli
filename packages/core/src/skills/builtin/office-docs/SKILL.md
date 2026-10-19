@@ -1,9 +1,9 @@
 ---
 name: office-docs
-description: Build corporate Word documents and Excel workbooks from the department templates, preserving the corporate styles, section structure, numbering and table shapes. Use for actas, procedimientos, project documentation, reports, deliverables, .docx and .xlsx work in the company's style, and for filling the department's themed charts. Triggers include acta, procedimiento, documentación del proyecto, plantilla corporate, informe, docx, xlsx, gráficos corporate. Exception: when the user hands an existing file as the base or the style source (a path, "desde este documento", "con el estilo de este"), do NOT use these templates — that is office-style-transfer, even if the result is an acta or mentions corporate; the bundled templates apply only when the user gives no reference file.
+description: Build and edit Word documents and Excel workbooks while preserving a template's styles, section structure, numbering and table shapes — the everyday work of actas, procedimientos, project documentation, reports, .docx/.xlsx deliverables and the template's themed charts. Use when the user asks for a document or a spreadsheet, either handing a file to follow or wanting one that matches the documents already in the project. Exception: when the user hands an existing file as the base or the style source (a path, "desde este documento", "con el estilo de este"), office-style-transfer wins even if the request names a corporate template; the templates this skill uses are the project's own.
 ---
 
-# corporate Office documents
+# Office documents (.docx / .xlsx)
 
 Everything is done with `officecli`, the Office engine bundled at
 `bundle/vendor/officecli/`. It reads, queries and writes `.docx`, `.xlsx` and
@@ -20,17 +20,28 @@ officecli refresh informe.docx                           # recalculated fields
 officecli import  datos.xlsx /sheet --csv datos.csv
 ```
 
-## Start from a template, always
+## Start from the project's template when there is one
 
-The department's templates are real Office files: the styles, logos, header
-bands and page setup are the thing being asked for.
+If the project has no document template, this skill ships a neutral one:
+`assets/templates/neutral-document.docx` — styled headings, body, caption,
+list, a styled table and a callout, with a header rule and a page-number
+footer. Copy it and edit in place.
 
-| key | file | for |
-| --- | --- | --- |
-| `acta` | `assets/templates/acta-reunion.dotx` | meeting minutes |
-| `procedimiento` | `assets/templates/procedimiento.dotx` | SOPs, runbooks |
-| `documentacion` | `assets/templates/documentacion-proyecto.dotx` | project deliverables, carries the logo header |
-| `graficos` | `assets/templates/chart-workbook.xlsx` | charts, four themed sheet recipes |
+
+
+A template is a real Office file: the styles, logos, header bands and page setup
+are the thing being asked for, so the job is to fill the file the project
+already uses instead of rebuilding it. Look for the template the request belongs
+to (a `.dotx`/`.docx` for documents, `.xlsx`/`.xltx` for workbooks) and use a
+copy of it as the output. When no template exists and the look does not matter,
+build the file with `officecli` directly; when the look matters and no file
+exists, ask which template to follow before writing anything.
+
+`scripts/from_dotx.py` expands a `.dotx` into an editable `.docx`:
+
+```bash
+python3 scripts/from_dotx.py plantilla.dotx informe.docx
+```
 
 The `.dotx` wrinkle: Word templates declare a *template* content type and
 `python-docx` refuses them outright. Rewriting that one string in
@@ -47,12 +58,14 @@ And `style` is the OOXML **styleId**, not the display name:
 | you pass | what happens |
 | --- | --- |
 | `"Heading 1"` (the name) | a reference Word cannot resolve |
-| `Heading1` | officecli **injects Word's own built-in heading**, dropping the corporate typeface and numbering |
+| `Heading1` | officecli **injects Word's own built-in heading**, dropping the template's typeface and numbering |
 | `Ttulo1` | correct: renders as `1. Introducción`, numbered by the template |
 
-The templates' style ids are Spanish: `Ttulo1`…`Ttulo9`, `TtuloTDC`,
-`Titulosdetablas`, `Titulofiguras`, `Cita`, `Normal`. Read them from the file
-rather than guessing: `officecli get doc.docx /styles`.
+Style ids come from the template, not from Word: read them with
+`officecli get doc.docx /styles` rather than guessing. The template this skill
+was written against names them in Spanish (`Ttulo1`…`Ttulo9`, `TtuloTDC`,
+`Titulosdetablas`, `Titulofiguras`, `Cita`, `Normal`), which is why the examples
+above use those ids.
 
 ## Table captions
 
@@ -98,20 +111,13 @@ officecli batch informe.docx --commands '[{"command":"remove","path":"/body/p[12
 
 ## Excel
 
-### The charts read fixed blocks
+### Charts read fixed blocks
 
-`assets/templates/chart-workbook.xlsx` has four themed sheets. Each chart plots a fixed
-range whose shape has nothing to do with a table of your data, so writing the
-numbers elsewhere leaves the chart plotting the template's sample series
-(`Lorem ipsum`, `Jan`…`Dec`) — which reads as real data and is worse than an
-empty chart.
-
-| sheet | categories | series |
-| --- | --- | --- |
-| `Gráfico de barras agrupadas` | `B7:M7` | `B8:M8` — one series, twelve periods |
-| `Barras por segmento` | `D10:G10` | `D11:G13` — three series, four categories |
-| `Progreso circular` | — | four donuts, two values each (`G17:G18`, `J17:J18`, …) |
-| `Gráfico de anillo` | `B14:B17` | `C14:C17` |
+A chart in a template plots a fixed range: it keeps reading the template's
+sample series (`Lorem ipsum`, `Jan`…`Dec`) no matter what you write next to it,
+and stale sample data reads as real data — worse than an empty chart. Inspect
+each chart's series and category ranges before writing, then put your numbers
+**into** those ranges, resizing the block when the shape of your data differs.
 
 A sector-by-year table is four categories × three series, so it belongs in
 `Barras por segmento`, not in `Gráfico de barras agrupadas`. The templates also

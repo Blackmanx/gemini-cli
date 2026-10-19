@@ -1,9 +1,9 @@
 ---
 name: pptd-slides
-description: Build corporate presentations from the department PowerPoint templates so they look like corporate made them. Covers editing an existing template slide in place, deleting the slides you do not need, replacing text, reusing the template's figures, and the layout and colour traps that make a deck look wrong. Use when the user asks for a deck, presentation, slides or PPTX in the company's corporate style, or to edit one of the corporate templates. Exception: when the user hands an existing .pptx as the base or style source (a path, "con el estilo de este"), do NOT use the department templates — that is office-style-transfer, even if corporate branding is requested; these templates apply only when the user gives no reference file.
+description: Build a presentation from the .pptx template the project provides, so it looks like the ones already delivered. Covers editing a template slide in place, deleting the slides you do not need, replacing text, reusing the template's figures, and the layout and colour traps that make a deck look wrong. Use when the user asks for a deck, presentation, slides or PPTX that has to match the project's corporate template. Exception: when the user hands an existing .pptx as the base or style source (a path, "con el estilo de este"), do NOT use the project template — that is office-style-transfer, even if branding is requested; the project template applies only when the user gives no reference file.
 ---
 
-# corporate presentations
+# Presentations from a project template (.pptx)
 
 ## The one rule that matters
 
@@ -12,7 +12,7 @@ description: Build corporate presentations from the department PowerPoint templa
 The breadcrumb, the page number, the footer and the decorative waves are drawn
 **on each slide**, not inherited from the layout. A slide created from a layout
 therefore comes out bare — one placeholder, no chrome — no matter how correct
-the layout is. Measured on the corporate template:
+the layout is. Measured on the template this skill was written against:
 
 | | a real template slide | a slide created from its layout |
 | --- | --- | --- |
@@ -25,15 +25,15 @@ cp "$TEMPLATE" deck.pptx
 officecli close deck.pptx
 ```
 
-Identify the template's closing slide before pruning. It is `ONE_COLUMN_TEXT`:
-slide 117 in clara and slide 123 in oscura. Do not assume the closing slide is
-the source deck's final page: clara has appendix slides after it. Select the
-closing slide explicitly and ensure no retained slide follows it.
+Identify the template's closing slide before pruning — it is the deck's end
+card, usually a `ONE_COLUMN_TEXT` slide. Do not assume it is the source deck's
+final page: appendix slides often follow it. Select the closing slide
+explicitly and ensure no retained slide follows it.
 
 ```bash
 officecli batch deck.pptx --commands "$(python3 -c '
 import json
-keep, total = {1, 2, 3, 4, 5, 6, 27, 50, 117}, 120
+keep, total = {1, 2, 3, 4, 5, 6, 27, 50, 117}, 120   # your picks, deck length
 print(json.dumps([{"command": "remove", "path": f"/slide[{i}]"}
                   for i in range(total, 0, -1) if i not in keep]))')"
 ```
@@ -86,71 +86,50 @@ time.
 
 ## Which slides to keep
 
-**Slides 27 to 90 are the content range** in both decks — 64 slides that already
-carry the breadcrumb, the footer and the page number. Slides 1–26 are covers,
-section dividers and title samples; 91 onward are style specimens. Build a deck
-out of 27–90 and vary the picks, so it does not read as one slide repeated.
+## Inventory the template
 
-| clara (120 slides) | oscura (123 slides) | slides | shape |
-| --- | --- | --- | --- |
-| `TITLE_AND_TWO_COLUMNS_2_1` | `TITLE_AND_TWO_COLUMNS_2` | 50 / 43 | the standard content slide |
-| `TITLE_AND_TWO_COLUMNS_2_2_1` | `TITLE_AND_TWO_COLUMNS_2_2` | 9 / 11 | content plus a second element |
-| `TITLE_AND_TWO_COLUMNS_2_3_1_2` | `TITLE_AND_TWO_COLUMNS_2_3_3` | 3 / 3 | three-part comparison |
-| `TITLE_AND_TWO_COLUMNS_2_3_1_1` | `TITLE_AND_TWO_COLUMNS_2_3_2` | 2 / 2 | three-part, narrower |
-| — | `TITLE_AND_BODY_2_2`, `TITLE_AND_TWO_COLUMNS_2_3` | 1 each | one-offs worth avoiding for variety |
+If the project has no deck to follow, this skill ships a neutral one:
+`assets/templates/neutral-deck.pptx` — cover, agenda, divider, two columns,
+three cards, bullets, metrics, a native chart, a timeline, a table, a quote and
+an end card. Copy it and prune it exactly as you would a project template.
 
-They differ in shape count — 12, 16, 23, 29, 32, 33 — so consecutive slides
-taken from different parts of the range do not look identical. List what a
-candidate holds before keeping it:
+
+
+A corporate deck is a kit: content slides, covers, section dividers, an agenda,
+a timeline, an org chart, team and chart slides, and an end card. Which indexes
+hold which is a property of the deck you were given, so read it before planning
+— one call lists the whole file, and one candidate in full:
 
 ```bash
+officecli query deck.pptx "*" --compact --fields x,y,width,height,size
 officecli query deck.pptx "/slide[45]/*"
 ```
 
-## The structural slides
-
-A deck is not only its content. It opens, divides and closes, and the templates
-have every one of those shapes — in slides 1 to 26, which sit outside the
-content range:
-
-| | clara | oscura |
-| --- | --- | --- |
-| cover | 1–5 | 7–12 |
-| section divider | 6 | 13–14 |
-| index / agenda | 7–8 | 15–16 |
-| timeline | — | 105–106 |
-| org chart, for partners | 106 | 112–113 |
-| team and roles | 101–107 | 107–111 |
-| chart slide | 108 | 114 |
-| content | 27–90 | 27–90 |
-
-So a proposal is: cover, index, then the content slides, a divider between
-blocks of content, and a closing slide. The divider slides read "Separador de
-temas" and are meant to carry the block's name.
-
-Note that "Inicio" and "Fin" in the dark deck (105–106) are the **ends of a
-timeline**, not an opening and a closing slide.
+The content slides are the ones that already carry the breadcrumb, the footer
+and the page number; the structural slides sit around them. Pick a content range
+and vary the picks — candidates differ in shape count, so consecutive slides
+taken from different parts of the range do not look identical. A proposal is:
+cover, index, the content slides with a divider between blocks, and the closing
+slide. Divider slides are meant to carry the block's name; do not mistake a
+timeline's own first and last slide for an opening and a closing one.
 
 ## Make the title fit
 
-The title box on the cover is anchored to its **bottom** and has **no autofit**,
-and the subtitle sits inside its area:
+A cover title is usually anchored to its **bottom** and has **no autofit**,
+with the subtitle sitting inside the title's area: a second line grows upward
+and prints straight through the subtitle. Measure both boxes before writing:
 
-| | y | height | bottom | size |
-| --- | --- | --- | --- | --- |
-| subtitle | 2.50" | 0.55" | 3.05" | 18pt |
-| title | 1.46" | 2.40" | 3.85" | 54pt |
+```bash
+python3 scripts/check_overlaps.py deck.pptx --capacity /slide[1]
+```
 
-At 54pt the template's own one-line title occupies 3.10"–3.85" and clears the
-subtitle. Two lines grow upward to about 2.0" and print straight through it.
-So a title has to stay on one line: either shorten it, or drop the size until it
-fits.
+Keep the cover title on one line: shorten it, or drop the size until it fits.
 
 ```bash
 officecli set deck.pptx "/slide[1]/shape[@id=1284]" --prop size=34pt
 ```
 
-As a rule of thumb at 54pt the box takes roughly 20 characters; at 34pt about 34.
+As a rule of thumb a 54pt cover title takes roughly 20 characters and a 34pt one about 34, but trust `--capacity` over the rule.
 
 ## How much text a shape holds
 
@@ -176,26 +155,18 @@ This is why a deck can pass a shape-geometry check and still be broken, and it
 is the single most common defect in these cards.
 
 A card title carries `<a:spAutoFit/>` and a `cy` frozen at the height of the
-**one-line label the template shipped with**. Writing a two-word title into it
+**one-line label the template shipped with**. Writing a longer title into it
 does not error and does not change the box on disk:
 
 ```bash
-officecli get deck.pptx "/slide[5]/group[@id=2433]/shape[@id=2437]"
-# height=485487emu   <- one line at 17pt, plus spcFirstLastPara and the insets
+officecli get deck.pptx "/slide[5]/group[...]/shape[@id=...]"
+# height=...emu   <- one line at the shipped size, plus spcFirstLastPara and insets
 ```
 
 PowerPoint recomputes that `cy` only when the file is opened and re-saved, so
-until then it renders two lines inside a box that claims one. Measured on the
-three-card slide: the title box ends 0.85 cm above the paragraph below it, one
-line takes 1.1 cm, and the second line lands squarely on the body text.
-
-Three titles that break this way out of the box, in both decks:
-
-| title | text | box | renders as |
-| --- | --- | --- | --- |
-| `Arquitectura Multiagente` | 24 chars | one line | two lines |
-| `Ciberseguridad en IA` | 20 chars | one line | two lines |
-| `Trazabilidad Blockchain` | 23 chars | one line | two lines |
+until then it renders two lines inside a box that claims one, and the second
+line lands on the paragraph below. Measure the box with
+`check_overlaps.py --capacity` before writing into a card title.
 
 So a rectangle comparison finds nothing and the deck is still wrong. Compare
 the **text**, not the box — that is what `scripts/check_overlaps.py` does, and
@@ -230,19 +201,18 @@ A ten-slide I+D proposal, as a worked reference:
 | 9 | pilot | the open use case, end to end |
 | 10 | why us, why now | three value cards and a closing band |
 
-The closing slide is `ONE_COLUMN_TEXT` — dark #123, clara #117 — the end card:
-navy, waves, corporate logo centred, and no text. It is required even when the brief
-does not explicitly request a conclusion. Clara has appendix slides after #117,
-so keep the exact closing slide and ensure it is last in the finished deck.
-Write the closing line on it.
+The closing slide is the template's end card — the deck's own art, no body text.
+It is required even when the brief does not explicitly request a conclusion, and
+it must be last in the finished deck. Write the closing line on it.
 
-Before delivery, query the final slide index and verify that it is this corporate end
-card and contains the closing message. If it is missing or another slide comes
-after it, rebuild from the untouched template and preserve the end card; never
-substitute a blank slide or claim the deck is complete without it.
+Before delivery, query the final slide index and verify that the last slide is
+the end card and carries the closing message. If it is missing or another slide
+comes after it, rebuild from the untouched template and preserve the end card;
+never substitute a blank slide or claim the deck is complete without it.
 
-The breadcrumb is constant across the content slides and names the project:
-`corporate · I+D · <convocatoria>`. Set it once on every content slide, not per slide.
+The breadcrumb is constant across the content slides and names the project in
+whatever form the template uses. Set it once on every content slide, not per
+slide.
 
 ## Prevent overlap before delivery
 
@@ -285,14 +255,13 @@ white — check in PowerPoint, not in the preview.
 
 ## Figures
 
-The templates carry their pictures inside the `.pptx`, with **no alt text at
-all** — the Google Slides export strips all 3912 — and the slide titles are
-useless as context (`49`, `Iconografia`). `figures.py` gives them ids and names:
+The template carries its pictures inside the `.pptx`, often with **no alt text
+at all** — an export can strip every one — and the slide titles say nothing
+about them. Inventory the deck's own art before reaching for a new image;
+reusing it is what keeps the result looking like the template:
 
 ```bash
-python3 assets/templates/figures.py list --limit 40          # id, name, kind, slides
-python3 assets/templates/figures.py search candado           # find by meaning
-python3 assets/templates/figures.py extract 42 out.png       # write one out
+officecli query deck.pptx "/slide[i]/*" --compact    # what each slide holds
 ```
 
 Then `officecli add ... type picture` with `src`, `x`, `y`, `alt` — there is no
@@ -304,8 +273,8 @@ officecli batch deck.pptx --commands '[
    "props":{"src":"figura.png","x":"2cm","y":"3cm","alt":"Crecimiento"}}]'
 ```
 
-The clara deck has 587 readable pictures (blue icon set, a security/SSL family,
-photographs of people, partner logos); the oscura one has 209.
+A corporate template can hold hundreds of pictures — icon sets, families of
+illustrations, photographs, partner logos: inventory before inventing.
 
 ## Finishing
 

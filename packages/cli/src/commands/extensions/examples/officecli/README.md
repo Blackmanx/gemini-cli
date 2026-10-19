@@ -26,7 +26,7 @@ Only `linux-x64` is vendored. Set `OFFICECLI` to point at another build.
 The server exposes a single tool named `officecli` that covers create, read and
 modify across the three formats — not one tool per format or per operation.
 
-This is the generic engine. The `office-docs` and `pptd-slides` skills keep the
-corporate-specific parts: which template paragraphs are sample filler, that the cover
-title lives in a text box split across runs, that a chart reads `B8:M8`, and
-that headings are already auto-numbered.
+This is the generic engine. The document and presentation skills keep the
+template-specific knowledge: which paragraphs are sample filler, that a cover
+title lives in a text box split across runs, which range a chart reads, and that
+headings are already auto-numbered.

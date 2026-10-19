@@ -79,14 +79,11 @@ installs the newest build. It picks `npm` automatically when the global prefix
 is writable and falls back to the no-permissions symlink route otherwise.
 
 ```bash
-export GITHUB_TOKEN=$(gh auth token)   # or paste a token with repo access
-curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
-  https://raw.githubusercontent.com/Blackmanx/gemini-cli/feature/omp-port/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Blackmanx/gemini-cli/main/install.sh | bash
 ```
 
-The repo is private, so the token is what lets `curl` read the script and lets
-the installer fetch release assets; without it you get a 404. `gh auth token`
-reuses your existing `gh` login, so that is usually all you need.
+Replace `OWNER` with the GitHub account that hosts this fork. The repository is
+public, so `curl` needs no token.
 
 **On an existing install** the same command updates instead: it compares
 versions and only downloads when a newer release exists, and it leaves
@@ -102,8 +99,7 @@ versions and only downloads when a newer release exists, and it leaves
 | `--uninstall`         | Remove the fork (keeps `~/.gemini` and backups)     |
 
 ```bash
-curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" \
-  https://raw.githubusercontent.com/Blackmanx/gemini-cli/feature/omp-port/install.sh \
+curl -fsSL https://raw.githubusercontent.com/Blackmanx/gemini-cli/main/install.sh \
   | bash -s -- --force --dry-run
 ```
 
@@ -164,7 +160,7 @@ ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
 **4. Verify**, from any directory:
 
 ```bash
-gemini --version   # e.g. 0.63.0-184cf92c5
+gemini --version   # e.g. 0.66.0-184cf92c5
 gemini --help
 gemini             # launch the interactive CLI
 ```
@@ -244,8 +240,8 @@ fixes the warning is what makes the binary runnable at all.
 The same bundle is a valid npm package, if you would rather have npm manage it:
 
 ```bash
-git clone --branch feature/omp-port https://github.com/Blackmanx/gemini-cli.git
-cd gemini-cli-omp
+git clone https://github.com/Blackmanx/gemini-cli.git
+cd gemini-cli
 npm install
 npm run release:bundle     # writes release/gemini-cli-bundle.zip and release/*.tgz
 cd bundle && npm install -g .
@@ -313,8 +309,7 @@ mkdir -p ~/.local/bin
 ln -sf ~/opt/gemini-cli/bundle/gemini.js ~/.local/bin/gemini
 ```
 
-**4. Verify.** The version must end in `-<base>-<sha>`, which is how you know you
-are running this fork and not the upstream package:
+**4. Verify.** The version carries the short commit the build came from:
 
 ```bash
 gemini --version
@@ -356,7 +351,7 @@ files, and the next run will re-stamp it if you release from a different commit.
 
 ```bash
 git add package.json packages/*/package.json
-git commit -m "chore: version 0.63.0-$(git rev-parse --short HEAD)"
+git commit -m "chore: version 0.66.0-$(git rev-parse --short HEAD)"
 ```
 
 Useful flags:
@@ -379,8 +374,8 @@ Two constraints worth knowing before you tag by hand:
 - The repository enforces a tag protection rule,
   `^v(\d*)(\.(\d*)?\.(\d*)?)?-?(?:[a-zA-Z0-9]*)?$`. Dots are allowed only in the
   numeric core, and the suffix takes a **single** dash before alphanumerics. So
-  `0.63.0-0adc74b84` must be tagged `v0.63.0-0adc74b84`; the script
-  flattens it. Anything else is HTTP 422.
+  `0.66.0-0adc74b84` is tagged `v0.66.0-0adc74b84`; the script flattens any
+  stray dot. Anything else is HTTP 422.
 - The release pipeline in `.github/workflows/release-*.yml` is gated on
   `github.repository == 'google-gemini/gemini-cli'`, so it does nothing here.
   That is why this script exists rather than the stock release job.
@@ -401,7 +396,7 @@ To keep it exact, commit your code changes first and release from that commit:
 
 ```bash
 git commit -am "..."                        # HEAD = X
-npm run release:bundle -- --release         # stamps 0.63.0-X
+npm run release:bundle -- --release         # stamps 0.66.0-X
 git add package.json packages/*/package.json   # optional: record the bump
 ```
 
@@ -439,7 +434,7 @@ To undo a machine-global `npm link`, note that the link lives in the _prefix_,
 not in your home directory:
 
 ```bash
-cd gemini-cli-omp/packages/cli && npm unlink -g @google/gemini-cli   # the linked package's own name
+cd gemini-cli/packages/cli && npm unlink -g @google/gemini-cli   # the linked package's own name
 rm -f "$(npm config get prefix)/bin/gemini"
 ```
 
@@ -449,7 +444,7 @@ When you want `gemini` to run the code you are editing, skip the bundle and link
 `packages/cli` directly:
 
 ```bash
-cd gemini-cli-omp
+cd gemini-cli
 npm run build
 cd packages/cli
 npm link
@@ -461,7 +456,7 @@ before it takes effect. Use it while developing; use the bundle above for a
 machine you actually work on.
 
 ```bash
-cd gemini-cli-omp
+cd gemini-cli
 npm run build   # after every change
 ```
 
