@@ -571,6 +571,17 @@ const App: React.FC = () => {
     }
   }, [entries]);
 
+  // Grow the composer's textarea to fit its contents, so a long prompt
+  // stays fully visible instead of scrolling inside a single line.
+  useEffect(() => {
+    const node = inputRef.current;
+    if (!node) {
+      return;
+    }
+    node.style.height = 'auto';
+    node.style.height = `${Math.min(node.scrollHeight, 220)}px`;
+  }, [input]);
+
   // Whether the reasoning is on screen, which replaces the waiting dots.
   const hasLiveThought = entries.some(
     (entry) => entry.kind === 'thought' && entry.live,
