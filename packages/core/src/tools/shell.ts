@@ -1148,8 +1148,16 @@ export class ShellToolInvocation extends BaseToolInvocation<
           result:
             typeof returnDisplay === 'string'
               ? { type: 'text', text: returnDisplay }
-              : // TODO: Add support for terminal display type (AnsiOutput)
-                undefined,
+              : // The terminal output is a list of styled lines, which the
+                // display can carry as it is instead of being flattened to
+                // JSON somewhere further down.
+                Array.isArray(returnDisplay)
+                ? {
+                    type: 'terminal' as const,
+                    ansi: returnDisplay,
+                    exitCode: result.exitCode ?? undefined,
+                  }
+                : undefined,
         },
         returnDisplay,
         data,

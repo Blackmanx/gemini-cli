@@ -11,13 +11,11 @@ import { WebSocket, WebSocketServer } from 'ws';
 import {
   Logger,
   MessageBusType,
-  PolicyDecision,
   ApprovalMode,
   Storage,
   debugLogger,
   type AgentLoopContext,
   type Config,
-  type ToolConfirmationRequest,
 } from '@google/gemini-cli-core';
 import {
   SettingScope,
@@ -75,6 +73,11 @@ function readSettingAt(
 /** Whether a value can be read by key. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+/** Whether a value is a string. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
 /** The modes the browser may pick, in the order it shows them. */
@@ -144,6 +147,8 @@ export class WebServer {
   private readonly sockets = new Set<WebSocket>();
   /** Confirmations the browser has been asked about, by their id. */
   private readonly toolConfirmations = new Map<string, string>();
+  /** Tool confirmations already shown, so an update is not shown twice. */
+  private readonly askedConfirmations = new Set<string>();
   private confirmationCounter = 0;
   /** Stops the listener that answers the agent's confirmations. */
   private busController: AbortController | undefined;
@@ -154,12 +159,13 @@ export class WebServer {
   }
 
   /**
-   * Answers the agent's tool confirmations.
+   * Shows the agent's tool confirmations in the browser.
    *
-   * Before a tool runs, the agent asks the message bus whether it may. In
-   * the terminal something is listening and shows a dialog; without a
-   * listener the question goes nowhere and the tool waits for an answer
-   * that never comes, which looks exactly like a frozen command.
+   * The scheduler publishes the state of every tool call on the message
+   * bus. A call that is waiting for approval carries the details to show
+   * and the id the answer has to be published with. Without someone
+   * listening, the tool waits for an answer that never comes, which looks
+   * exactly like a frozen command.
    */
   private listenForToolConfirmations(): void {
     const bus = this.options.config.getMessageBus?.();
@@ -169,62 +175,55 @@ export class WebServer {
     const controller = new AbortController();
     this.busController = controller;
     bus.subscribe(
-      MessageBusType.TOOL_CONFIRMATION_REQUEST,
-      (request: ToolConfirmationRequest) => {
-        void this.askAboutTool(request);
+      MessageBusType.TOOL_CALLS_UPDATE,
+      (message) => {
+        // Every message on this channel carries the current tool calls.
+        if (isRecord(message)) {
+          this.checkForApprovals(message['toolCalls']);
+        }
       },
       { signal: controller.signal },
     );
   }
 
-  /** Decides, or asks the browser, whether a tool may run. */
-  private async askAboutTool(request: ToolConfirmationRequest): Promise<void> {
-    let decision: PolicyDecision | undefined;
-    if (request.forcedDecision) {
-      decision =
-        request.forcedDecision === 'allow'
-          ? PolicyDecision.ALLOW
-          : request.forcedDecision === 'deny'
-            ? PolicyDecision.DENY
-            : PolicyDecision.ASK_USER;
-    } else {
-      try {
-        decision = (
-          await this.options.config
-            .getPolicyEngine?.()
-            ?.check(
-              request.toolCall,
-              request.serverName,
-              request.toolAnnotations,
-              request.subagent,
-            )
-        )?.decision;
-      } catch (error) {
-        debugLogger.warn('web: policy check failed:', error);
+  /** Asks the browser about every tool call that is waiting for approval. */
+  private checkForApprovals(toolCalls: unknown): void {
+    if (!Array.isArray(toolCalls)) {
+      return;
+    }
+    for (const entry of toolCalls) {
+      if (!isRecord(entry)) {
+        continue;
       }
-    }
+      if (entry['status'] !== 'awaiting_approval') {
+        continue;
+      }
+      const correlationId = entry['correlationId'];
+      const details = entry['confirmationDetails'];
+      if (typeof correlationId !== 'string' || !isRecord(details)) {
+        continue;
+      }
+      // The bus publishes an update on every change, so the same call is
+      // seen more than once.
+      if (this.askedConfirmations.has(correlationId)) {
+        continue;
+      }
+      this.askedConfirmations.add(correlationId);
 
-    if (decision === PolicyDecision.ALLOW) {
-      this.answerTool(request.correlationId, true);
-      return;
+      const id = `tool-${++this.confirmationCounter}`;
+      this.toolConfirmations.set(id, correlationId);
+      const request = isRecord(entry['request']) ? entry['request'] : {};
+      this.broadcast({
+        type: 'confirmation_request',
+        request: {
+          id,
+          title: this.confirmationTitle(details, request['name']),
+          details: this.confirmationDetails(details, request['args']),
+          options: ['Allow', 'Deny'],
+          callId: isString(request['callId']) ? request['callId'] : undefined,
+        },
+      });
     }
-    if (decision === PolicyDecision.DENY) {
-      this.answerTool(request.correlationId, false);
-      return;
-    }
-
-    const id = `tool-${++this.confirmationCounter}`;
-    this.toolConfirmations.set(id, request.correlationId);
-    this.broadcast({
-      type: 'confirmation_request',
-      request: {
-        id,
-        title: this.confirmationTitle(request),
-        details: this.confirmationDetails(request),
-        options: ['Allow', 'Deny'],
-        callId: request.toolCall.id,
-      },
-    });
   }
 
   /** Sends the agent the answer it is waiting for. */
@@ -243,35 +242,48 @@ export class WebServer {
   }
 
   /** A one-line title for the confirmation the browser shows. */
-  private confirmationTitle(request: ToolConfirmationRequest): string {
-    const details = request.details;
-    if (details && 'title' in details && typeof details.title === 'string') {
-      return details.title;
+  private confirmationTitle(
+    details: Record<string, unknown>,
+    name: unknown,
+  ): string {
+    const title = details['title'];
+    if (isString(title) && title.length > 0) {
+      return title;
     }
-    return `Allow ${request.toolCall.name}?`;
+    return isString(name) ? `Allow ${name}?` : 'Allow this tool?';
   }
 
-  /**
-   * The text under the title: the command, the file, or what the tool is.
-   */
-  private confirmationDetails(request: ToolConfirmationRequest): string {
-    const details = request.details;
-    if (!details) {
-      return JSON.stringify(request.toolCall.args ?? {}, null, 2);
+  /** The text under the title: the command, the file, or what the tool is. */
+  private confirmationDetails(
+    details: Record<string, unknown>,
+    args: unknown,
+  ): string {
+    const type = details['type'];
+    const command = details['command'];
+    if (type === 'exec' && isString(command)) {
+      return command;
     }
-    if (details.type === 'exec') {
-      return details.command;
+    const filePath = details['filePath'];
+    const fileDiff = details['fileDiff'];
+    if (type === 'edit' && isString(filePath)) {
+      return isString(fileDiff) ? `${filePath}\n\n${fileDiff}` : filePath;
     }
-    if (details.type === 'edit') {
-      return `${details.filePath}\n\n${details.fileDiff}`;
+    if (type === 'mcp') {
+      const serverName = details['serverName'];
+      const toolName = details['toolDisplayName'];
+      return `${isString(serverName) ? serverName : ''}: ${
+        isString(toolName) ? toolName : ''
+      }`;
     }
-    if (details.type === 'mcp') {
-      return `${details.serverName}: ${details.toolDisplayName}`;
+    const systemMessage = details['systemMessage'];
+    if (isString(systemMessage)) {
+      return systemMessage;
     }
-    if ('systemMessage' in details && details.systemMessage) {
-      return details.systemMessage;
+    const prompt = details['prompt'];
+    if (type === 'info' && isString(prompt)) {
+      return prompt;
     }
-    return JSON.stringify(request.toolCall.args ?? {}, null, 2);
+    return isRecord(args) ? JSON.stringify(args, null, 2) : '';
   }
 
   /** Sends an event to every browser that is listening. */
@@ -450,6 +462,7 @@ export class WebServer {
       this.answerTool(correlationId, false);
     }
     this.toolConfirmations.clear();
+    this.askedConfirmations.clear();
     await this.session?.dispose();
     this.session = undefined;
     // The WebSocketServer only finishes closing once every client is gone,

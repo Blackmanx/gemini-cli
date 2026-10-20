@@ -239,17 +239,25 @@ describe('WebServer tool confirmations', () => {
     });
   }
 
-  const toolRequest = {
-    type: 'tool_confirmation_request',
-    correlationId: 'corr-1',
-    toolCall: { id: 'call-1', name: 'run_shell_command', args: {} },
-    details: {
-      type: 'exec',
-      title: 'Run shell command',
-      command: 'ls -F /tmp',
-      rootCommand: 'ls',
-      rootCommands: ['ls'],
-    },
+  const toolUpdate = {
+    toolCalls: [
+      {
+        status: 'awaiting_approval',
+        correlationId: 'corr-1',
+        confirmationDetails: {
+          type: 'exec',
+          title: 'Run shell command',
+          command: 'ls -F /tmp',
+          rootCommand: 'ls',
+          rootCommands: ['ls'],
+        },
+        request: {
+          callId: 'call-1',
+          name: 'run_shell_command',
+          args: { command: 'ls -F /tmp' },
+        },
+      },
+    ],
   };
 
   it('asks the browser before a tool runs and passes the answer on', async () => {
@@ -261,7 +269,7 @@ describe('WebServer tool confirmations', () => {
 
     try {
       expect(requests).toHaveLength(1);
-      requests[0](toolRequest);
+      requests[0](toolUpdate);
 
       const asked = await client.waitFor(
         (event) => event.type === 'confirmation_request',
@@ -294,25 +302,23 @@ describe('WebServer tool confirmations', () => {
     }
   });
 
-  it('answers on its own when the policy already allows the tool', async () => {
+  it('asks about a waiting tool only once, however many updates arrive', async () => {
     const published: unknown[] = [];
     const requests: Array<(request: unknown) => void> = [];
-    server = serverWith({ decision: 'allow', published, requests });
+    server = serverWith({ published, requests });
     const url = await server.start();
     const client = await connect(url);
 
     try {
-      requests[0](toolRequest);
+      requests[0](toolUpdate);
+      requests[0](toolUpdate);
+      requests[0](toolUpdate);
 
-      const deadline = Date.now() + 10_000;
-      while (published.length === 0 && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 20));
-      }
-      expect(published[0]).toMatchObject({ confirmed: true });
-      // Nothing was asked, because the policy already said yes.
+      await client.waitFor((event) => event.type === 'confirmation_request');
+      await new Promise((resolve) => setTimeout(resolve, 200));
       expect(
-        client.events.some((event) => event.type === 'confirmation_request'),
-      ).toBe(false);
+        client.events.filter((event) => event.type === 'confirmation_request'),
+      ).toHaveLength(1);
     } finally {
       client.close();
     }

@@ -4,7 +4,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { AgentEvent, Config, ContentPart } from '@google/gemini-cli-core';
+import type {
+  AgentEvent,
+  Config,
+  ContentPart,
+  DisplayContent,
+} from '@google/gemini-cli-core';
 import {
   LegacyAgentSession,
   debugLogger,
@@ -12,6 +17,16 @@ import {
 } from '@google/gemini-cli-core';
 import type { LoadedSettings } from '../config/settings.js';
 import type { ServerEvent, WebAttachment, WebToolCall } from './protocol.js';
+
+/** Whether a value is a styled token of a terminal line. */
+function isTextToken(value: unknown): value is { text: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'text' in value &&
+    typeof value.text === 'string'
+  );
+}
 
 /** How much of a tool's output to send before truncating. */
 const MAX_TOOL_OUTPUT = 64 * 1024;
@@ -368,7 +383,7 @@ export class WebSession {
 
         // A long-running tool reports its output as it goes; the browser
         // shows it live instead of waiting for the tool to finish.
-        const liveOutput = displayContentToString(event.display?.result);
+        const liveOutput = this.liveOutput(event.display?.result);
         if (liveOutput) {
           this.emit({
             type: 'tool_progress',
@@ -512,7 +527,7 @@ export class WebSession {
     if (display?.result) {
       const result = display.result;
       if (result.type === 'text') {
-        return this.truncate(result.text);
+        return this.truncate(this.readableText(result.text));
       }
       if (result.type === 'diff') {
         const path = result.path ? `--- ${result.path}\n` : '';
@@ -523,16 +538,19 @@ export class WebSession {
           kind: 'diff',
         };
       }
-      if (result.type === 'terminal' && result.exitCode !== undefined) {
-        const code = result.exitCode === 0 ? 'ok' : `exit ${result.exitCode}`;
-        return this.truncate(`Command finished: ${code}`);
-      }
       if (result.type === 'terminal' && result.ansi) {
         // AnsiOutput is a list of lines, each a list of styled tokens.
         const text = result.ansi
           .map((line) => line.map((token) => token.text).join(''))
-          .join('\n');
-        return this.truncate(text);
+          .join('\n')
+          .trimEnd();
+        if (text.length > 0) {
+          return this.truncate(text);
+        }
+      }
+      if (result.type === 'terminal' && result.exitCode !== undefined) {
+        const code = result.exitCode === 0 ? 'ok' : `exit ${result.exitCode}`;
+        return this.truncate(`Command finished: ${code}`);
       }
     }
 
@@ -541,10 +559,63 @@ export class WebSession {
         (part): part is Extract<ContentPart, { type: 'text' }> =>
           part.type === 'text',
       )
-      .map((part) => part.text)
+      .map((part) => this.readableText(part.text))
       .join('\n');
 
     return text ? this.truncate(text) : undefined;
+  }
+
+  /**
+   * Turns a serialized terminal output back into the text it showed.
+   *
+   * Older tool results carry their styled lines as JSON, because there was
+   * nowhere in the display to put a terminal. Showing that raw is how a
+   * shell result ends up looking like `[[{"text":"..."}]]`.
+   */
+  private readableText(text: string): string {
+    if (!text.startsWith('[[')) {
+      return text;
+    }
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (!Array.isArray(parsed) || !parsed.every(Array.isArray)) {
+        return text;
+      }
+      return parsed
+        .map((line) =>
+          Array.isArray(line)
+            ? line
+                .map((token) => (isTextToken(token) ? token.text : ''))
+                .join('')
+            : '',
+        )
+        .join('\n');
+    } catch {
+      return text;
+    }
+  }
+
+  /**
+   * The text of a tool's display while it is still running.
+   *
+   * A terminal result is a list of styled lines, which the browser wants
+   * as plain text rather than as the JSON it would otherwise be.
+   */
+  private liveOutput(
+    result: DisplayContent | null | undefined,
+  ): string | undefined {
+    if (!result) {
+      return undefined;
+    }
+    if (result.type === 'terminal' && result.ansi) {
+      return result.ansi
+        .map((line) => line.map((token) => token.text).join(''))
+        .join('\n');
+    }
+    if (result.type === 'terminal' && result.exitCode !== undefined) {
+      return undefined;
+    }
+    return displayContentToString(result);
   }
 
   private truncate(text: string): { text: string; truncated: boolean } {

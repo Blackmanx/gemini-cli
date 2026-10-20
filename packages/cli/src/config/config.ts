@@ -858,7 +858,12 @@ export async function loadCliConfig(
 
   // -p/--prompt forces non-interactive (headless) mode
   // -i/--prompt-interactive forces interactive mode with an initial prompt
+  //
+  // The web UI is interactive even without a terminal: the browser is the
+  // surface the user answers on. Treating it as headless would hide every
+  // tool that needs a confirmation and answer its questions with a denial.
   const interactive =
+    !!argv.web ||
     !!argv.promptInteractive ||
     !!argv.acp ||
     !!argv.experimentalAcp ||
