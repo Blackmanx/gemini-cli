@@ -95,6 +95,29 @@ export interface WebTool {
   description: string;
 }
 
+/**
+ * A file the user attached to a message.
+ *
+ * The browser sends the content inline, because the agent runs on the same
+ * machine as the browser and the model accepts inline data.
+ */
+export interface WebAttachment {
+  /** The file's name, shown to the model and to the user. */
+  name: string;
+  /** The file's MIME type. */
+  mimeType: string;
+  /** The file's size in bytes. */
+  size: number;
+  /**
+   * The content, base64 encoded. Only images carry their bytes; other
+   * files are referenced by path instead, so a large document is not
+   * copied through the socket.
+   */
+  data?: string;
+  /** The absolute path of a file that already lives on disk. */
+  path?: string;
+}
+
 /** Events pushed from the server to the browser. */
 export type ServerEvent =
   | {
@@ -108,10 +131,24 @@ export type ServerEvent =
       /** The current approval mode, e.g. 'default' or 'yolo'. */
       approvalMode: string;
     }
-  | { type: 'user_message'; text: string; timestamp: number }
+  | {
+      type: 'user_message';
+      text: string;
+      timestamp: number;
+      /** The files that came with the message. */
+      attachments?: WebAttachment[];
+    }
   | { type: 'agent_message'; text: string; streaming: boolean }
   | { type: 'agent_thought'; text: string }
   | { type: 'tool_call'; toolCall: WebToolCall }
+  | {
+      type: 'tool_progress';
+      callId: string;
+      /** The output so far, for a tool that is still running. */
+      output: string;
+      /** A short note about what the tool is doing. */
+      message?: string;
+    }
   | {
       type: 'tool_output';
       callId: string;
@@ -134,7 +171,12 @@ export type ServerEvent =
 
 /** Requests sent from the browser to the server. */
 export type ClientRequest =
-  | { type: 'prompt'; text: string }
+  | {
+      type: 'prompt';
+      text: string;
+      /** The files the user attached to this message. */
+      attachments?: WebAttachment[];
+    }
   | { type: 'cancel' }
   | { type: 'command'; text: string }
   | { type: 'confirmation_response'; id: string; confirmed: boolean }

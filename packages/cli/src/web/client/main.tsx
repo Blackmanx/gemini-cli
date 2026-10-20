@@ -10,6 +10,7 @@ import { createRoot } from 'react-dom/client';
 import type {
   ClientRequest,
   ServerEvent,
+  WebAttachment,
   WebCommand,
   WebConfirmationRequest,
   WebDialog,
@@ -22,9 +23,19 @@ import { renderMarkdown } from './markdown.js';
 
 /** One entry in the transcript. */
 type Entry =
-  | { kind: 'user'; id: string; text: string }
+  | { kind: 'user'; id: string; text: string; attachments?: WebAttachment[] }
   | { kind: 'agent'; id: string; text: string; streaming: boolean }
-  | { kind: 'thought'; id: string; text: string }
+  | {
+      /**
+       * The model's reasoning. It stays where it happened in the
+       * transcript and fills itself in as the reasoning arrives.
+       */
+      kind: 'thought';
+      id: string;
+      text: string;
+      /** Whether the reasoning is still being written. */
+      live: boolean;
+    }
   | {
       kind: 'tool';
       id: string;
@@ -35,8 +46,75 @@ type Entry =
     }
   | { kind: 'notice'; id: string; text: string; isError: boolean };
 
+/**
+ * A file the user picked, before it is sent.
+ *
+ * An image is kept in the browser as a data URL so it can be previewed
+ * and sent inline; any other file is uploaded to the server, which stores
+ * it on disk and hands back its path.
+ */
+interface PendingAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  /** A preview of an image, as a data URL. */
+  preview?: string;
+  /** The uploaded file, once the server has it. */
+  uploaded?: WebAttachment;
+  /** Set while the file is being uploaded. */
+  uploading?: boolean;
+  /** Why the file could not be attached. */
+  failed?: string;
+}
+
 let counter = 0;
 const nextId = () => `entry-${++counter}`;
+
+/** The largest file the browser will attach. */
+const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
+
+/**
+ * How much text is shown without folding.
+ *
+ * Past this length a tool's output or the model's reasoning is folded
+ * away, so one long shell run does not push the rest of the answer off
+ * the screen.
+ */
+const AUTO_EXPAND_LIMIT = 1200;
+
+/** Turns a byte count into something a person can read. */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Reads a file as a data URL. */
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Whether the server answered an upload with an attachment. */
+function isAttachment(value: unknown): value is WebAttachment {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'name' in value &&
+    typeof value.name === 'string' &&
+    'path' in value &&
+    typeof value.path === 'string'
+  );
+}
 
 const App: React.FC = () => {
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -57,14 +135,50 @@ const App: React.FC = () => {
   const [dialog, setDialog] = useState<WebDialog | undefined>(undefined);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [error, setError] = useState<string | undefined>();
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [dragging, setDragging] = useState(false);
 
   const socketRef = useRef<WebSocket | undefined>(undefined);
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset['theme'] = theme;
   }, [theme]);
+
+  // The copy buttons inside code blocks are plain HTML in the rendered
+  // markdown, so they are wired up here rather than by React.
+  useEffect(() => {
+    const node = transcriptRef.current;
+    if (!node) {
+      return;
+    }
+    const onClick = (event: Event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) {
+        return;
+      }
+      const button = target.closest('.code-copy');
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      const code = button.parentElement?.querySelector('code');
+      if (!code?.textContent) {
+        return;
+      }
+      void navigator.clipboard.writeText(code.textContent).then(() => {
+        button.textContent = 'Copied';
+        button.classList.add('copied');
+        setTimeout(() => {
+          button.textContent = 'Copy';
+          button.classList.remove('copied');
+        }, 1500);
+      });
+    };
+    node.addEventListener('click', onClick);
+    return () => node.removeEventListener('click', onClick);
+  }, [entries]);
 
   useEffect(() => {
     const socket = new WebSocket(`ws://${location.host}/ws`);
@@ -86,6 +200,9 @@ const App: React.FC = () => {
       handleServerEvent(serverEvent);
     };
     socket.onclose = () => {
+      // The turn cannot finish if the connection is gone, so the spinner
+      // stops rather than spinning forever.
+      setBusy(false);
       setError('The connection to the CLI was closed.');
     };
     return () => {
@@ -106,7 +223,12 @@ const App: React.FC = () => {
       case 'user_message':
         setEntries((prev) => [
           ...prev,
-          { kind: 'user', id: nextId(), text: event.text },
+          {
+            kind: 'user',
+            id: nextId(),
+            text: event.text,
+            attachments: event.attachments,
+          },
         ]);
         break;
       case 'agent_message':
@@ -133,10 +255,35 @@ const App: React.FC = () => {
         });
         break;
       case 'agent_thought':
-        setEntries((prev) => [
-          ...prev,
-          { kind: 'thought', id: nextId(), text: event.text },
-        ]);
+        // The reasoning fills one entry in place, the way the terminal
+        // shows it, rather than a new block per chunk.
+        setEntries((prev) => {
+          const index = prev.findIndex(
+            (entry) => entry.kind === 'thought' && entry.live,
+          );
+          if (index < 0) {
+            return [
+              ...prev,
+              {
+                kind: 'thought',
+                id: nextId(),
+                text: event.text,
+                live: true,
+              },
+            ];
+          }
+          const existing = prev[index];
+          if (existing.kind !== 'thought') {
+            return prev;
+          }
+          const updated: Entry = {
+            ...existing,
+            text: existing.text
+              ? `${existing.text}\n${event.text}`
+              : event.text,
+          };
+          return [...prev.slice(0, index), updated, ...prev.slice(index + 1)];
+        });
         break;
       case 'tool_call':
         setEntries((prev) => {
@@ -153,8 +300,12 @@ const App: React.FC = () => {
           if (index >= 0) {
             const existing = prev[index];
             if (existing.kind === 'tool') {
+              // The entry keeps its id, so React does not remount it and
+              // the box does not lose whether it was opened.
+              toolEntry.id = existing.id;
               toolEntry.output = existing.output;
               toolEntry.truncated = existing.truncated;
+              toolEntry.outputKind = existing.outputKind;
             }
             return [
               ...prev.slice(0, index),
@@ -164,6 +315,17 @@ const App: React.FC = () => {
           }
           return [...prev, toolEntry];
         });
+        break;
+      case 'tool_progress':
+        // The output of a tool that is still running; it replaces what is
+        // shown so far, so the box reads as one live stream.
+        setEntries((prev) =>
+          prev.map((entry) =>
+            entry.kind === 'tool' && entry.call.callId === event.callId
+              ? { ...entry, output: event.output }
+              : entry,
+          ),
+        );
         break;
       case 'tool_output':
         setEntries((prev) =>
@@ -227,6 +389,15 @@ const App: React.FC = () => {
         break;
       case 'turn_ended':
         setBusy(false);
+        // The reasoning is no longer live, so it folds itself away if it
+        // grew too long to read at a glance.
+        setEntries((prev) =>
+          prev.map((entry) =>
+            entry.kind === 'thought' && entry.live
+              ? { ...entry, live: false }
+              : entry,
+          ),
+        );
         break;
       case 'settings_changed':
         break;
@@ -252,6 +423,11 @@ const App: React.FC = () => {
     }
   }, [entries]);
 
+  // Whether the reasoning is on screen, which replaces the waiting dots.
+  const hasLiveThought = entries.some(
+    (entry) => entry.kind === 'thought' && entry.live,
+  );
+
   const send = useCallback((request: ClientRequest) => {
     const socket = socketRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {
@@ -259,20 +435,158 @@ const App: React.FC = () => {
     }
   }, []);
 
+  /**
+   * Attaches the files the user picked.
+   *
+   * An image is kept inline so the model sees it directly; anything else
+   * is uploaded to the server, which writes it to disk so the agent can
+   * read it with its own tools.
+   */
+  const attachFiles = useCallback(async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (list.length === 0) {
+      return;
+    }
+
+    for (const file of list) {
+      const id = nextId();
+      const isImage = file.type.startsWith('image/');
+
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+        setAttachments((prev) => [
+          ...prev,
+          {
+            id,
+            name: file.name,
+            mimeType: file.type || 'application/octet-stream',
+            size: file.size,
+            failed: `Too large (${formatSize(file.size)}).`,
+          },
+        ]);
+        continue;
+      }
+
+      if (isImage) {
+        try {
+          const preview = await readAsDataUrl(file);
+          const base64 = preview.slice(preview.indexOf(',') + 1);
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id,
+              name: file.name,
+              mimeType: file.type,
+              size: file.size,
+              preview,
+              uploaded: {
+                name: file.name,
+                mimeType: file.type,
+                size: file.size,
+                data: base64,
+              },
+            },
+          ]);
+        } catch {
+          setAttachments((prev) => [
+            ...prev,
+            {
+              id,
+              name: file.name,
+              mimeType: file.type,
+              size: file.size,
+              failed: 'The image could not be read.',
+            },
+          ]);
+        }
+        continue;
+      }
+
+      // Not an image: upload it so the agent can read it from disk.
+      setAttachments((prev) => [
+        ...prev,
+        {
+          id,
+          name: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          uploading: true,
+        },
+      ]);
+
+      void (async () => {
+        try {
+          const response = await fetch(
+            `/api/upload?name=${encodeURIComponent(file.name)}`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': file.type || 'application/octet-stream',
+              },
+              body: file,
+            },
+          );
+          const body: unknown = await response.json();
+          if (!response.ok || !isAttachment(body)) {
+            throw new Error(
+              body && typeof body === 'object' && 'error' in body
+                ? String(body.error)
+                : 'The upload failed.',
+            );
+          }
+          setAttachments((prev) =>
+            prev.map((item) =>
+              item.id === id
+                ? { ...item, uploading: false, uploaded: body }
+                : item,
+            ),
+          );
+        } catch (uploadError) {
+          setAttachments((prev) =>
+            prev.map((item) =>
+              item.id === id
+                ? {
+                    ...item,
+                    uploading: false,
+                    failed:
+                      uploadError instanceof Error
+                        ? uploadError.message
+                        : 'The upload failed.',
+                  }
+                : item,
+            ),
+          );
+        }
+      })();
+    }
+  }, []);
+
+  const removeAttachment = useCallback((id: string) => {
+    setAttachments((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
   const submit = useCallback(
     (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed) {
+      const ready = attachments.filter(
+        (item): item is PendingAttachment & { uploaded: WebAttachment } =>
+          item.uploaded !== undefined && !item.failed && !item.uploading,
+      );
+      if (!trimmed && ready.length === 0) {
         return;
       }
       if (trimmed.startsWith('/') || trimmed.startsWith('?')) {
         send({ type: 'command', text: trimmed });
       } else {
-        send({ type: 'prompt', text: trimmed });
+        send({
+          type: 'prompt',
+          text: trimmed,
+          attachments: ready.map((item) => item.uploaded),
+        });
       }
       setInput('');
+      setAttachments([]);
     },
-    [send],
+    [attachments, send],
   );
 
   const onKeyDown = useCallback(
@@ -304,7 +618,7 @@ const App: React.FC = () => {
   const html = useMemo(() => {
     const map = new Map<string, string>();
     for (const entry of entries) {
-      if (entry.kind === 'agent' || entry.kind === 'thought') {
+      if (entry.kind === 'agent') {
         map.set(entry.id, renderMarkdown(entry.text));
       }
     }
@@ -411,7 +725,32 @@ const App: React.FC = () => {
             if (entry.kind === 'user') {
               return (
                 <div className="row user" key={entry.id}>
-                  <div className="bubble user-bubble">{entry.text}</div>
+                  <div className="bubble user-bubble">
+                    {entry.attachments && entry.attachments.length > 0 && (
+                      <div className="user-attachments">
+                        {entry.attachments.map((attachment) => (
+                          <div
+                            className="user-attachment"
+                            key={`${attachment.name}-${attachment.size}`}
+                          >
+                            {attachment.mimeType.startsWith('image/') && (
+                              <img
+                                src={`data:${attachment.mimeType};base64,${attachment.data ?? ''}`}
+                                alt={attachment.name}
+                              />
+                            )}
+                            <span className="attachment-name">
+                              {attachment.name}
+                            </span>
+                            <span className="attachment-size">
+                              {formatSize(attachment.size)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {entry.text}
+                  </div>
                 </div>
               );
             }
@@ -435,15 +774,11 @@ const App: React.FC = () => {
             }
             if (entry.kind === 'thought') {
               return (
-                <details className="row thought" key={entry.id}>
-                  <summary>Thinking</summary>
-                  <div
-                    className="markdown"
-                    dangerouslySetInnerHTML={{
-                      __html: html.get(entry.id) ?? '',
-                    }}
-                  />
-                </details>
+                <ThoughtView
+                  key={entry.id}
+                  text={entry.text}
+                  live={entry.live}
+                />
               );
             }
             if (entry.kind === 'tool') {
@@ -467,7 +802,7 @@ const App: React.FC = () => {
             );
           })}
 
-          {busy && (
+          {busy && !hasLiveThought && (
             <div className="row agent">
               <div className="avatar" aria-hidden="true">
                 ✦
@@ -508,13 +843,89 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="composer">
+        <div
+          className={`composer ${dragging ? 'dragging' : ''}`}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            if (event.dataTransfer?.files?.length) {
+              void attachFiles(event.dataTransfer.files);
+            }
+          }}
+        >
+          {attachments.length > 0 && (
+            <div className="attachments">
+              {attachments.map((attachment) => (
+                <div
+                  className={`attachment ${attachment.failed ? 'failed' : ''}`}
+                  key={attachment.id}
+                  title={attachment.failed ?? attachment.name}
+                >
+                  {attachment.preview ? (
+                    <img src={attachment.preview} alt={attachment.name} />
+                  ) : (
+                    <span className="attachment-icon" aria-hidden="true">
+                      {attachment.uploading ? '⋯' : '📄'}
+                    </span>
+                  )}
+                  <div className="attachment-meta">
+                    <span className="attachment-name">{attachment.name}</span>
+                    <span className="attachment-size">
+                      {attachment.failed ??
+                        (attachment.uploading
+                          ? 'Uploading…'
+                          : formatSize(attachment.size))}
+                    </span>
+                  </div>
+                  <button
+                    className="attachment-remove"
+                    onClick={() => removeAttachment(attachment.id)}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="composer-inner">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              hidden
+              onChange={(event) => {
+                if (event.target.files?.length) {
+                  void attachFiles(event.target.files);
+                }
+                // Allow picking the same file again.
+                event.target.value = '';
+              }}
+            />
+            <button
+              className="icon-button"
+              title="Attach files"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              📎
+            </button>
             <textarea
               ref={inputRef}
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={onKeyDown}
+              onPaste={(event) => {
+                const files = Array.from(event.clipboardData?.files ?? []);
+                if (files.length > 0) {
+                  event.preventDefault();
+                  void attachFiles(files);
+                }
+              }}
               placeholder="Ask Gemini anything, or type / for commands"
               rows={1}
             />
@@ -581,15 +992,106 @@ const CopyButton: React.FC<{ text: string; label?: string }> = ({
   );
 };
 
-/** A tool call, with its output collapsible. */
+/**
+ * The model's reasoning.
+ *
+ * It fills itself in while the model is still thinking, and folds itself
+ * away once it is over if it grew too long to read at a glance. The user
+ * can open or close it whenever they want, and that choice sticks.
+ */
+const ThoughtView: React.FC<{ text: string; live: boolean }> = ({
+  text,
+  live,
+}) => {
+  const [open, setOpen] = useState(true);
+  const touched = useRef(false);
+
+  useEffect(() => {
+    if (touched.current) {
+      return;
+    }
+    if (live) {
+      setOpen(true);
+      return;
+    }
+    setOpen(text.length <= AUTO_EXPAND_LIMIT);
+  }, [live, text]);
+
+  if (!text) {
+    return null;
+  }
+
+  return (
+    <div className="row thought-row">
+      <button
+        className="thought-header"
+        onClick={() => {
+          touched.current = true;
+          setOpen(!open);
+        }}
+      >
+        <span className="thought-chevron">{open ? '▾' : '▸'}</span>
+        <span className="thought-label">
+          {live ? 'Thinking' : 'Thought about'}
+        </span>
+        {!open && (
+          <span className="thought-preview">
+            {text.split('\n').filter(Boolean).slice(-1)[0]?.slice(0, 90)}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="thought-body">
+          <div
+            className="markdown"
+            dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
+ * A tool call.
+ *
+ * The output is shown straight away when it is short enough to read at a
+ * glance, and folded away when it is not, so a long shell run does not
+ * push everything else off the screen. The arguments have their own
+ * toggle: they are what the tool was asked to do, which is rarely worth
+ * reading twice.
+ */
 const ToolCallView: React.FC<{
   call: WebToolCall;
   output?: string;
   truncated?: boolean;
   outputKind?: 'diff';
 }> = ({ call, output, truncated, outputKind }) => {
-  const [open, setOpen] = useState(false);
   const status = call.status;
+  const isRunning = status === 'executing' || status === 'pending';
+
+  // Whether the user has opened or closed the box themselves. Once they
+  // have, the automatic behaviour leaves it alone.
+  const touched = useRef(false);
+  const [open, setOpen] = useState(false);
+  const [showArgs, setShowArgs] = useState(false);
+
+  // While the tool runs its output streams in, so the box stays open; once
+  // it is done the output is shown if it is short enough to read at a
+  // glance, and folded away if it is not.
+  useEffect(() => {
+    if (touched.current) {
+      return;
+    }
+    if (isRunning) {
+      setOpen(true);
+      return;
+    }
+    if (output !== undefined) {
+      setOpen(output.length <= AUTO_EXPAND_LIMIT);
+    }
+  }, [isRunning, output]);
+
   // The file a diff refers to, so the browser can offer to open it.
   const diffPath = useMemo(() => {
     if (outputKind !== 'diff' || !output) {
@@ -598,9 +1100,19 @@ const ToolCallView: React.FC<{
     const match = /^---\s*(.+)$/m.exec(output);
     return match?.[1]?.trim();
   }, [output, outputKind]);
+
+  const hasArgs = Object.keys(call.args).length > 0;
+  const argCount = Object.keys(call.args).length;
+
   return (
     <div className={`tool-call ${status}`}>
-      <button className="tool-header" onClick={() => setOpen(!open)}>
+      <button
+        className="tool-header"
+        onClick={() => {
+          touched.current = true;
+          setOpen(!open);
+        }}
+      >
         <span className="tool-icon">
           {status === 'completed' ? '✓' : status === 'failed' ? '✕' : '⋯'}
         </span>
@@ -619,12 +1131,7 @@ const ToolCallView: React.FC<{
               <CopyButton text={diffPath} label="Copy path" />
             </div>
           )}
-          {Object.keys(call.args).length > 0 && (
-            <pre className="tool-args">
-              {JSON.stringify(call.args, null, 2)}
-            </pre>
-          )}
-          {output &&
+          {output !== undefined &&
             (outputKind === 'diff' ? (
               <div className="tool-output diff">
                 {output.split('\n').map((line, index) => (
@@ -646,8 +1153,29 @@ const ToolCallView: React.FC<{
             ) : (
               <pre className="tool-output">{output}</pre>
             ))}
+          {isRunning && output === undefined && (
+            <div className="tool-running">Running…</div>
+          )}
           {truncated && <div className="tool-truncated">Output truncated.</div>}
-          {output && <CopyButton text={output} label="Copy output" />}
+          <div className="tool-footer">
+            {hasArgs && (
+              <button
+                className="tool-args-toggle"
+                onClick={() => setShowArgs(!showArgs)}
+              >
+                {showArgs ? '▾' : '▸'} {argCount}{' '}
+                {argCount === 1 ? 'argument' : 'arguments'}
+              </button>
+            )}
+            {output !== undefined && (
+              <CopyButton text={output} label="Copy output" />
+            )}
+          </div>
+          {showArgs && (
+            <pre className="tool-args">
+              {JSON.stringify(call.args, null, 2)}
+            </pre>
+          )}
         </div>
       )}
     </div>

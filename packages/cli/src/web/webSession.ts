@@ -5,9 +5,13 @@
  */
 
 import type { AgentEvent, Config, ContentPart } from '@google/gemini-cli-core';
-import { LegacyAgentSession, debugLogger } from '@google/gemini-cli-core';
+import {
+  LegacyAgentSession,
+  debugLogger,
+  displayContentToString,
+} from '@google/gemini-cli-core';
 import type { LoadedSettings } from '../config/settings.js';
-import type { ServerEvent, WebToolCall } from './protocol.js';
+import type { ServerEvent, WebAttachment, WebToolCall } from './protocol.js';
 
 /** How much of a tool's output to send before truncating. */
 const MAX_TOOL_OUTPUT = 64 * 1024;
@@ -105,10 +109,15 @@ export class WebSession {
   }
 
   /** Sends a prompt to the agent. */
-  async send(text: string): Promise<void> {
+  async send(text: string, attachments: WebAttachment[] = []): Promise<void> {
     this.cancelled = false;
     this.messageBuffer = '';
-    this.emit({ type: 'user_message', text, timestamp: Date.now() });
+    this.emit({
+      type: 'user_message',
+      text,
+      timestamp: Date.now(),
+      attachments: attachments.length > 0 ? attachments : undefined,
+    });
     this.emit({ type: 'turn_started' });
 
     // The agent runs its loop in the background, so `send` returns before the
@@ -120,7 +129,7 @@ export class WebSession {
     try {
       const agent = await this.ensureAgent();
       await agent.send({
-        message: { content: [{ type: 'text', text }] },
+        message: { content: this.buildContent(text, attachments) },
       });
       await finished;
     } catch (error) {
@@ -133,6 +142,48 @@ export class WebSession {
       this.turnFinished = undefined;
       this.emit({ type: 'turn_ended', cancelled: this.cancelled });
     }
+  }
+
+  /**
+   * Builds the content of a message from its text and its attachments.
+   *
+   * An image travels as inline data, which the model reads directly. Any
+   * other file is referenced by its path, so the agent reads it with the
+   * tools it already has, exactly as it would for an `@file` reference in
+   * the terminal.
+   */
+  private buildContent(
+    text: string,
+    attachments: WebAttachment[],
+  ): ContentPart[] {
+    const content: ContentPart[] = [{ type: 'text', text }];
+
+    for (const attachment of attachments) {
+      if (attachment.data && attachment.mimeType.startsWith('image/')) {
+        content.push({
+          type: 'media',
+          data: attachment.data,
+          mimeType: attachment.mimeType,
+        });
+        continue;
+      }
+      if (attachment.path) {
+        content.push({
+          type: 'reference',
+          text: `Attached file: ${attachment.name} (${attachment.path})`,
+          uri: attachment.path,
+        });
+        continue;
+      }
+      // A file with content but no path and no image: the model reads it
+      // from the text, so the name is all it needs.
+      content.push({
+        type: 'reference',
+        text: `Attached file: ${attachment.name}`,
+      });
+    }
+
+    return content;
   }
 
   /** Stops the current turn. */
@@ -197,6 +248,18 @@ export class WebSession {
         };
         this.currentToolCalls.set(callId, updated);
         this.emit({ type: 'tool_call', toolCall: updated });
+
+        // A long-running tool reports its output as it goes; the browser
+        // shows it live instead of waiting for the tool to finish.
+        const liveOutput = displayContentToString(event.display?.result);
+        if (liveOutput) {
+          this.emit({
+            type: 'tool_progress',
+            callId,
+            output: liveOutput,
+            message: event._meta?.legacyState?.progressMessage,
+          });
+        }
         break;
       }
       case 'tool_response': {

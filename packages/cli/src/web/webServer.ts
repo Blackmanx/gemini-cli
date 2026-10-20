@@ -5,6 +5,8 @@
  */
 
 import http from 'node:http';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
   Logger,
@@ -33,6 +35,7 @@ import type { SlashCommand, CommandContext } from '../ui/commands/types.js';
 import type {
   ClientRequest,
   ServerEvent,
+  WebAttachment,
   WebCommand,
   WebDialog,
   WebModel,
@@ -46,6 +49,9 @@ import { INDEX_HTML, CLIENT_JS, CLIENT_CSS } from './_client-assets.js';
 
 const DEFAULT_PORT = 7777;
 const MAX_PORT_RETRIES = 10;
+
+/** The largest file the browser may attach. */
+const MAX_UPLOAD_SIZE = 20 * 1024 * 1024;
 
 /**
  * The terminal passes the `Config` as the agent context, because `Config`
@@ -340,8 +346,110 @@ export class WebServer {
       res.end(JSON.stringify(commands));
       return;
     }
+    if (path === '/api/upload' && req.method === 'POST') {
+      await this.handleUpload(req, res);
+      return;
+    }
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
+  }
+
+  /**
+   * Stores an uploaded file and returns where it landed.
+   *
+   * Uploads go to disk rather than through the socket, so attaching a large
+   * document costs the same as attaching a small one. The file lands in the
+   * session's own directory, so the agent can read it with its own tools.
+   */
+  private async handleUpload(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): Promise<void> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let rejected = false;
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        req.on('data', (chunk: Buffer) => {
+          size += chunk.length;
+          if (size > MAX_UPLOAD_SIZE) {
+            rejected = true;
+            reject(new Error('too large'));
+            return;
+          }
+          chunks.push(chunk);
+        });
+        req.on('end', () => resolve());
+        req.on('error', reject);
+      });
+    } catch {
+      res.writeHead(rejected ? 413 : 400, {
+        'Content-Type': 'application/json',
+      });
+      res.end(
+        JSON.stringify({
+          error: rejected
+            ? `The file is larger than the ${Math.floor(MAX_UPLOAD_SIZE / 1024 / 1024)} MB limit.`
+            : 'The upload failed.',
+        }),
+      );
+      return;
+    }
+
+    const name = this.readUploadName(req) ?? 'attachment';
+    const target = join(this.uploadDir(), this.safeName(name));
+
+    try {
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, Buffer.concat(chunks));
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'The file could not be saved.',
+        }),
+      );
+      return;
+    }
+
+    const mimeType =
+      req.headers['content-type']?.split(';')[0] ?? 'application/octet-stream';
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        name,
+        path: target,
+        size,
+        mimeType,
+      } satisfies WebAttachment),
+    );
+  }
+
+  /** The name of the uploaded file, from the query string. */
+  private readUploadName(req: http.IncomingMessage): string | undefined {
+    const query = (req.url ?? '').split('?')[1];
+    if (!query) {
+      return undefined;
+    }
+    const name = new URLSearchParams(query).get('name');
+    return name ?? undefined;
+  }
+
+  /** Where uploads are stored. */
+  private uploadDir(): string {
+    return join(this.options.cwd, '.gemini-web-uploads');
+  }
+
+  /** A file name that cannot escape the upload directory. */
+  private safeName(name: string): string {
+    const base = basename(name)
+      .replace(/[^\w.\- ]/g, '_')
+      .trim();
+    return base.length > 0 ? base : 'attachment';
   }
 
   private handleSocket(socket: WebSocket): void {
@@ -434,7 +542,7 @@ export class WebServer {
     try {
       switch (request.type) {
         case 'prompt':
-          await session.send(request.text);
+          await session.send(request.text, request.attachments ?? []);
           break;
         case 'cancel':
           await session.cancel();

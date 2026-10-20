@@ -4,6 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* The highlighter's palette, pulled in so the token colours below can
+   override it. The import has to live here: esbuild extracts the CSS of a
+   JavaScript import into a separate file instead of inlining it. */
+@import 'highlight.js/styles/github-dark.css';
+
 .app {
   display: flex;
   flex-direction: column;
@@ -247,21 +252,162 @@ select {
   font-size: 12.5px;
 }
 
+/* ---------- code blocks, styled like an editor ---------- */
+
 .markdown pre {
   background: var(--code-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 12px 14px;
-  overflow-x: auto;
+  overflow: hidden;
   margin: 10px 0;
+  position: relative;
+  /* Room for the language tab, so it does not sit over the first line. */
+  padding-top: 24px;
+}
+
+/* The language label sits on the block like a tab in an editor. */
+.markdown pre::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 3px 9px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: var(--bg-hover);
+  border-bottom-right-radius: 8px;
+  pointer-events: none;
 }
 
 .markdown pre code {
+  display: block;
   background: none;
   border: none;
-  padding: 0;
+  padding: 12px 14px;
   font-size: 12.5px;
-  line-height: 1.55;
+  line-height: 1.6;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+/* The copy button of a code block, on the opposite corner. */
+.code-copy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 3px 9px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: var(--bg-hover);
+  border: none;
+  border-bottom-left-radius: 8px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.markdown pre:hover .code-copy,
+.code-copy:focus {
+  opacity: 1;
+}
+
+.code-copy.copied {
+  color: var(--success);
+}
+
+/* The highlighter's own palette, tuned to the app's surfaces. */
+.markdown pre code.hljs {
+  background: transparent;
+  color: var(--code-text);
+}
+
+:root {
+  --code-text: #d6deeb;
+  --code-comment: #637777;
+  --code-keyword: #c792ea;
+  --code-string: #ecc48d;
+  --code-number: #f78c6c;
+  --code-title: #82aaff;
+  --code-type: #ffcb8b;
+}
+
+html[data-theme='light'] {
+  --code-text: #24292e;
+  --code-comment: #6a737d;
+  --code-keyword: #d73a49;
+  --code-string: #032f62;
+  --code-number: #005cc5;
+  --code-title: #6f42c1;
+  --code-type: #e36209;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-name {
+  color: var(--code-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+  color: var(--code-string);
+}
+
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: var(--code-number);
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-title.function_ {
+  color: var(--code-title);
+}
+
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-built_in,
+.hljs-builtin-name {
+  color: var(--code-type);
+}
+
+.hljs-attr,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params {
+  color: var(--code-text);
+}
+
+.hljs-deletion {
+  color: var(--danger);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 600;
 }
 
 .markdown table {
@@ -425,6 +571,41 @@ select {
   margin-bottom: 8px;
 }
 
+.tool-running {
+  color: var(--text-faint);
+  font-size: 12.5px;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+/* The row of small controls under a tool's output. */
+.tool-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.tool-footer .copy-button {
+  position: static;
+  opacity: 1;
+}
+
+.tool-args-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 2px 4px;
+  border-radius: 5px;
+}
+
+.tool-args-toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 /* A diff is coloured line by line, the way a review tool shows it. */
 .tool-output.diff {
   white-space: pre;
@@ -503,6 +684,68 @@ select {
   color: var(--danger);
 }
 
+/* ---------- thinking ---------- */
+
+.thought-row {
+  max-width: 860px;
+  width: 100%;
+  margin: 0 auto 14px;
+  box-sizing: border-box;
+}
+
+.thought-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  text-align: left;
+  font-size: 12.5px;
+  border-radius: 8px;
+}
+
+.thought-header:hover {
+  background: var(--bg-hover);
+}
+
+.thought-chevron {
+  color: var(--text-faint);
+}
+
+.thought-label {
+  font-weight: 500;
+  flex: 0 0 auto;
+}
+
+.thought-preview {
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.thought-body {
+  margin-top: 4px;
+  padding: 10px 14px;
+  border-left: 2px solid var(--border);
+  color: var(--text-muted);
+  font-size: 13px;
+  background: var(--bg-subtle);
+  border-radius: 0 8px 8px 0;
+}
+
+.thought-body .markdown > :first-child {
+  margin-top: 0;
+}
+
+.thought-body .markdown > :last-child {
+  margin-bottom: 0;
+}
+
 /* ---------- thinking dots ---------- */
 
 .thinking {
@@ -545,6 +788,148 @@ select {
   padding: 8px 20px 16px;
   border-top: 1px solid var(--border);
   background: var(--bg);
+  position: relative;
+}
+
+/* Dragging a file over the composer highlights it, so the drop target is
+   obvious before the user lets go. */
+.composer.dragging::after {
+  content: 'Drop the files to attach them';
+  position: absolute;
+  inset: 4px 12px;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-soft) 85%, transparent);
+  color: var(--accent-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* ---------- attachments ---------- */
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 860px;
+  margin: 0 auto 8px;
+}
+
+.attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 8px;
+  max-width: 260px;
+  box-shadow: var(--shadow);
+}
+
+.attachment.failed {
+  border-color: var(--danger);
+}
+
+.attachment img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+.attachment-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border-radius: 6px;
+  font-size: 17px;
+  flex: 0 0 auto;
+}
+
+.attachment-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.attachment-name {
+  font-size: 12.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachment-size {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.attachment.failed .attachment-size {
+  color: var(--danger);
+}
+
+.attachment-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  flex: 0 0 auto;
+}
+
+.attachment-remove:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* The attachments a user already sent, shown in the transcript. */
+.user-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.user-attachment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  max-width: 260px;
+}
+
+.user-attachment img {
+  width: 26px;
+  height: 26px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.user-attachment .attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-attachment .attachment-size {
+  color: var(--text-faint);
+  flex: 0 0 auto;
 }
 
 .composer-inner {
