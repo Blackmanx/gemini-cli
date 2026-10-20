@@ -28,9 +28,9 @@ function forksThatFit(): number {
     return Math.floor(override);
   }
   const gigabytes = os.totalmem() / 1024 ** 3;
-  // About 2.5 GB per process, and never more than four: past that the
-  // gain in speed is small and the risk of running out of memory is not.
-  return Math.max(1, Math.min(4, Math.floor(gigabytes / 2.5)));
+  // About 2 GB per process, and never more than four: past that the gain
+  // in speed is small and the risk of running out of memory is not.
+  return Math.max(1, Math.min(4, Math.floor(gigabytes / 2)));
 }
 
 export default defineConfig({
