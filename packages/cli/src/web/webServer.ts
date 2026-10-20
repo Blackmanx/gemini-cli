@@ -21,6 +21,7 @@ import {
   debugLogger,
   type AgentLoopContext,
   type Config,
+  type MessageRecord,
 } from '@google/gemini-cli-core';
 import {
   SettingScope,
@@ -1001,23 +1002,16 @@ export class WebServer {
         case 'dialog_closed':
           break;
         case 'new_session':
-          send({
-            type: 'info',
-            message: 'A new session starts with the next prompt.',
-          });
+          await this.startNewSession(session);
           break;
         case 'list_sessions':
-          send({
-            type: 'info',
-            message: JSON.stringify(await this.listSessions()),
+          this.broadcast({
+            type: 'sessions',
+            sessions: await this.listSessions(),
           });
           break;
         case 'resume_session':
-          send({
-            type: 'info',
-            message:
-              'Resuming a session is not supported from the browser yet; use --resume on the command line.',
-          });
+          await this.resumeSession(session, request.sessionId);
           break;
         default:
           send({ type: 'error', message: 'Unknown request' });
@@ -1213,16 +1207,157 @@ export class WebServer {
     }
   }
 
+  /** The storage the sessions live in, ready to read. */
+  private async sessionStorage(): Promise<Storage | undefined> {
+    const storage = this.options.config.storage;
+    if (!storage) {
+      return undefined;
+    }
+    if (!storage.isInitialized()) {
+      await storage.initialize();
+    }
+    return storage;
+  }
+
   /** The sessions stored on disk. */
   private async listSessions(): Promise<WebSessionSummary[]> {
+    const storage = await this.sessionStorage();
+    if (!storage) {
+      return [];
+    }
     const { SessionSelector } = await import('../utils/sessionUtils.js');
-    const { Storage } = await import('@google/gemini-cli-core');
-    const selector = new SessionSelector(new Storage(this.options.cwd));
+    const selector = new SessionSelector(storage);
     const sessions = await selector.listSessions();
-    return sessions.slice(0, 50).map((session) => ({
-      id: session.id,
-      timestamp: new Date(session.lastUpdated).toLocaleString(),
-      summary: (session.firstUserMessage ?? '').slice(0, 80),
-    }));
+    return sessions
+      .sort(
+        (one, other) =>
+          new Date(other.lastUpdated).getTime() -
+          new Date(one.lastUpdated).getTime(),
+      )
+      .slice(0, 50)
+      .map((session) => ({
+        id: session.id,
+        timestamp: new Date(session.lastUpdated).toLocaleString(),
+        summary: (session.firstUserMessage ?? 'Untitled session').slice(0, 100),
+        messageCount: session.messageCount,
+      }));
+  }
+
+  /**
+   * Loads a session from disk into the agent, and tells the browser what it
+   * held so the conversation can be read and continued.
+   */
+  private async resumeSession(
+    session: WebSession,
+    sessionId: string,
+  ): Promise<void> {
+    if (session.busy) {
+      this.broadcast({
+        type: 'error',
+        message:
+          'Wait for the current turn to finish before loading a session.',
+      });
+      return;
+    }
+
+    const storage = await this.sessionStorage();
+    if (!storage) {
+      this.broadcast({
+        type: 'error',
+        message: 'Sessions are not available in this session.',
+      });
+      return;
+    }
+    const { SessionSelector } = await import('../utils/sessionUtils.js');
+    const { convertSessionToClientHistory } = await import(
+      '@google/gemini-cli-core'
+    );
+    const selector = new SessionSelector(storage);
+    const selected = await selector.resolveSessionById(sessionId);
+
+    await this.options.config
+      .getGeminiClient()
+      .resumeChat(
+        convertSessionToClientHistory(selected.sessionData.messages),
+        {
+          conversation: selected.sessionData,
+          filePath: selected.sessionPath,
+        },
+      );
+
+    this.broadcast({
+      type: 'session_resumed',
+      sessionId: selected.sessionData.sessionId,
+      summary: selected.displayInfo,
+      messages: this.toHistoryMessages(selected.sessionData.messages),
+    });
+  }
+
+  /** Starts a fresh conversation, leaving the stored ones alone. */
+  private async startNewSession(session: WebSession): Promise<void> {
+    if (session.busy) {
+      this.broadcast({
+        type: 'error',
+        message: 'Wait for the current turn to finish before starting again.',
+      });
+      return;
+    }
+    await this.options.config.getGeminiClient().resetChat();
+    this.broadcast({
+      type: 'session_resumed',
+      sessionId: this.options.config.getSessionId(),
+      summary: '',
+      messages: [],
+    });
+  }
+
+  /** The text of a stored session, as the transcript shows it. */
+  private toHistoryMessages(
+    messages: readonly MessageRecord[],
+  ): Array<{ role: 'user' | 'agent'; text: string }> {
+    const result: Array<{ role: 'user' | 'agent'; text: string }> = [];
+    for (const message of messages) {
+      if (message.type !== 'user' && message.type !== 'gemini') {
+        continue;
+      }
+      const role = message.type === 'user' ? 'user' : 'agent';
+      // The first message of every session is the CLI's own context, not
+      // something the user wrote.
+      const text = this.contentText(message.content)
+        .replace(/<session_context>[\s\S]*?<\/session_context>/g, '')
+        .trim();
+      if (!text) {
+        continue;
+      }
+      const last = result[result.length - 1];
+      if (last && last.role === role) {
+        // The model answers in several parts; the transcript shows one.
+        last.text = `${last.text}\n${text}`;
+      } else {
+        result.push({ role, text });
+      }
+    }
+    return result;
+  }
+
+  /** The text of a stored message, whatever shape its content has. */
+  private contentText(content: MessageRecord['content']): string {
+    if (typeof content === 'string') {
+      return content;
+    }
+    if (!Array.isArray(content)) {
+      return '';
+    }
+    return content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+        if (isRecord(part) && isString(part['text'])) {
+          return part['text'];
+        }
+        return '';
+      })
+      .join('');
   }
 }

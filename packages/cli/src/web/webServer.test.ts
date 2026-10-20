@@ -235,6 +235,42 @@ with zipfile.ZipFile(${JSON.stringify(document)}, 'w') as z:
   });
 });
 
+describe('WebServer sessions', () => {
+  let server: WebServer | undefined;
+
+  afterEach(async () => {
+    await server?.stop();
+    server = undefined;
+  });
+
+  it('shows a stored session without the CLI context message', () => {
+    server = new WebServer({ config, settings, cwd: '/tmp', port: 0 });
+    const toHistory = (
+      server as unknown as {
+        toHistoryMessages(
+          messages: unknown[],
+        ): Array<{ role: string; text: string }>;
+      }
+    ).toHistoryMessages.bind(server);
+
+    const messages = toHistory([
+      {
+        type: 'user',
+        content:
+          '<session_context>This is the Gemini CLI context.</session_context>',
+      },
+      { type: 'user', content: 'hola' },
+      { type: 'gemini', content: [{ text: 'Hola, ' }, { text: '¿qué tal?' }] },
+      { type: 'gemini', content: [{ functionCall: { name: 'x' } }] },
+    ]);
+
+    expect(messages).toEqual([
+      { role: 'user', text: 'hola' },
+      { role: 'agent', text: 'Hola, ¿qué tal?' },
+    ]);
+  });
+});
+
 /** Opens a socket to the server and collects what it sends. */
 async function connect(url: string): Promise<{
   events: ServerEvent[];

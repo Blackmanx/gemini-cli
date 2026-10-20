@@ -133,6 +133,11 @@ export class WebSession {
     return this.config.getSessionId();
   }
 
+  /** Whether a turn is in flight. */
+  get busy(): boolean {
+    return this.running;
+  }
+
   addClient(client: WebClient): void {
     this.clients.add(client);
   }

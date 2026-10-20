@@ -177,6 +177,14 @@ export type ServerEvent =
       type: 'file_created';
       file: WebGeneratedFile;
     }
+  | { type: 'sessions'; sessions: WebSessionSummary[] }
+  | {
+      /** A session was loaded, or a new one started: this is its content. */
+      type: 'session_resumed';
+      sessionId: string;
+      summary: string;
+      messages: WebHistoryMessage[];
+    }
   | { type: 'confirmation_request'; request: WebConfirmationRequest }
   | { type: 'confirmation_resolved'; id: string; confirmed: boolean }
   | { type: 'dialog'; dialog: WebDialog }
@@ -252,4 +260,12 @@ export interface WebSessionSummary {
   timestamp: string;
   /** The first user message of the session, trimmed for display. */
   summary: string;
+  /** How many messages the session holds. */
+  messageCount?: number;
+}
+
+/** One message of a session that was loaded. */
+export interface WebHistoryMessage {
+  role: 'user' | 'agent';
+  text: string;
 }

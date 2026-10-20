@@ -16,6 +16,7 @@ import type {
   WebDialog,
   WebGeneratedFile,
   WebModel,
+  WebSessionSummary,
   WebTool,
   WebToolCall,
   WebUsage,
@@ -156,8 +157,9 @@ const App: React.FC = () => {
   >();
   const [pending, setPending] = useState<WebConfirmationRequest | undefined>();
   const [panel, setPanel] = useState<
-    'none' | 'settings' | 'commands' | 'dialog'
+    'none' | 'settings' | 'sessions' | 'commands' | 'dialog'
   >('none');
+  const [sessions, setSessions] = useState<WebSessionSummary[]>([]);
   const [dialog, setDialog] = useState<WebDialog | undefined>(undefined);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [approvalMode, setApprovalMode] = useState('default');
@@ -262,6 +264,28 @@ const App: React.FC = () => {
         break;
       case 'approval_mode':
         setApprovalMode(event.mode);
+        break;
+      case 'sessions':
+        setSessions(event.sessions);
+        break;
+      case 'session_resumed':
+        // A loaded session replaces the transcript: it is the conversation
+        // the agent now remembers.
+        setEntries(
+          event.messages.map((message) =>
+            message.role === 'user'
+              ? { kind: 'user', id: nextId(), text: message.text }
+              : {
+                  kind: 'agent',
+                  id: nextId(),
+                  text: message.text,
+                  streaming: false,
+                },
+          ),
+        );
+        setUsage(undefined);
+        setBusy(false);
+        setPanel('none');
         break;
       case 'user_message':
         setEntries((prev) => [
@@ -764,6 +788,14 @@ const App: React.FC = () => {
       if (!trimmed && ready.length === 0) {
         return;
       }
+      if (trimmed === '/resume') {
+        // The browser has a panel for this, so the terminal's picker is
+        // not what the user wants to see.
+        setPanel('sessions');
+        send({ type: 'list_sessions' });
+        setInput('');
+        return;
+      }
       if (trimmed.startsWith('/') || trimmed.startsWith('?')) {
         send({ type: 'command', text: trimmed });
       } else {
@@ -867,6 +899,20 @@ const App: React.FC = () => {
           )}
           <button
             className="icon-button"
+            onClick={() => {
+              if (panel === 'sessions') {
+                setPanel('none');
+                return;
+              }
+              setPanel('sessions');
+              send({ type: 'list_sessions' });
+            }}
+            title="Sessions"
+          >
+            🕘
+          </button>
+          <button
+            className="icon-button"
             onClick={() => setPanel(panel === 'settings' ? 'none' : 'settings')}
             title="Settings"
           >
@@ -883,6 +929,16 @@ const App: React.FC = () => {
       </header>
 
       <div className="body">
+        {panel === 'sessions' && (
+          <SessionsPanel
+            sessions={sessions}
+            onClose={() => setPanel('none')}
+            onResume={(sessionId) =>
+              send({ type: 'resume_session', sessionId })
+            }
+            onNew={() => send({ type: 'new_session' })}
+          />
+        )}
         {panel === 'settings' && (
           <SettingsPanel
             onClose={() => setPanel('none')}
@@ -1539,6 +1595,53 @@ interface SettingsEntry {
   options?: ReadonlyArray<{ label: string; value: string | number }>;
   requiresRestart: boolean;
 }
+
+/**
+ * The sessions stored on disk.
+ *
+ * The terminal has the same list behind `/resume`; here a click loads the
+ * conversation into the agent and shows it again.
+ */
+const SessionsPanel: React.FC<{
+  sessions: WebSessionSummary[];
+  onClose: () => void;
+  onResume: (sessionId: string) => void;
+  onNew: () => void;
+}> = ({ sessions, onClose, onResume, onNew }) => (
+  <aside className="panel">
+    <div className="panel-header">
+      <h2>Sessions</h2>
+      <button className="icon-button" onClick={onClose} title="Close">
+        ✕
+      </button>
+    </div>
+    <div className="panel-controls">
+      <button className="button primary" onClick={onNew}>
+        New chat
+      </button>
+    </div>
+    <div className="panel-body">
+      {sessions.length === 0 && (
+        <div className="panel-empty">No sessions in this folder.</div>
+      )}
+      {sessions.map((session) => (
+        <button
+          className="session-row"
+          key={session.id}
+          onClick={() => onResume(session.id)}
+          title={`Load this session (${session.id})`}
+        >
+          <span className="session-summary">{session.summary}</span>
+          <span className="session-meta">
+            {session.timestamp}
+            {session.messageCount !== undefined &&
+              ` · ${session.messageCount} msgs`}
+          </span>
+        </button>
+      ))}
+    </div>
+  </aside>
+);
 
 const SettingsPanel: React.FC<{
   onClose: () => void;
