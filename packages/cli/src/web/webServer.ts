@@ -43,7 +43,7 @@ import type {
   WebSettingsEntry,
   WebTool,
 } from './protocol.js';
-import { WebSession } from './webSession.js';
+import { WebSession, type WebClient } from './webSession.js';
 import { WebConfirmationBroker, createWebUI } from './webUi.js';
 import { INDEX_HTML, CLIENT_JS, CLIENT_CSS } from './_client-assets.js';
 
@@ -461,10 +461,14 @@ export class WebServer {
     this.clients.add(send);
     this.sockets.add(socket);
 
+    // The session keeps its own list of listeners, so the same object is
+    // used to add and to remove this one.
+    const client: WebClient = { send };
+
     const announce = async () => {
       try {
         const session = await this.ensureSession();
-        session.addClient({ send });
+        session.addClient(client);
 
         send({
           type: 'session_started',
@@ -499,6 +503,10 @@ export class WebServer {
     socket.on('close', () => {
       this.clients.delete(send);
       this.sockets.delete(socket);
+      // When the last listener leaves, the session stops the turn it was
+      // running, rather than leaving it waiting for an answer that will
+      // never come.
+      this.session?.removeClient(client);
     });
 
     void announce();

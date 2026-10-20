@@ -20,6 +20,11 @@ import type {
   WebUsage,
 } from '../protocol.js';
 import { renderMarkdown } from './markdown.js';
+import {
+  MAX_ATTACHMENT_SIZE,
+  formatSize,
+  shouldAutoExpand,
+} from './display.js';
 
 /** One entry in the transcript. */
 type Entry =
@@ -71,29 +76,6 @@ interface PendingAttachment {
 let counter = 0;
 const nextId = () => `entry-${++counter}`;
 
-/** The largest file the browser will attach. */
-const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
-
-/**
- * How much text is shown without folding.
- *
- * Past this length a tool's output or the model's reasoning is folded
- * away, so one long shell run does not push the rest of the answer off
- * the screen.
- */
-const AUTO_EXPAND_LIMIT = 1200;
-
-/** Turns a byte count into something a person can read. */
-function formatSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
 /** Reads a file as a data URL. */
 function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -142,6 +124,10 @@ const App: React.FC = () => {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Whether a turn is running, readable from the callbacks that cannot
+  // depend on it.
+  const busyRef = useRef(false);
+  busyRef.current = busy;
 
   useEffect(() => {
     document.documentElement.dataset['theme'] = theme;
@@ -428,6 +414,10 @@ const App: React.FC = () => {
     (entry) => entry.kind === 'thought' && entry.live,
   );
 
+  // How long the turn has been running, so a slow answer can be told apart
+  // from a stuck one.
+  const turnElapsed = useElapsed(busy);
+
   const send = useCallback((request: ClientRequest) => {
     const socket = socketRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {
@@ -566,6 +556,12 @@ const App: React.FC = () => {
 
   const submit = useCallback(
     (text: string) => {
+      if (busyRef.current) {
+        // Two turns at once would fight over the same agent. The turn has
+        // to be stopped first.
+        setError('Wait for the current turn to finish, or stop it first.');
+        return;
+      }
       const trimmed = text.trim();
       const ready = attachments.filter(
         (item): item is PendingAttachment & { uploaded: WebAttachment } =>
@@ -964,10 +960,44 @@ const App: React.FC = () => {
               {usage.cached > 0 && ` · ${usage.cached.toLocaleString()} cached`}
             </div>
           )}
+          {busy && (
+            <div className="usage">
+              Working for {turnElapsed}s
+              <button
+                className="link-button"
+                onClick={() => send({ type: 'cancel' })}
+                title="Stop the turn"
+              >
+                Stop
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
+};
+
+/**
+ * Counts the seconds `active` has been true.
+ *
+ * It is what tells a long run from a stuck one: the clock keeps moving
+ * even when nothing else does.
+ */
+const useElapsed = (active: boolean): number => {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    const started = Date.now();
+    setSeconds(0);
+    const timer = setInterval(() => {
+      setSeconds(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [active]);
+  return seconds;
 };
 
 /** A button that copies a string to the clipboard. */
@@ -1014,7 +1044,7 @@ const ThoughtView: React.FC<{ text: string; live: boolean }> = ({
       setOpen(true);
       return;
     }
-    setOpen(text.length <= AUTO_EXPAND_LIMIT);
+    setOpen(shouldAutoExpand(text));
   }, [live, text]);
 
   if (!text) {
@@ -1069,6 +1099,9 @@ const ToolCallView: React.FC<{
 }> = ({ call, output, truncated, outputKind }) => {
   const status = call.status;
   const isRunning = status === 'executing' || status === 'pending';
+  // The clock keeps running while the tool works, so a long run is not
+  // mistaken for a stuck one.
+  const elapsed = useElapsed(isRunning);
 
   // Whether the user has opened or closed the box themselves. Once they
   // have, the automatic behaviour leaves it alone.
@@ -1088,7 +1121,7 @@ const ToolCallView: React.FC<{
       return;
     }
     if (output !== undefined) {
-      setOpen(output.length <= AUTO_EXPAND_LIMIT);
+      setOpen(shouldAutoExpand(output));
     }
   }, [isRunning, output]);
 
@@ -1118,8 +1151,12 @@ const ToolCallView: React.FC<{
         </span>
         <span className="tool-name">{call.title}</span>
         <span className="tool-status">{status}</span>
-        {call.durationMs !== undefined && (
-          <span className="tool-duration">{call.durationMs}ms</span>
+        {isRunning ? (
+          <span className="tool-duration">{elapsed}s</span>
+        ) : (
+          call.durationMs !== undefined && (
+            <span className="tool-duration">{call.durationMs}ms</span>
+          )
         )}
         <span className="tool-chevron">{open ? '▾' : '▸'}</span>
       </button>
@@ -1154,7 +1191,7 @@ const ToolCallView: React.FC<{
               <pre className="tool-output">{output}</pre>
             ))}
           {isRunning && output === undefined && (
-            <div className="tool-running">Running…</div>
+            <div className="tool-running">Running… {elapsed}s</div>
           )}
           {truncated && <div className="tool-truncated">Output truncated.</div>}
           <div className="tool-footer">

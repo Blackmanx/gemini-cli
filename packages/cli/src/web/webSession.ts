@@ -20,11 +20,39 @@ const MAX_TOOL_OUTPUT = 64 * 1024;
 const MAX_ERROR_LENGTH = 2000;
 
 /**
+ * How long the agent may stay silent before the turn is cut short.
+ *
+ * Silence means the agent is waiting for something that is not coming: a
+ * confirmation nobody will answer, or a tool that will never return. A
+ * turn that hangs forever leaves the browser spinning, so it is stopped
+ * instead.
+ */
+const MAX_TURN_SILENCE = 10 * 60 * 1000;
+
+/** How long a turn may run, however busy it is. */
+const MAX_TURN_DURATION = 60 * 60 * 1000;
+
+/**
  * A browser client attached to a session.
  */
 export interface WebClient {
   send(event: ServerEvent): void;
 }
+
+/**
+ * The part of the agent session the web UI drives.
+ *
+ * The real agent is used in production. The tests bring their own, so a
+ * turn can be started, watched and abandoned without a model behind it.
+ */
+export interface WebAgent {
+  subscribe(listener: (event: AgentEvent) => void): () => void;
+  send(request: { message: { content: ContentPart[] } }): Promise<unknown>;
+  abort(): Promise<void>;
+}
+
+/** Builds the agent a session drives. */
+export type WebAgentFactory = () => WebAgent | Promise<WebAgent>;
 
 /**
  * Drives one agent session and translates its events for the browser.
@@ -35,7 +63,7 @@ export interface WebClient {
  */
 export class WebSession {
   private readonly clients = new Set<WebClient>();
-  private agent: LegacyAgentSession | undefined;
+  private agent: WebAgent | undefined;
   private unsubscribe: (() => void) | undefined;
   private currentToolCalls = new Map<string, WebToolCall>();
   private toolStartedAt = new Map<string, number>();
@@ -44,11 +72,22 @@ export class WebSession {
   /** Resolves when the agent ends the current turn. */
   private turnFinished: (() => void) | undefined;
   private cancelled = false;
+  /** Whether a turn is in flight. */
+  private running = false;
+  /** Fires when the agent has been silent for too long. */
+  private silenceTimer: NodeJS.Timeout | undefined;
+  /** Fires when the turn has run for too long. */
+  private turnTimer: NodeJS.Timeout | undefined;
 
   constructor(
     readonly config: Config,
     readonly settings: LoadedSettings,
     readonly cwd: string,
+    private readonly createAgent: WebAgentFactory = () =>
+      new LegacyAgentSession({
+        config: this.config,
+        promptId: this.config.getSessionId(),
+      }),
   ) {}
 
   get sessionId(): string {
@@ -61,6 +100,11 @@ export class WebSession {
 
   removeClient(client: WebClient): void {
     this.clients.delete(client);
+    if (this.clients.size === 0 && this.running) {
+      // Nobody is left to answer a confirmation, so the turn is stopped
+      // rather than left waiting for an answer that will never come.
+      void this.cancel();
+    }
   }
 
   private emit(event: ServerEvent): void {
@@ -80,7 +124,7 @@ export class WebSession {
    * should be able to list commands and settings even if the agent itself
    * cannot be constructed.
    */
-  private async ensureAgent(): Promise<LegacyAgentSession> {
+  private async ensureAgent(): Promise<WebAgent> {
     if (this.agent) {
       return this.agent;
     }
@@ -89,10 +133,7 @@ export class WebSession {
     if (!client.isInitialized()) {
       await client.initialize();
     }
-    const agent = new LegacyAgentSession({
-      config: this.config,
-      promptId: this.config.getSessionId(),
-    });
+    const agent = await this.createAgent();
     this.agent = agent;
     this.unsubscribe = agent.subscribe((event) => {
       this.handleEvent(event);
@@ -103,6 +144,7 @@ export class WebSession {
   async dispose(): Promise<void> {
     this.unsubscribe?.();
     this.unsubscribe = undefined;
+    this.clearWatchdogs();
     await this.agent?.abort();
     this.agent = undefined;
     this.clients.clear();
@@ -110,6 +152,18 @@ export class WebSession {
 
   /** Sends a prompt to the agent. */
   async send(text: string, attachments: WebAttachment[] = []): Promise<void> {
+    if (this.running) {
+      // Two turns at once would fight over the same agent: the second one
+      // would take over the ending of the first, and the first would never
+      // be told it was over.
+      this.emit({
+        type: 'error',
+        message:
+          'A turn is already running. Stop it before sending another prompt.',
+      });
+      return;
+    }
+    this.running = true;
     this.cancelled = false;
     this.messageBuffer = '';
     this.emit({
@@ -126,6 +180,8 @@ export class WebSession {
       this.turnFinished = resolve;
     });
 
+    this.armWatchdogs();
+
     try {
       const agent = await this.ensureAgent();
       await agent.send({
@@ -139,6 +195,8 @@ export class WebSession {
         stack: error instanceof Error ? error.stack : undefined,
       });
     } finally {
+      this.clearWatchdogs();
+      this.running = false;
       this.turnFinished = undefined;
       this.emit({ type: 'turn_ended', cancelled: this.cancelled });
     }
@@ -189,10 +247,67 @@ export class WebSession {
   /** Stops the current turn. */
   async cancel(): Promise<void> {
     this.cancelled = true;
-    await this.agent?.abort();
+    try {
+      await this.agent?.abort();
+    } finally {
+      // The turn is released even when the agent never says it is done, so
+      // the browser does not wait for an answer that will not come.
+      this.turnFinished?.();
+    }
+  }
+
+  /**
+   * Arms the timers that stop a turn that is not going anywhere.
+   *
+   * The silence timer is rearmed on every event the agent sends, so it
+   * only fires when the agent has really gone quiet.
+   */
+  private armWatchdogs(): void {
+    this.clearWatchdogs();
+    this.armSilenceTimer();
+    this.turnTimer = setTimeout(() => {
+      this.emit({
+        type: 'error',
+        message: 'The turn ran for too long and was stopped.',
+      });
+      void this.cancel();
+    }, MAX_TURN_DURATION);
+    this.turnTimer.unref?.();
+  }
+
+  /** Rearms the silence timer. */
+  private armSilenceTimer(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+    }
+    this.silenceTimer = setTimeout(() => {
+      this.emit({
+        type: 'error',
+        message:
+          'The agent stopped responding, so the turn was stopped. It may be waiting for something that never arrived.',
+      });
+      void this.cancel();
+    }, MAX_TURN_SILENCE);
+    this.silenceTimer.unref?.();
+  }
+
+  /** Stops the timers that watch over the turn. */
+  private clearWatchdogs(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = undefined;
+    }
+    if (this.turnTimer) {
+      clearTimeout(this.turnTimer);
+      this.turnTimer = undefined;
+    }
   }
 
   private handleEvent(event: AgentEvent): void {
+    // The agent is alive, so the silence timer starts over.
+    if (this.running) {
+      this.armSilenceTimer();
+    }
     switch (event.type) {
       case 'message': {
         if (event.role === 'user') {

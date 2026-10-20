@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect } from 'vitest';
-import { WebSession } from './webSession.js';
-import type { Config, ContentPart } from '@google/gemini-cli-core';
+import { describe, it, expect, vi } from 'vitest';
+import { WebSession, type WebAgent } from './webSession.js';
+import type { AgentEvent, Config, ContentPart } from '@google/gemini-cli-core';
 import type { LoadedSettings } from '../config/settings.js';
 import type { ServerEvent, WebAttachment } from './protocol.js';
 
@@ -16,6 +16,51 @@ const config = {
 } as unknown as Config;
 
 const settings = {} as LoadedSettings;
+
+/**
+ * An agent that does what the test tells it to.
+ *
+ * The real agent needs a model behind it, and a turn that hangs is
+ * exactly what these tests are about, so the agent is replaced by one
+ * that can be started, watched and left hanging on purpose.
+ */
+class FakeAgent implements WebAgent {
+  aborted = false;
+  sent = 0;
+  /** When set, `send` fails with this error. */
+  failWith: Error | undefined;
+  private listeners: Array<(event: AgentEvent) => void> = [];
+
+  subscribe(listener: (event: AgentEvent) => void): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((one) => one !== listener);
+    };
+  }
+
+  async send(_request: {
+    message: { content: ContentPart[] };
+  }): Promise<unknown> {
+    this.sent++;
+    if (this.failWith) {
+      throw this.failWith;
+    }
+    return { streamId: 'test-stream' };
+  }
+
+  async abort(): Promise<void> {
+    this.aborted = true;
+  }
+
+  emit(event: AgentEvent): void {
+    for (const listener of [...this.listeners]) {
+      listener(event);
+    }
+  }
+}
+
+/** Waits for the microtasks and timers a turn needs to get going. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('WebSession', () => {
   it('renders a diff as a unified diff', async () => {
@@ -175,5 +220,159 @@ describe('WebSession', () => {
       text: 'Attached file: notas.txt (/tmp/notas.txt)',
       uri: '/tmp/notas.txt',
     });
+  });
+});
+
+describe('WebSession turns', () => {
+  it('ends the turn when the agent says it is done', async () => {
+    const agent = new FakeAgent();
+    const session = new WebSession(config, settings, '/tmp', () => agent);
+    const events: ServerEvent[] = [];
+    session.addClient({ send: (event) => events.push(event) });
+
+    const turn = session.send('hola');
+    await settle();
+    agent.emit({ type: 'agent_end' } as AgentEvent);
+    await turn;
+
+    expect(events.some((event) => event.type === 'turn_started')).toBe(true);
+    const ended = events.find((event) => event.type === 'turn_ended');
+    expect(ended).toBeDefined();
+    expect(ended?.type === 'turn_ended' && ended.cancelled).toBe(false);
+  });
+
+  it('ends the turn when the agent fails', async () => {
+    const agent = new FakeAgent();
+    agent.failWith = new Error('the model is on fire');
+    const session = new WebSession(config, settings, '/tmp', () => agent);
+    const events: ServerEvent[] = [];
+    session.addClient({ send: (event) => events.push(event) });
+
+    await session.send('hola');
+
+    const error = events.find((event) => event.type === 'error');
+    expect(error?.type === 'error' && error.message).toBe(
+      'the model is on fire',
+    );
+    expect(events.some((event) => event.type === 'turn_ended')).toBe(true);
+  });
+
+  it('refuses a second prompt while a turn is running', async () => {
+    const agent = new FakeAgent();
+    const session = new WebSession(config, settings, '/tmp', () => agent);
+    const events: ServerEvent[] = [];
+    session.addClient({ send: (event) => events.push(event) });
+
+    const first = session.send('primero');
+    await settle();
+    await session.send('segundo');
+
+    expect(agent.sent).toBe(1);
+    const error = events.find((event) => event.type === 'error');
+    expect(error?.type === 'error' && error.message).toContain(
+      'already running',
+    );
+    expect(events.filter((event) => event.type === 'turn_started').length).toBe(
+      1,
+    );
+
+    agent.emit({ type: 'agent_end' } as AgentEvent);
+    await first;
+  });
+
+  it('releases the turn when it is cancelled', async () => {
+    const agent = new FakeAgent();
+    const session = new WebSession(config, settings, '/tmp', () => agent);
+    const events: ServerEvent[] = [];
+    session.addClient({ send: (event) => events.push(event) });
+
+    const turn = session.send('hola');
+    await settle();
+    await session.cancel();
+    await turn;
+
+    expect(agent.aborted).toBe(true);
+    const ended = events.find((event) => event.type === 'turn_ended');
+    expect(ended?.type === 'turn_ended' && ended.cancelled).toBe(true);
+  });
+
+  it('stops the turn when the last listener leaves', async () => {
+    const agent = new FakeAgent();
+    const session = new WebSession(config, settings, '/tmp', () => agent);
+    const events: ServerEvent[] = [];
+    const first = { send: (event: ServerEvent) => events.push(event) };
+    const second = { send: (event: ServerEvent) => events.push(event) };
+    session.addClient(first);
+    session.addClient(second);
+
+    const turn = session.send('hola');
+    await settle();
+
+    session.removeClient(first);
+    await settle();
+    // There is still someone watching, so the turn carries on.
+    expect(agent.aborted).toBe(false);
+
+    session.removeClient(second);
+    await turn;
+    // Nobody is left to answer a confirmation, so the turn is stopped.
+    expect(agent.aborted).toBe(true);
+  });
+
+  it('stops a turn that goes quiet for too long', async () => {
+    vi.useFakeTimers();
+    try {
+      const agent = new FakeAgent();
+      const session = new WebSession(config, settings, '/tmp', () => agent);
+      const events: ServerEvent[] = [];
+      session.addClient({ send: (event) => events.push(event) });
+
+      const turn = session.send('hola');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // Ten minutes of nothing.
+      await vi.advanceTimersByTimeAsync(11 * 60 * 1000);
+      await turn;
+
+      expect(agent.aborted).toBe(true);
+      const error = events.find((event) => event.type === 'error');
+      expect(error?.type === 'error' && error.message).toContain(
+        'stopped responding',
+      );
+      expect(events.some((event) => event.type === 'turn_ended')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a turn alive while the agent is still talking', async () => {
+    vi.useFakeTimers();
+    try {
+      const agent = new FakeAgent();
+      const session = new WebSession(config, settings, '/tmp', () => agent);
+      const events: ServerEvent[] = [];
+      session.addClient({ send: (event) => events.push(event) });
+
+      const turn = session.send('hola');
+      await vi.advanceTimersByTimeAsync(0);
+
+      // The agent keeps sending things, so the silence timer keeps moving.
+      for (let i = 0; i < 3; i++) {
+        await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+        agent.emit({
+          type: 'message',
+          role: 'model',
+          content: [{ type: 'text', text: `paso ${i}` }],
+        } as unknown as AgentEvent);
+      }
+
+      expect(agent.aborted).toBe(false);
+      expect(events.some((event) => event.type === 'error')).toBe(false);
+
+      agent.emit({ type: 'agent_end' } as AgentEvent);
+      await turn;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
