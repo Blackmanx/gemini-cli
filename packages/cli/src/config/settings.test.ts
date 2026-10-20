@@ -2588,10 +2588,13 @@ describe('Settings Loading and Merging', () => {
       // Default is now removeDeprecated = true
       migrateDeprecatedSettings(loadedSettings);
 
-      // Should remove disableAutoUpdate and trust enableAutoUpdate: true
-      expect(setValueSpy).toHaveBeenCalledWith(SettingScope.User, 'general', {
-        enableAutoUpdate: true,
-      });
+      // The autoupdate keys are left alone: the updater is gone, and an
+      // old settings file round-trips without being rewritten.
+      expect(setValueSpy).not.toHaveBeenCalledWith(
+        SettingScope.User,
+        'general',
+        expect.anything(),
+      );
 
       // Should remove disableFuzzySearch and trust enableFuzzySearch: false
       expect(setValueSpy).toHaveBeenCalledWith(SettingScope.User, 'context', {

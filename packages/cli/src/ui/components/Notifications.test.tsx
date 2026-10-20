@@ -276,25 +276,6 @@ describe('Notifications', () => {
     unmount();
   });
 
-  it('renders update notification', async () => {
-    const uiState = {
-      initError: null,
-      streamingState: 'idle',
-      updateInfo: { message: 'Update available' },
-    } as unknown as UIState;
-    mockUseUIState.mockReturnValue(uiState);
-    const { lastFrame, unmount } = await renderWithProviders(
-      <Notifications />,
-      {
-        uiState,
-        settings,
-        width: 100,
-      },
-    );
-    expect(lastFrame()).toMatchSnapshot();
-    unmount();
-  });
-
   it('renders screen reader nudge when enabled and not seen (no legacy file)', async () => {
     mockUseIsScreenReaderEnabled.mockReturnValue(true);
     persistentStateMock.setData({ hasSeenScreenReaderNudge: false });

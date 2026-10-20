@@ -53,6 +53,20 @@ import { DefaultLight } from '../ui/themes/builtin/light/default-light.js';
 import { pickDefaultThemeName } from '../ui/themes/theme.js';
 import { generateSvgForTerminal } from './svg.js';
 
+/**
+ * How long to wait for Ink to render before going on without it.
+ *
+ * Ink renders on its own schedule, and a component that has already
+ * rendered does not render again until something changes. Waiting a whole
+ * second for a render that may never come made every test in the suite
+ * pay for it, so the pause is short and the real waiting happens in the
+ * loop that follows.
+ *
+ * It has to outlast the escape key timeout, which is what turns a lone
+ * escape into a key press.
+ */
+const RENDER_WAIT_MS = 100;
+
 export const persistentStateMock = new FakePersistentState();
 
 if (process.env['NODE_ENV'] === 'test') {
@@ -218,14 +232,23 @@ class XtermStdout extends EventEmitter {
       } else {
         // Wait for at least one render to be called if we haven't rendered yet or since start of this call,
         // but don't wait forever as some renders might be synchronous or skipped.
+        //
+        // This is a short pause, not a long one: the loop below does the
+        // real waiting, so a render that never comes costs a moment rather
+        // than a second of every test. The listener is taken off again when
+        // the pause is over, so it cannot pile up.
         if (this.renderCount === startRenderCount) {
-          const renderPromise = new Promise((resolve) =>
-            this.once('render', resolve),
-          );
-          const timeoutPromise = new Promise((resolve) =>
-            setTimeout(resolve, 1000),
-          );
-          await Promise.race([renderPromise, timeoutPromise]);
+          await new Promise<void>((resolve) => {
+            const onRender = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+            const timer = setTimeout(() => {
+              this.off('render', onRender);
+              resolve();
+            }, RENDER_WAIT_MS);
+            this.once('render', onRender);
+          });
         }
       }
     });

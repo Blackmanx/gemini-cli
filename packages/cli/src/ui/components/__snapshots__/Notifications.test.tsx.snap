@@ -13,11 +13,3 @@ exports[`Notifications > renders screen reader nudge when enabled and not seen (
 next run.
 "
 `;
-
-exports[`Notifications > renders update notification 1`] = `
-"
-╭──────────────────────────────────────────────────────────────────────────────────────────────────╮
-│ Update available                                                                                 │
-╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
-"
-`;

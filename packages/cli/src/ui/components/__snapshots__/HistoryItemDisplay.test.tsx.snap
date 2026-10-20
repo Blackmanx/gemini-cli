@@ -52,6 +52,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=false) > should 
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -107,6 +108,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=false) > should 
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -121,6 +123,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=false) > should 
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -135,6 +138,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=false) > should 
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -190,6 +194,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=true) > should r
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -245,6 +250,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=true) > should r
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -300,6 +306,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=true) > should r
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -355,6 +362,7 @@ exports[`<HistoryItemDisplay /> > gemini items (alternateBuffer=true) > should r
    48 Line 48
    49 Line 49
    50 Line 50
+    F5 to copy, or /copy-block
 "
 `;
 

@@ -419,7 +419,7 @@ describe('SettingsSchema', () => {
       expect(setting.category).toBe('Experimental');
       expect(setting.default).toBe(true);
       expect(setting.requiresRestart).toBe(true);
-      expect(setting.showInDialog).toBe(false);
+      expect(setting.showInDialog).toBe(true);
       expect(setting.description).toBe('Enable local and remote subagents.');
     });
 

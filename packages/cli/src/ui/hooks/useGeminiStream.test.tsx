@@ -397,6 +397,8 @@ describe('useGeminiStream', () => {
     getEnableHooks: vi.fn(() => false),
     // The magic keywords notice wrapper calls this before sending the query.
     getMagicKeywordsSettings: vi.fn(() => undefined),
+    // The goals feature is not exercised by these tests.
+    isGoalContinuationEnabled: vi.fn(() => false),
   } as unknown as Config;
 
   beforeEach(() => {
@@ -413,6 +415,15 @@ describe('useGeminiStream', () => {
     // Reset properties of mockConfig if needed
     (mockConfig.getCheckpointingEnabled as Mock).mockReturnValue(false);
     (mockConfig.getApprovalMode as Mock).mockReturnValue(ApprovalMode.DEFAULT);
+    // The todo reminders are turned on by some of the tests below. A mock
+    // keeps its answer until it is reset, so they are put back here: a
+    // reminder left switched on makes the hook send a second request in
+    // the tests that come after, and those then wait for an answer that
+    // never comes.
+    (mockConfig.isTodoEnabled as Mock).mockReturnValue(false);
+    (mockConfig.isTodoRemindersEnabled as Mock).mockReturnValue(false);
+    (mockConfig.getTodoPhases as Mock).mockReturnValue([]);
+    (mockConfig.isGoalContinuationEnabled as Mock).mockReturnValue(false);
 
     // Default mock for useReactToolScheduler to prevent toolCalls being undefined initially
     mockUseToolScheduler.mockReturnValue([
@@ -426,11 +437,15 @@ describe('useGeminiStream', () => {
 
     // Reset mocks for GeminiClient instance methods (startChat and sendMessageStream)
     // The GeminiClient constructor itself is mocked at the module level.
-    mockStartChat.mockClear().mockResolvedValue({
+    //
+    // These are reset rather than cleared: a mock that was queued with
+    // `mockReturnValueOnce` and never used would otherwise be handed to the
+    // next test, which then waits for a stream that never comes.
+    mockStartChat.mockReset().mockResolvedValue({
       sendMessageStream: mockSendMessageStream,
     } as unknown as any); // GeminiChat -> any
     mockSendMessageStream
-      .mockClear()
+      .mockReset()
       .mockReturnValue((async function* () {})());
     handleAtCommandSpy = vi.spyOn(atCommandProcessor, 'handleAtCommand');
     vi.spyOn(coreEvents, 'emitFeedback');

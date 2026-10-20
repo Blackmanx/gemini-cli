@@ -16,9 +16,6 @@ exports[`SettingsDialog > Initial Rendering > should render settings list with v
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                      true  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -33,6 +30,9 @@ exports[`SettingsDialog > Initial Rendering > should render settings list with v
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -80,9 +80,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'accessibility settings
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                      true  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -97,6 +94,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'accessibility settings
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -126,9 +126,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'all boolean settings d
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                     true*  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -143,6 +140,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'all boolean settings d
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -172,9 +172,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'default state' correct
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                      true  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -189,6 +186,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'default state' correct
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -218,9 +218,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'file filtering setting
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                      true  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -235,6 +232,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'file filtering setting
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -264,9 +264,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'focused on scope selec
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                      true  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -281,6 +278,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'focused on scope selec
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -310,9 +310,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'mixed boolean and numb
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                    false*  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -327,6 +324,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'mixed boolean and numb
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -356,9 +356,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'tools and security set
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                      true  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -373,6 +370,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'tools and security set
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │
@@ -402,9 +402,6 @@ exports[`SettingsDialog > Snapshot Tests > should render 'various boolean settin
 │    Default Approval Mode                                                                Default  │
 │    The default approval mode for tool execution. 'default' prompts for approval, 'au…            │
 │                                                                                                  │
-│    Enable Auto Update                                                                    false*  │
-│    Enable automatic updates.                                                                     │
-│                                                                                                  │
 │    Enable Terminal Notifications                                                          false  │
 │    Enable terminal run-event notifications for action-required prompts and session com…          │
 │                                                                                                  │
@@ -419,6 +416,9 @@ exports[`SettingsDialog > Snapshot Tests > should render 'various boolean settin
 │                                                                                                  │
 │    Plan Model Routing                                                                      true  │
 │    Automatically switch between Pro and Flash models based on Plan Mode status. Uses Pr…         │
+│                                                                                                  │
+│    Retry Fetch Errors                                                                      true  │
+│    Retry on "exception TypeError: fetch failed sending request" errors.                          │
 │                                                                                                  │
 │  ▼                                                                                               │
 │                                                                                                  │

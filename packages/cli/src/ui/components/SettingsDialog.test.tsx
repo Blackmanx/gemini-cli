@@ -383,9 +383,9 @@ describe('SettingsDialog', () => {
       // 'general.vimMode' has description 'Enable Vim keybindings' in settingsSchema.ts
       expect(output).toContain('Vim Mode');
       expect(output).toContain('Enable Vim keybindings');
-      // 'general.enableAutoUpdate' has description 'Enable automatic updates.'
-      expect(output).toContain('Enable Auto Update');
-      expect(output).toContain('Enable automatic updates.');
+      // 'general.enableNotifications' has a description of its own.
+      expect(output).toContain('Enable Terminal Notifications');
+      expect(output).toContain('Enable terminal run-event notifications');
       unmount();
     });
   });
@@ -421,7 +421,7 @@ describe('SettingsDialog', () => {
       await waitUntilReady();
 
       await waitFor(() => {
-        expect(lastFrame()).toContain('Enable Auto Update');
+        expect(lastFrame()).toContain('Default Approval Mode');
       });
 
       // Navigate up
@@ -1704,7 +1704,7 @@ describe('SettingsDialog', () => {
       await waitFor(() => {
         expect(lastFrame()).toContain('nonexistentsetting');
         expect(lastFrame()).not.toContain('Vim Mode'); // Should not contain any settings
-        expect(lastFrame()).not.toContain('Enable Auto Update'); // Should not contain any settings
+        expect(lastFrame()).not.toContain('Default Approval Mode'); // Should not contain any settings
       });
 
       unmount();

@@ -13,6 +13,7 @@ exports[`<GeminiMessage /> - Raw Markdown Display Snapshots > renders pending st
 "✦ Test bold and code markdown
 
    1 const x = 1;
+    F5 to copy, or /copy-block
 "
 `;
 
@@ -29,6 +30,7 @@ exports[`<GeminiMessage /> - Raw Markdown Display Snapshots > renders with rende
 "✦ Test bold and code markdown
 
    1 const x = 1;
+    F5 to copy, or /copy-block
 "
 `;
 

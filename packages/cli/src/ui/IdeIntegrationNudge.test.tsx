@@ -9,6 +9,7 @@ import { renderWithProviders } from '../test-utils/render.js';
 import { act } from 'react';
 import { IdeIntegrationNudge } from './IdeIntegrationNudge.js';
 import { debugLogger } from '@google/gemini-cli-core';
+import { ESC_TIMEOUT } from './contexts/KeypressContext.js';
 
 // Mock debugLogger
 vi.mock('@google/gemini-cli-core', async (importOriginal) => {
@@ -148,7 +149,12 @@ describe('IdeIntegrationNudge', () => {
     await act(async () => {
       stdin.write('\u001B');
     });
-    // Escape key has a timeout in KeypressContext, so we need to wrap waitUntilReady in act
+    // Escape key has a timeout in KeypressContext, so the key is only
+    // known to be a lone escape once that time has passed. Waiting for it
+    // here keeps the test from depending on how long anything else waits.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, ESC_TIMEOUT + 20));
+    });
     await act(async () => {
       await waitUntilReady();
     });

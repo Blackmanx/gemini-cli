@@ -29,8 +29,20 @@ export default defineConfig({
       react: path.resolve(__dirname, '../../node_modules/react'),
     },
     setupFiles: ['./test-setup.ts'],
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    // The snapshots were written in English, and the numbers in them are
+    // formatted the English way. The locale of the machine running the
+    // tests decides otherwise, so it is pinned here: the tests then check
+    // the same thing everywhere, while the CLI itself keeps the format of
+    // the user's own locale.
+    env: {
+      LANG: 'en_US.UTF-8',
+      LC_ALL: 'en_US.UTF-8',
+    },
+    // A test that takes a minute is a test that is stuck. Nothing in this
+    // suite takes more than a few seconds, so the limit is low enough to
+    // catch a hang and high enough not to catch a slow machine.
+    testTimeout: 30000,
+    hookTimeout: 30000,
     pool: 'forks',
     coverage: {
       enabled: true,
@@ -47,9 +59,12 @@ export default defineConfig({
       ],
     },
     poolOptions: {
-      threads: {
-        minThreads: 1,
-        maxThreads: 4,
+      // These have to match the pool above. The options for threads were
+      // being ignored while the forks pool was in use, so every run used
+      // one process per core, which is more than the machine can hold.
+      forks: {
+        minForks: 1,
+        maxForks: 8,
       },
     },
     server: {

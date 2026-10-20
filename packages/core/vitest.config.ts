@@ -9,8 +9,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     reporters: ['default', 'junit'],
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    // A test that takes a minute is a test that is stuck.
+    testTimeout: 30000,
+    hookTimeout: 30000,
     pool: 'forks',
     silent: true,
     setupFiles: ['./test-setup.ts'],
@@ -32,9 +33,12 @@ export default defineConfig({
       ],
     },
     poolOptions: {
-      threads: {
-        minThreads: 1,
-        maxThreads: 4,
+      // These have to match the pool above. The options for threads were
+      // being ignored while the forks pool was in use, so every run used
+      // one process per core, which is more than the machine can hold.
+      forks: {
+        minForks: 1,
+        maxForks: 8,
       },
     },
   },
