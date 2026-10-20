@@ -837,7 +837,18 @@ export async function main() {
     }
 
     const wasRaw = process.stdin.isRaw;
-    if (config.isInteractive() && !wasRaw && process.stdin.isTTY) {
+    if (argv.web) {
+      // The web UI reads nothing from the terminal, and asking it about
+      // its capabilities puts the terminal in raw mode: with raw mode on,
+      // Ctrl+C is a character rather than a signal, and the first thing a
+      // stuck user tries stops working. Ctrl+C has to stop the server even
+      // while it is still starting, so the handler goes in here.
+      const stop = () => process.exit(0);
+      process.on('SIGINT', stop);
+      process.on('SIGTERM', stop);
+    }
+
+    if (!argv.web && config.isInteractive() && !wasRaw && process.stdin.isTTY) {
       // Set this as early as possible to avoid spurious characters from
       // input showing up in the output.
       process.stdin.setRawMode(true);
@@ -848,9 +859,14 @@ export async function main() {
       });
     }
 
-    const terminalHandle = startupProfiler.start('setup_terminal');
-    await setupTerminalAndTheme(config, settings);
-    terminalHandle?.end();
+    // A browser has its own colours, so the terminal does not have to be
+    // asked about its own. Asking also means raw mode for a moment, which
+    // is long enough to swallow the Ctrl+C that stops a stuck start.
+    if (!argv.web) {
+      const terminalHandle = startupProfiler.start('setup_terminal');
+      await setupTerminalAndTheme(config, settings);
+      terminalHandle?.end();
+    }
 
     const initAppHandle = startupProfiler.start('initialize_app');
     const initializationResult = await initializeApp(config, settings);

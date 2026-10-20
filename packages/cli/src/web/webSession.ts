@@ -375,6 +375,10 @@ export class WebSession {
           } else if (part.type === 'thought') {
             this.emit({ type: 'agent_thought', text: part.thought });
           }
+          // The answer often says where the document it wrote went.
+          if (part.type === 'text') {
+            this.announceDocuments([part.text]);
+          }
         }
         break;
       }
@@ -670,6 +674,11 @@ export class WebSession {
     const seen = new Set<string>();
     for (const text of texts) {
       if (!text) {
+        continue;
+      }
+      // Most chunks carry no path at all, and a stat for every one of them
+      // would be wasted work while the answer streams in.
+      if (!/\.[A-Za-z0-9]{2,5}\b/.test(text)) {
         continue;
       }
       for (const match of text.matchAll(

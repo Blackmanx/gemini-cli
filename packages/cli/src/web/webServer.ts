@@ -636,7 +636,16 @@ export class WebServer {
 
   /** Whether a path may be read back to the browser. */
   private isPreviewablePath(target: string): boolean {
-    const roots = [this.options.cwd, tmpdir(), this.uploadDir()];
+    // Documents for the user are often written on the Windows side of WSL,
+    // or straight into their home, so those are part of the workspace as
+    // far as a preview is concerned.
+    const roots = [
+      this.options.cwd,
+      tmpdir(),
+      this.uploadDir(),
+      homedir(),
+      '/mnt',
+    ];
     return roots.some(
       (root) =>
         target === root ||
