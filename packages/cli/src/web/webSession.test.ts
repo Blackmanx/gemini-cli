@@ -319,6 +319,20 @@ describe('WebSession turns', () => {
     expect(agent.aborted).toBe(true);
   });
 
+  it('releases the turn when the session is disposed', async () => {
+    const agent = new FakeAgent();
+    const session = new WebSession(config, settings, '/tmp', () => agent);
+    session.addClient({ send: () => {} });
+
+    const turn = session.send('hola');
+    await settle();
+    await session.dispose();
+    // The turn resolves rather than waiting for an agent that is gone.
+    await turn;
+
+    expect(agent.aborted).toBe(true);
+  });
+
   it('stops a turn that goes quiet for too long', async () => {
     vi.useFakeTimers();
     try {

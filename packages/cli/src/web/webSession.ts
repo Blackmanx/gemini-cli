@@ -146,6 +146,8 @@ export class WebSession {
     this.unsubscribe = undefined;
     this.clearWatchdogs();
     await this.agent?.abort();
+    // Nothing is left to wait for, so an open turn is released.
+    this.turnFinished?.();
     this.agent = undefined;
     this.clients.clear();
   }
