@@ -257,6 +257,113 @@ select {
   font-size: 12.5px;
 }
 
+/* ---------- tables ---------- */
+
+.table-wrap {
+  position: relative;
+  margin: 12px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0;
+}
+
+/* A little room on the right for the copy button. */
+.table-wrap thead th:last-child,
+.table-wrap tbody td:last-child {
+  padding-right: 96px;
+}
+
+.table-copy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 3px 9px;
+  font-family: var(--sans);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  background: var(--bg-hover);
+  border: none;
+  border-bottom-left-radius: 8px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.table-wrap:hover .table-copy,
+.table-copy:focus {
+  opacity: 1;
+}
+
+.table-copy.copied {
+  color: var(--success);
+}
+
+/* ---------- generated documents ---------- */
+
+.file-row {
+  align-items: flex-start;
+}
+
+.file-avatar {
+  font-size: 14px;
+}
+
+.file-card {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.file-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+}
+
+.file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-kind {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.file-head .button {
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+
+.file-preview {
+  display: block;
+  width: 100%;
+  height: 520px;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: var(--bg-subtle);
+}
+
 /* ---------- code blocks, styled like an editor ---------- */
 
 .markdown pre {

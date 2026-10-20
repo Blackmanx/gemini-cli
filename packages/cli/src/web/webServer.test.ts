@@ -5,7 +5,8 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebServer } from './webServer.js';
@@ -152,6 +153,85 @@ describe('WebServer', () => {
     const attachment = (await response.json()) as WebAttachment;
     expect(attachment.path?.startsWith(dir)).toBe(true);
     expect(attachment.path).not.toContain('..');
+  });
+});
+
+describe('WebServer previews', () => {
+  let server: WebServer | undefined;
+
+  afterEach(async () => {
+    await server?.stop();
+    server = undefined;
+  });
+
+  it('serves a PDF that lives in the workspace', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'web-preview-'));
+    const document = join(dir, 'informe.pdf');
+    writeFileSync(document, '%PDF-1.4 fake');
+    server = new WebServer({ config, settings, cwd: dir, port: 0 });
+    const url = await server.start();
+
+    const response = await fetch(
+      `${url}/api/preview?path=${encodeURIComponent(document)}`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    expect(await response.text()).toContain('%PDF');
+  });
+
+  it('refuses a path outside the workspace and the temporary directory', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'web-preview-'));
+    server = new WebServer({ config, settings, cwd: dir, port: 0 });
+    const url = await server.start();
+
+    const response = await fetch(
+      `${url}/api/preview?path=${encodeURIComponent('/etc/passwd')}`,
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it('turns a Word document into a PDF in the temporary directory', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'web-preview-'));
+    // A minimal Word document, so the conversion has something real to do.
+    const document = join(dir, 'nota.docx');
+    execFileSync('python3', [
+      '-c',
+      `import zipfile
+with zipfile.ZipFile(${JSON.stringify(document)}, 'w') as z:
+    z.writestr('[Content_Types].xml', '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
+    z.writestr('_rels/.rels', '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>')
+    z.writestr('word/document.xml', '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hola</w:t></w:r></w:p></w:body></w:document>')`,
+    ]);
+    server = new WebServer({ config, settings, cwd: dir, port: 0 });
+    const url = await server.start();
+
+    const response = await fetch(
+      `${url}/api/preview?path=${encodeURIComponent(document)}`,
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/pdf');
+    const body = Buffer.from(await response.arrayBuffer());
+    expect(body.subarray(0, 4).toString()).toBe('%PDF');
+  }, 120_000);
+
+  it('keeps an uploaded folder in its own subtree', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'web-upload-'));
+    server = new WebServer({ config, settings, cwd: dir, port: 0 });
+    const url = await server.start();
+
+    const response = await fetch(
+      `${url}/api/upload?${new URLSearchParams({
+        name: 'notas.txt',
+        dir: 'informes/2026',
+      }).toString()}`,
+      { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: 'x' },
+    );
+    expect(response.status).toBe(200);
+    const attachment = (await response.json()) as WebAttachment;
+    expect(attachment.path).toBe(
+      join(dir, '.gemini-web-uploads', 'informes', '2026', 'notas.txt'),
+    );
+    expect(readFileSync(attachment.path as string, 'utf-8')).toBe('x');
   });
 });
 

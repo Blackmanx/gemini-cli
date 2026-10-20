@@ -86,10 +86,36 @@ marked.setOptions({
   breaks: true,
 });
 
+/**
+ * Puts a "copy" button on every table.
+ *
+ * A table is often meant for a spreadsheet, and copying it by hand loses
+ * the rows. The button copies the cells as one block a spreadsheet can
+ * take, and the handler in the client does the copying.
+ */
+function withTableCopy(html: string): string {
+  if (!html.includes('<table')) {
+    return html;
+  }
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  for (const table of template.content.querySelectorAll('table')) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-wrap';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'table-copy';
+    button.textContent = 'Copy as table';
+    table.replaceWith(wrapper);
+    wrapper.append(button, table);
+  }
+  return template.innerHTML;
+}
+
 /** Renders markdown into HTML that is safe to insert into the page. */
 export function renderMarkdown(markdown: string): string {
   const raw = marked.parse(markdown, { async: false });
-  return DOMPurify.sanitize(raw, {
+  const clean = DOMPurify.sanitize(raw, {
     ALLOWED_TAGS,
     ALLOWED_ATTR: [
       'href',
@@ -108,4 +134,6 @@ export function renderMarkdown(markdown: string): string {
     // Block javascript: and data: URLs in links and images.
     ALLOWED_URI_REGEXP: /^(?:https?|mailto|tel|#|\/|\.\/)/i,
   });
+
+  return withTableCopy(clean);
 }

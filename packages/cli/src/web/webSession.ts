@@ -15,8 +15,30 @@ import {
   debugLogger,
   displayContentToString,
 } from '@google/gemini-cli-core';
+import { existsSync, statSync } from 'node:fs';
+import { basename, isAbsolute, resolve } from 'node:path';
 import type { LoadedSettings } from '../config/settings.js';
-import type { ServerEvent, WebAttachment, WebToolCall } from './protocol.js';
+import type {
+  ServerEvent,
+  WebAttachment,
+  WebGeneratedFile,
+  WebToolCall,
+} from './protocol.js';
+
+/** The document extensions the browser can show or hand over. */
+const PREVIEW_EXTENSIONS: Record<string, WebGeneratedFile['kind'] | undefined> =
+  {
+    '.pdf': 'pdf',
+    '.doc': 'document',
+    '.docx': 'document',
+    '.odt': 'document',
+    '.ppt': 'presentation',
+    '.pptx': 'presentation',
+    '.odp': 'presentation',
+    '.xls': 'spreadsheet',
+    '.xlsx': 'spreadsheet',
+    '.ods': 'spreadsheet',
+  };
 
 /** Whether a value is a styled token of a terminal line. */
 function isTextToken(value: unknown): value is { text: string } {
@@ -82,6 +104,8 @@ export class WebSession {
   private unsubscribe: (() => void) | undefined;
   private currentToolCalls = new Map<string, WebToolCall>();
   private toolStartedAt = new Map<string, number>();
+  /** Documents already offered to the browser, by path and modification. */
+  private readonly announcedFiles = new Map<string, number>();
   /** The text of the message being streamed, so chunks accumulate. */
   private messageBuffer = '';
   /** Resolves when the agent ends the current turn. */
@@ -234,6 +258,14 @@ export class WebSession {
     const content: ContentPart[] = [{ type: 'text', text }];
 
     for (const attachment of attachments) {
+      if (attachment.kind === 'folder' && attachment.path) {
+        content.push({
+          type: 'reference',
+          text: `Attached folder: ${attachment.name} (${attachment.path})`,
+          uri: attachment.path,
+        });
+        continue;
+      }
       if (attachment.data && attachment.mimeType.startsWith('image/')) {
         content.push({
           type: 'media',
@@ -422,6 +454,16 @@ export class WebSession {
             kind: output.kind,
           });
         }
+
+        // A tool that writes a document leaves a path behind: in its
+        // arguments, in a diff, or in what it printed.
+        this.announceDocuments([
+          JSON.stringify(this.currentToolCalls.get(callId)?.args ?? {}),
+          output?.text ?? '',
+          event.display?.result?.type === 'diff'
+            ? (event.display.result.path ?? '')
+            : '',
+        ]);
         break;
       }
       case 'usage': {
@@ -616,6 +658,64 @@ export class WebSession {
       return undefined;
     }
     return displayContentToString(result);
+  }
+
+  /**
+   * Offers the browser any document the agent has just written.
+   *
+   * A path is only announced once per modification, because a tool
+   * response repeats material the browser already has.
+   */
+  private announceDocuments(texts: string[]): void {
+    const seen = new Set<string>();
+    for (const text of texts) {
+      if (!text) {
+        continue;
+      }
+      for (const match of text.matchAll(
+        /(?:[A-Za-z]:)?[^\s"'`()[\]{}<>|,;]+\.[A-Za-z0-9]{2,5}/g,
+      )) {
+        const candidate = match[0];
+        const extension = candidate
+          .slice(candidate.lastIndexOf('.'))
+          .toLowerCase();
+        const kind = PREVIEW_EXTENSIONS[extension];
+        if (!kind || seen.has(candidate)) {
+          continue;
+        }
+        seen.add(candidate);
+        const absolute = isAbsolute(candidate)
+          ? candidate
+          : resolve(this.cwd, candidate);
+        let modified: number;
+        try {
+          if (!existsSync(absolute) || !statSync(absolute).isFile()) {
+            continue;
+          }
+          modified = statSync(absolute).mtimeMs;
+        } catch {
+          continue;
+        }
+        if (this.announcedFiles.get(absolute) === modified) {
+          continue;
+        }
+        this.announcedFiles.set(absolute, modified);
+        this.emit({
+          type: 'file_created',
+          file: {
+            name:
+              this.cwd && absolute.startsWith(this.cwd)
+                ? absolute.slice(this.cwd.length + 1)
+                : basename(absolute),
+            path: absolute,
+            kind,
+            // A PDF goes straight through; the office formats are turned
+            // into one by the server.
+            previewable: true,
+          },
+        });
+      }
+    }
   }
 
   private truncate(text: string): { text: string; truncated: boolean } {

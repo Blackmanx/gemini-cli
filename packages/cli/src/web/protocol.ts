@@ -116,6 +116,22 @@ export interface WebAttachment {
   data?: string;
   /** The absolute path of a file that already lives on disk. */
   path?: string;
+  /** A folder the user attached, rather than a single file. */
+  kind?: 'file' | 'folder';
+  /** How many files a folder holds. */
+  fileCount?: number;
+}
+
+/** A file the agent wrote, offered to the browser as a preview. */
+export interface WebGeneratedFile {
+  /** The file's name, e.g. "reports/q3.pdf". */
+  name: string;
+  /** The absolute path on disk. */
+  path: string;
+  /** What kind of document it is. */
+  kind: 'pdf' | 'document' | 'presentation' | 'spreadsheet' | 'other';
+  /** Whether the server can turn it into something the browser shows. */
+  previewable: boolean;
 }
 
 /** Events pushed from the server to the browser. */
@@ -155,6 +171,11 @@ export type ServerEvent =
       output: string;
       truncated: boolean;
       kind?: 'diff';
+    }
+  | {
+      /** A document the agent wrote, ready to preview or open. */
+      type: 'file_created';
+      file: WebGeneratedFile;
     }
   | { type: 'confirmation_request'; request: WebConfirmationRequest }
   | { type: 'confirmation_resolved'; id: string; confirmed: boolean }

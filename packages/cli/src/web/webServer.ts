@@ -5,8 +5,13 @@
  */
 
 import http from 'node:http';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { basename, dirname, extname, join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
   Logger,
@@ -152,6 +157,8 @@ export class WebServer {
   private confirmationCounter = 0;
   /** Stops the listener that answers the agent's confirmations. */
   private busController: AbortController | undefined;
+  /** Conversions in flight, so the same document is not twice converted. */
+  private readonly conversions = new Map<string, Promise<string>>();
 
   constructor(private readonly options: WebServerOptions) {
     this.host = options.host ?? '127.0.0.1';
@@ -559,8 +566,144 @@ export class WebServer {
       await this.handleUpload(req, res);
       return;
     }
+    if (path === '/api/preview') {
+      await this.servePreview(req, res);
+      return;
+    }
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
+  }
+
+  /**
+   * Serves a document the agent wrote.
+   *
+   * A PDF is sent as it is. A Word, PowerPoint or Excel file is turned
+   * into a PDF in the temporary directory first, because the browser
+   * cannot show those, and the conversion is cached until the document
+   * changes.
+   */
+  private async servePreview(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): Promise<void> {
+    const url = new URL(req.url ?? '/', this.url());
+    const requested = url.searchParams.get('path');
+    if (!requested) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      res.end('A path is required');
+      return;
+    }
+
+    const target = resolve(requested.replace(/^~(?=$|[\\/])/, homedir()));
+    if (!this.isPreviewablePath(target)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain' });
+      res.end('That path is outside the workspace');
+      return;
+    }
+    if (!existsSync(target) || !statSync(target).isFile()) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not found');
+      return;
+    }
+
+    const extension = extname(target).toLowerCase();
+    let pdf = target;
+    if (extension !== '.pdf') {
+      try {
+        pdf = await this.convertToPdf(target);
+      } catch (error) {
+        res.writeHead(415, { 'Content-Type': 'text/plain' });
+        res.end(
+          `This file cannot be shown in the browser: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return;
+      }
+    }
+
+    const { size } = statSync(pdf);
+    res.writeHead(200, {
+      'Content-Type': 'application/pdf',
+      'Content-Length': size,
+      // The file is on the user's own machine; nothing here is markup.
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': `inline; filename="${basename(pdf)}"`,
+      'Cache-Control': 'no-store',
+    });
+    createReadStream(pdf).pipe(res);
+  }
+
+  /** Whether a path may be read back to the browser. */
+  private isPreviewablePath(target: string): boolean {
+    const roots = [this.options.cwd, tmpdir(), this.uploadDir()];
+    return roots.some(
+      (root) =>
+        target === root ||
+        target.startsWith(root.endsWith('/') ? root : `${root}/`),
+    );
+  }
+
+  /** Turns a document into a PDF in the temporary directory. */
+  private async convertToPdf(source: string): Promise<string> {
+    const directory = join(tmpdir(), 'gemini-web-previews');
+    await mkdir(directory, { recursive: true });
+    const hash = createHash('sha1').update(source).digest('hex');
+    const target = join(directory, `${hash}.pdf`);
+
+    if (
+      existsSync(target) &&
+      statSync(target).mtimeMs >= statSync(source).mtimeMs
+    ) {
+      return target;
+    }
+
+    const running = this.conversions.get(source);
+    if (running) {
+      return running;
+    }
+
+    const conversion = (async () => {
+      // LibreOffice writes `<name>.pdf` next to the source name, so it is
+      // converted into a directory of its own and then moved into place.
+      const staging = join(directory, `${hash}-in`);
+      await rm(staging, { recursive: true, force: true });
+      await mkdir(staging, { recursive: true });
+      try {
+        await promisify(execFile)(
+          'soffice',
+          [
+            '--headless',
+            '--norestore',
+            '--convert-to',
+            'pdf',
+            '--outdir',
+            staging,
+            source,
+          ],
+          { timeout: 120_000 },
+        );
+        const produced = join(
+          staging,
+          `${basename(source, extname(source))}.pdf`,
+        );
+        if (!existsSync(produced)) {
+          throw new Error('LibreOffice did not produce a PDF');
+        }
+        await rm(target, { force: true });
+        await promisify(execFile)('mv', [produced, target]);
+        return target;
+      } finally {
+        await rm(staging, { recursive: true, force: true });
+      }
+    })();
+
+    this.conversions.set(source, conversion);
+    try {
+      return await conversion;
+    } finally {
+      this.conversions.delete(source);
+    }
   }
 
   /**
@@ -607,7 +750,14 @@ export class WebServer {
     }
 
     const name = this.readUploadName(req) ?? 'attachment';
-    const target = join(this.uploadDir(), this.safeName(name));
+    // A folder is uploaded one file at a time under the folder's own
+    // relative path, so the agent receives the tree it was shown.
+    const relativeDir = this.readUploadDir(req);
+    const target = join(
+      this.uploadDir(),
+      relativeDir ? this.safeRelativePath(relativeDir) : '',
+      this.safeName(name),
+    );
 
     try {
       await mkdir(dirname(target), { recursive: true });
@@ -634,6 +784,7 @@ export class WebServer {
         path: target,
         size,
         mimeType,
+        ...(relativeDir ? { kind: 'file' as const } : {}),
       } satisfies WebAttachment),
     );
   }
@@ -646,6 +797,25 @@ export class WebServer {
     }
     const name = new URLSearchParams(query).get('name');
     return name ?? undefined;
+  }
+
+  /** The folder an upload belongs to, when it is part of one. */
+  private readUploadDir(req: http.IncomingMessage): string | undefined {
+    const query = (req.url ?? '').split('?')[1];
+    if (!query) {
+      return undefined;
+    }
+    const dir = new URLSearchParams(query).get('dir');
+    return dir ?? undefined;
+  }
+
+  /** A relative path that cannot walk out of the upload directory. */
+  private safeRelativePath(input: string): string {
+    return input
+      .split(/[\\/]+/)
+      .filter((part) => part.length > 0 && part !== '.' && part !== '..')
+      .map((part) => this.safeName(part))
+      .join('/');
   }
 
   /** Where uploads are stored. */

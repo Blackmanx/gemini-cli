@@ -70,3 +70,22 @@ describe('renderMarkdown', () => {
     expect(html).toContain('href="https://example.com/docs"');
   });
 });
+
+describe('tables', () => {
+  it('wraps a table so its cells can be copied in one go', () => {
+    const html = renderMarkdown(
+      '| Model | Reqs |\n| --- | --- |\n| pro | 3 |\n| flash | 5 |\n',
+    );
+
+    expect(html).toContain('class="table-wrap"');
+    expect(html).toContain('class="table-copy"');
+    expect(html).toContain('<table>');
+    expect(html).toContain('<td>pro</td>');
+    expect(html).toContain('<td>flash</td>');
+  });
+
+  it('leaves text that is not a table alone', () => {
+    const html = renderMarkdown('no tables here');
+    expect(html).not.toContain('table-wrap');
+  });
+});

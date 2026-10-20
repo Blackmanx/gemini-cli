@@ -5,6 +5,9 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { WebSession, type WebAgent } from './webSession.js';
 import type { AgentEvent, Config, ContentPart } from '@google/gemini-cli-core';
 import type { LoadedSettings } from '../config/settings.js';
@@ -184,6 +187,75 @@ describe('WebSession', () => {
       throw new Error('no error');
     }
     expect(error.message).toBe('API key not valid.');
+  });
+
+  it('offers a document the agent wrote to the browser', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'web-files-'));
+    const document = join(dir, 'informe.pdf');
+    writeFileSync(document, 'pdf');
+    const session = new WebSession(config, settings, dir);
+    const events: ServerEvent[] = [];
+    session.addClient({ send: (event) => events.push(event) });
+
+    const announce = (
+      session as unknown as { announceDocuments(texts: string[]): void }
+    ).announceDocuments.bind(session);
+    announce([`He creado ${document}`]);
+
+    const created = events.find((event) => event.type === 'file_created');
+    expect(created).toBeDefined();
+    if (created?.type !== 'file_created') {
+      throw new Error('no file was announced');
+    }
+    expect(created.file.path).toBe(document);
+    expect(created.file.kind).toBe('pdf');
+    expect(created.file.name).toBe('informe.pdf');
+    expect(created.file.previewable).toBe(true);
+  });
+
+  it('announces the same document only once', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'web-files-'));
+    const document = join(dir, 'cuentas.xlsx');
+    writeFileSync(document, 'cells');
+    const session = new WebSession(config, settings, dir);
+    const events: ServerEvent[] = [];
+    session.addClient({ send: (event) => events.push(event) });
+
+    const announce = (
+      session as unknown as { announceDocuments(texts: string[]): void }
+    ).announceDocuments.bind(session);
+    announce([document]);
+    announce([document]);
+
+    expect(
+      events.filter((event) => event.type === 'file_created'),
+    ).toHaveLength(1);
+  });
+
+  it('names a folder as a folder when it is attached', () => {
+    const session = new WebSession(config, settings, '/tmp');
+    const build = (
+      session as unknown as {
+        buildContent(text: string, attachments: WebAttachment[]): ContentPart[];
+      }
+    ).buildContent.bind(session);
+
+    const content = build('revisa esto', [
+      {
+        name: 'informes',
+        mimeType: 'inode/directory',
+        size: 100,
+        path: '/tmp/.gemini-web-uploads/informes',
+        kind: 'folder',
+        fileCount: 3,
+      },
+    ]);
+
+    expect(content[1]).toEqual({
+      type: 'reference',
+      text: 'Attached folder: informes (/tmp/.gemini-web-uploads/informes)',
+      uri: '/tmp/.gemini-web-uploads/informes',
+    });
   });
 
   it('turns an image attachment into inline media and a file into a reference', () => {

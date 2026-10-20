@@ -14,6 +14,7 @@ import type {
   WebCommand,
   WebConfirmationRequest,
   WebDialog,
+  WebGeneratedFile,
   WebModel,
   WebTool,
   WebToolCall,
@@ -49,6 +50,12 @@ type Entry =
       truncated?: boolean;
       outputKind?: 'diff';
     }
+  | {
+      /** A document the agent wrote, offered for preview. */
+      kind: 'file';
+      id: string;
+      file: WebGeneratedFile;
+    }
   | { kind: 'notice'; id: string; text: string; isError: boolean };
 
 /**
@@ -71,10 +78,15 @@ interface PendingAttachment {
   uploading?: boolean;
   /** Why the file could not be attached. */
   failed?: string;
+  /** How many files a folder holds. */
+  fileCount?: number;
 }
 
 let counter = 0;
 const nextId = () => `entry-${++counter}`;
+
+/** How many files a folder may hold before it is refused. */
+const MAX_FOLDER_FILES = 200;
 
 /** Reads a file as a data URL. */
 function readAsDataUrl(file: File): Promise<string> {
@@ -96,6 +108,38 @@ function isAttachment(value: unknown): value is WebAttachment {
     'path' in value &&
     typeof value.path === 'string'
   );
+}
+
+/**
+ * Copies a table so a spreadsheet can take it.
+ *
+ * Spreadsheets understand a block of tab-separated rows, and richer
+ * targets understand the table's own markup, so both go on the clipboard
+ * when the browser allows it.
+ */
+async function copyTable(table: HTMLTableElement): Promise<void> {
+  const rows = [...table.rows].map((row) =>
+    [...row.cells]
+      .map((cell) => (cell.innerText ?? '').replace(/\s+/g, ' ').trim())
+      .join('\t'),
+  );
+  const tsv = rows.join('\n');
+  const rich = table.outerHTML;
+
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/plain': new Blob([tsv], { type: 'text/plain' }),
+          'text/html': new Blob([rich], { type: 'text/html' }),
+        }),
+      ]);
+      return;
+    } catch {
+      // Fall back to plain text below.
+    }
+  }
+  await navigator.clipboard.writeText(tsv);
 }
 
 const App: React.FC = () => {
@@ -125,6 +169,7 @@ const App: React.FC = () => {
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
   // Whether a turn is running, readable from the callbacks that cannot
   // depend on it.
   const busyRef = useRef(false);
@@ -146,22 +191,29 @@ const App: React.FC = () => {
       if (!(target instanceof HTMLElement)) {
         return;
       }
-      const button = target.closest('.code-copy');
+      const button = target.closest('.code-copy, .table-copy');
       if (!(button instanceof HTMLButtonElement)) {
         return;
       }
       const code = button.parentElement?.querySelector('code');
-      if (!code?.textContent) {
-        return;
-      }
-      void navigator.clipboard.writeText(code.textContent).then(() => {
+      const table = button.parentElement?.querySelector('table');
+      const done = () => {
+        const label = button.dataset['label'] ?? button.textContent ?? 'Copy';
+        button.dataset['label'] = label;
         button.textContent = 'Copied';
         button.classList.add('copied');
         setTimeout(() => {
-          button.textContent = 'Copy';
+          button.textContent = label;
           button.classList.remove('copied');
         }, 1500);
-      });
+      };
+      if (code?.textContent) {
+        void navigator.clipboard.writeText(code.textContent).then(done);
+        return;
+      }
+      if (table instanceof HTMLTableElement) {
+        void copyTable(table).then(done);
+      }
     };
     node.addEventListener('click', onClick);
     return () => node.removeEventListener('click', onClick);
@@ -317,6 +369,24 @@ const App: React.FC = () => {
               : entry,
           ),
         );
+        break;
+      case 'file_created':
+        setEntries((prev) => {
+          const index = prev.findIndex(
+            (entry) =>
+              entry.kind === 'file' && entry.file.path === event.file.path,
+          );
+          if (index >= 0) {
+            const existing = prev[index];
+            const updated: Entry = {
+              kind: 'file',
+              id: existing.id,
+              file: event.file,
+            };
+            return [...prev.slice(0, index), updated, ...prev.slice(index + 1)];
+          }
+          return [...prev, { kind: 'file', id: nextId(), file: event.file }];
+        });
         break;
       case 'tool_output':
         setEntries((prev) =>
@@ -567,6 +637,113 @@ const App: React.FC = () => {
     }
   }, []);
 
+  /**
+   * Attaches a folder, keeping its shape.
+   *
+   * The browser does not tell a page where a folder lives, so the files
+   * are uploaded under their own relative paths and the agent is handed
+   * the folder that holds them.
+   */
+  const attachFolder = useCallback(async (files: FileList | File[]) => {
+    const list = Array.from(files).filter((file) => file.size > 0);
+    if (list.length === 0) {
+      return;
+    }
+    if (list.length > MAX_FOLDER_FILES) {
+      setError(
+        `That folder holds ${list.length} files; at most ${MAX_FOLDER_FILES} can be attached.`,
+      );
+      return;
+    }
+
+    const id = nextId();
+    const first = list[0];
+    const relative = first.webkitRelativePath || first.name;
+    const rootName = relative.split('/')[0] ?? first.name;
+
+    setAttachments((prev) => [
+      ...prev,
+      {
+        id,
+        name: rootName,
+        mimeType: 'inode/directory',
+        size: list.reduce((total, file) => total + file.size, 0),
+        uploading: true,
+      },
+    ]);
+
+    try {
+      let folderPath: string | undefined;
+      for (const file of list) {
+        if (file.size > MAX_ATTACHMENT_SIZE) {
+          continue;
+        }
+        const path = file.webkitRelativePath || file.name;
+        const parts = path.split('/');
+        const directory = parts.slice(0, -1).join('/');
+        const query = new URLSearchParams({ name: parts.at(-1) ?? file.name });
+        if (directory) {
+          query.set('dir', directory);
+        }
+        const response = await fetch(`/api/upload?${query.toString()}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': file.type || 'application/octet-stream',
+          },
+          body: file,
+        });
+        if (!response.ok) {
+          const body: unknown = await response.json().catch(() => undefined);
+          throw new Error(
+            body && typeof body === 'object' && 'error' in body
+              ? String(body.error)
+              : 'The folder could not be uploaded.',
+          );
+        }
+        const body: unknown = await response.json();
+        if (isAttachment(body) && body.path && folderPath === undefined) {
+          const normalized = body.path.replace(/\\/g, '/');
+          folderPath = `${normalized.slice(0, normalized.length - path.length - 1)}/${rootName}`;
+        }
+      }
+
+      setAttachments((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                uploading: false,
+                fileCount: list.length,
+                uploaded: {
+                  name: rootName,
+                  mimeType: 'inode/directory',
+                  size: list.reduce((total, file) => total + file.size, 0),
+                  path: folderPath,
+                  kind: 'folder',
+                  fileCount: list.length,
+                },
+              }
+            : item,
+        ),
+      );
+    } catch (uploadError) {
+      setAttachments((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                uploading: false,
+                failed:
+                  uploadError instanceof Error
+                    ? uploadError.message
+                    : 'The folder could not be uploaded.',
+              }
+            : item,
+        ),
+      );
+    }
+  }, []);
+
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => prev.filter((item) => item.id !== id));
   }, []);
@@ -808,6 +985,9 @@ const App: React.FC = () => {
                 />
               );
             }
+            if (entry.kind === 'file') {
+              return <FileCard key={entry.id} file={entry.file} />;
+            }
             if (entry.kind === 'tool') {
               return (
                 <ToolCallView
@@ -897,7 +1077,11 @@ const App: React.FC = () => {
                     <img src={attachment.preview} alt={attachment.name} />
                   ) : (
                     <span className="attachment-icon" aria-hidden="true">
-                      {attachment.uploading ? '⋯' : '📄'}
+                      {attachment.uploading
+                        ? '⋯'
+                        : attachment.mimeType === 'inode/directory'
+                          ? '🗂'
+                          : '📄'}
                     </span>
                   )}
                   <div className="attachment-meta">
@@ -906,7 +1090,9 @@ const App: React.FC = () => {
                       {attachment.failed ??
                         (attachment.uploading
                           ? 'Uploading…'
-                          : formatSize(attachment.size))}
+                          : attachment.uploaded?.kind === 'folder'
+                            ? `${attachment.uploaded.fileCount ?? attachment.fileCount ?? 0} files · ${formatSize(attachment.size)}`
+                            : formatSize(attachment.size))}
                     </span>
                   </div>
                   <button
@@ -934,12 +1120,33 @@ const App: React.FC = () => {
                 event.target.value = '';
               }}
             />
+            <input
+              ref={folderInputRef}
+              type="file"
+              hidden
+              // A folder picker is a file picker that keeps the tree.
+              // React does not know the attribute, so it is set as one.
+              {...{ webkitdirectory: '', directory: '' }}
+              onChange={(event) => {
+                if (event.target.files?.length) {
+                  void attachFolder(event.target.files);
+                }
+                event.target.value = '';
+              }}
+            />
             <button
               className="icon-button"
               title="Attach files"
               onClick={() => fileInputRef.current?.click()}
             >
               📎
+            </button>
+            <button
+              className="icon-button"
+              title="Attach a folder"
+              onClick={() => folderInputRef.current?.click()}
+            >
+              🗂
             </button>
             <textarea
               ref={inputRef}
@@ -1004,6 +1211,69 @@ const App: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * A document the agent wrote.
+ *
+ * A PDF is shown in place, because the browser can render it. A Word,
+ * PowerPoint or Excel file is turned into one by the server on the way,
+ * so the preview is the same either way; the original is still one click
+ * away.
+ */
+const FileCard: React.FC<{ file: WebGeneratedFile }> = ({ file }) => {
+  const [open, setOpen] = useState(false);
+  const src = `/api/preview?path=${encodeURIComponent(file.path)}`;
+  const label =
+    file.kind === 'pdf'
+      ? 'PDF'
+      : file.kind === 'document'
+        ? 'Document'
+        : file.kind === 'presentation'
+          ? 'Presentation'
+          : file.kind === 'spreadsheet'
+            ? 'Spreadsheet'
+            : 'File';
+
+  return (
+    <div className="row file-row">
+      <div className="avatar file-avatar" aria-hidden="true">
+        ▤
+      </div>
+      <div className="file-card">
+        <div className="file-head">
+          <span className="file-name" title={file.path}>
+            {file.name}
+          </span>
+          <span className="file-kind">{label}</span>
+          <button
+            className="button"
+            onClick={() => setOpen(!open)}
+            title="Show the document in the transcript"
+          >
+            {open ? 'Hide' : 'Preview'}
+          </button>
+          <a
+            className="button"
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            title="Open in a new tab"
+          >
+            Open
+          </a>
+        </div>
+        {open && (
+          <iframe
+            className="file-preview"
+            src={src}
+            title={file.name}
+            loading="lazy"
+          />
+        )}
       </div>
     </div>
   );
