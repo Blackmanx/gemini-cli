@@ -106,6 +106,11 @@ export class WebSession {
   private toolStartedAt = new Map<string, number>();
   /** Documents already offered to the browser, by path and modification. */
   private readonly announcedFiles = new Map<string, number>();
+  /** Documents seen during the turn, waiting for it to end. */
+  private readonly turnDocuments = new Map<
+    string,
+    { path: string; kind: WebGeneratedFile['kind']; modified: number }
+  >();
   /** The text of the message being streamed, so chunks accumulate. */
   private messageBuffer = '';
   /** Resolves when the agent ends the current turn. */
@@ -380,10 +385,6 @@ export class WebSession {
           } else if (part.type === 'thought') {
             this.emit({ type: 'agent_thought', text: part.thought });
           }
-          // The answer often says where the document it wrote went.
-          if (part.type === 'text') {
-            this.announceDocuments([part.text]);
-          }
         }
         break;
       }
@@ -465,8 +466,9 @@ export class WebSession {
         }
 
         // A tool that writes a document leaves a path behind: in its
-        // arguments, in a diff, or in what it printed.
-        this.announceDocuments([
+        // arguments, in a diff, or in what it printed. It is only noted
+        // here; the cards go up when the turn is over.
+        this.collectDocuments([
           JSON.stringify(this.currentToolCalls.get(callId)?.args ?? {}),
           output?.text ?? '',
           event.display?.result?.type === 'diff'
@@ -505,7 +507,9 @@ export class WebSession {
         break;
       }
       case 'agent_end': {
-        // Close the streamed message so the browser stops merging chunks.
+        // Close the streamed message so the browser stops merging chunks;
+        // this has to come before the documents, or the browser would put
+        // the last chunk after them as if it were a new message.
         if (this.messageBuffer) {
           this.emit({
             type: 'agent_message',
@@ -513,6 +517,9 @@ export class WebSession {
             streaming: false,
           });
         }
+        // The answer is complete now, so it is finally known which
+        // documents it produced and which of them matter.
+        this.announceTurnDocuments();
         this.messageBuffer = '';
         this.turnFinished?.();
         break;
@@ -675,15 +682,67 @@ export class WebSession {
    * A path is only announced once per modification, because a tool
    * response repeats material the browser already has.
    */
-  private announceDocuments(texts: string[]): void {
-    const seen = new Set<string>();
-    for (const text of texts) {
-      if (!text) {
+  /**
+   * Notes the documents a tool has just written.
+   *
+   * Nothing is shown yet: a turn creates working files (a test, a
+   * template) that are not the point of the answer. The cards are put up
+   * when the turn ends, and only for what the answer talks about.
+   */
+  private collectDocuments(texts: string[]): void {
+    for (const document of this.documentsIn(texts)) {
+      this.turnDocuments.set(document.path, document);
+    }
+  }
+
+  /** Puts up the cards for the documents this turn produced. */
+  private announceTurnDocuments(): void {
+    // What the answer points at is what the user asked for; a working
+    // file it never mentions is not.
+    const mentioned = this.documentsIn([this.messageBuffer]);
+    const chosen =
+      mentioned.length > 0
+        ? mentioned
+        : [...this.turnDocuments.values()]
+            .sort((one, other) => other.modified - one.modified)
+            .slice(0, 1);
+
+    for (const document of chosen) {
+      if (this.announcedFiles.get(document.path) === document.modified) {
         continue;
       }
-      // Most chunks carry no path at all, and a stat for every one of them
-      // would be wasted work while the answer streams in.
-      if (!/\.[A-Za-z0-9]{2,5}\b/.test(text)) {
+      this.announcedFiles.set(document.path, document.modified);
+      this.emit({
+        type: 'file_created',
+        file: {
+          name:
+            this.cwd && document.path.startsWith(this.cwd)
+              ? document.path.slice(this.cwd.length + 1)
+              : basename(document.path),
+          path: document.path,
+          kind: document.kind,
+          // A PDF goes straight through; the office formats are turned
+          // into one by the server.
+          previewable: true,
+        },
+      });
+    }
+
+    this.turnDocuments.clear();
+  }
+
+  /** The documents a piece of text names, if they are on disk. */
+  private documentsIn(texts: string[]): Array<{
+    path: string;
+    kind: WebGeneratedFile['kind'];
+    modified: number;
+  }> {
+    const found = new Map<
+      string,
+      { path: string; kind: WebGeneratedFile['kind']; modified: number }
+    >();
+    for (const text of texts) {
+      if (!text || !/\.[A-Za-z0-9]{2,5}\b/.test(text)) {
         continue;
       }
       for (const match of text.matchAll(
@@ -694,42 +753,27 @@ export class WebSession {
           .slice(candidate.lastIndexOf('.'))
           .toLowerCase();
         const kind = PREVIEW_EXTENSIONS[extension];
-        if (!kind || seen.has(candidate)) {
+        if (!kind) {
           continue;
         }
-        seen.add(candidate);
         const absolute = isAbsolute(candidate)
           ? candidate
           : resolve(this.cwd, candidate);
-        let modified: number;
         try {
           if (!existsSync(absolute) || !statSync(absolute).isFile()) {
             continue;
           }
-          modified = statSync(absolute).mtimeMs;
-        } catch {
-          continue;
-        }
-        if (this.announcedFiles.get(absolute) === modified) {
-          continue;
-        }
-        this.announcedFiles.set(absolute, modified);
-        this.emit({
-          type: 'file_created',
-          file: {
-            name:
-              this.cwd && absolute.startsWith(this.cwd)
-                ? absolute.slice(this.cwd.length + 1)
-                : basename(absolute),
+          found.set(absolute, {
             path: absolute,
             kind,
-            // A PDF goes straight through; the office formats are turned
-            // into one by the server.
-            previewable: true,
-          },
-        });
+            modified: statSync(absolute).mtimeMs,
+          });
+        } catch {
+          // A path that cannot be read is not a document to show.
+        }
       }
     }
+    return [...found.values()];
   }
 
   private truncate(text: string): { text: string; truncated: boolean } {

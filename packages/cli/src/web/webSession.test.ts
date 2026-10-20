@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSession, type WebAgent } from './webSession.js';
@@ -189,28 +189,74 @@ describe('WebSession', () => {
     expect(error.message).toBe('API key not valid.');
   });
 
-  it('offers a document the agent wrote to the browser', () => {
+  it('offers, at the end, the document the answer talks about', () => {
     const dir = mkdtempSync(join(tmpdir(), 'web-files-'));
-    const document = join(dir, 'informe.pdf');
-    writeFileSync(document, 'pdf');
+    const working = join(dir, 'test-grid-w.docx');
+    const final = join(dir, 'informe.pdf');
+    writeFileSync(working, 'draft');
+    writeFileSync(final, 'pdf');
     const session = new WebSession(config, settings, dir);
     const events: ServerEvent[] = [];
     session.addClient({ send: (event) => events.push(event) });
 
-    const announce = (
-      session as unknown as { announceDocuments(texts: string[]): void }
-    ).announceDocuments.bind(session);
-    announce([`He creado ${document}`]);
+    const collect = (
+      session as unknown as { collectDocuments(texts: string[]): void }
+    ).collectDocuments.bind(session);
+    const handleEvent = (
+      session as unknown as { handleEvent(event: unknown): void }
+    ).handleEvent.bind(session);
 
-    const created = events.find((event) => event.type === 'file_created');
-    expect(created).toBeDefined();
-    if (created?.type !== 'file_created') {
+    collect([`borrador en ${working}`]);
+    collect([`documento en ${final}`]);
+
+    // Nothing is shown while the turn is still running.
+    expect(
+      events.filter((event) => event.type === 'file_created'),
+    ).toHaveLength(0);
+
+    (session as unknown as { messageBuffer: string }).messageBuffer =
+      `Listo. El documento está en ${final}`;
+    handleEvent({ type: 'agent_end' });
+
+    const created = events.filter((event) => event.type === 'file_created');
+    expect(created).toHaveLength(1);
+    if (created[0]?.type !== 'file_created') {
       throw new Error('no file was announced');
     }
-    expect(created.file.path).toBe(document);
-    expect(created.file.kind).toBe('pdf');
-    expect(created.file.name).toBe('informe.pdf');
-    expect(created.file.previewable).toBe(true);
+    expect(created[0].file.path).toBe(final);
+    expect(created[0].file.kind).toBe('pdf');
+    expect(created[0].file.name).toBe('informe.pdf');
+    expect(created[0].file.previewable).toBe(true);
+  });
+
+  it('shows the newest document when the answer names none', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'web-files-'));
+    const older = join(dir, 'plantilla.docx');
+    const newer = join(dir, 'cuentas.xlsx');
+    writeFileSync(older, 'a');
+    writeFileSync(newer, 'b');
+    const past = new Date(Date.now() - 60_000);
+    utimesSync(older, past, past);
+
+    const session = new WebSession(config, settings, dir);
+    const events: ServerEvent[] = [];
+    session.addClient({ send: (event) => events.push(event) });
+    const collect = (
+      session as unknown as { collectDocuments(texts: string[]): void }
+    ).collectDocuments.bind(session);
+    const handleEvent = (
+      session as unknown as { handleEvent(event: unknown): void }
+    ).handleEvent.bind(session);
+
+    collect([older, newer]);
+    handleEvent({ type: 'agent_end' });
+
+    const created = events.filter((event) => event.type === 'file_created');
+    expect(created).toHaveLength(1);
+    if (created[0]?.type !== 'file_created') {
+      throw new Error('no file was announced');
+    }
+    expect(created[0].file.path).toBe(newer);
   });
 
   it('announces the same document only once', () => {
@@ -220,12 +266,17 @@ describe('WebSession', () => {
     const session = new WebSession(config, settings, dir);
     const events: ServerEvent[] = [];
     session.addClient({ send: (event) => events.push(event) });
+    const collect = (
+      session as unknown as { collectDocuments(texts: string[]): void }
+    ).collectDocuments.bind(session);
+    const handleEvent = (
+      session as unknown as { handleEvent(event: unknown): void }
+    ).handleEvent.bind(session);
 
-    const announce = (
-      session as unknown as { announceDocuments(texts: string[]): void }
-    ).announceDocuments.bind(session);
-    announce([document]);
-    announce([document]);
+    collect([document]);
+    handleEvent({ type: 'agent_end' });
+    collect([document]);
+    handleEvent({ type: 'agent_end' });
 
     expect(
       events.filter((event) => event.type === 'file_created'),
