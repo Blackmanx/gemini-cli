@@ -215,7 +215,7 @@ if (argv.has('--skip-build')) {
 const manifest = {
   name: packageName,
   version,
-  description: 'Gemini CLI (omp port) - self-contained bundle',
+  description: 'Gemini CLI - self-contained bundle',
   type: 'module',
   bin: { gemini: './gemini.js' },
   // Everything is bundled; there are no runtime dependencies to resolve, and
@@ -318,7 +318,7 @@ if (shouldRelease) {
   }
 
   const assets = [tarball, zipPath];
-  const notes = `Gemini CLI (omp port) ${version}.
+  const notes = `Gemini CLI ${version}.
 
 Unzip and symlink (no npm permissions needed):
 
