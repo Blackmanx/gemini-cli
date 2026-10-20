@@ -118,6 +118,46 @@ function isAttachment(value: unknown): value is WebAttachment {
  * targets understand the table's own markup, so both go on the clipboard
  * when the browser allows it.
  */
+/**
+ * Copies text the old way, for when the clipboard API refuses.
+ *
+ * The modern API needs the document to be focused and the permission to
+ * be granted; a click on a page normally has both, but not always (an
+ * embedded frame, a browser that is strict about it). A hidden textarea
+ * and the old copy command still work there.
+ */
+function copyWithTextarea(text: string): boolean {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.top = '-1000px';
+  area.style.opacity = '0';
+  document.body.append(area);
+  area.select();
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch {
+    copied = false;
+  }
+  area.remove();
+  return copied;
+}
+
+/** Puts text on the clipboard, whichever way works. */
+async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    if (copyWithTextarea(text)) {
+      return;
+    }
+    throw new Error('The clipboard refused the copy.');
+  }
+}
+
 async function copyTable(table: HTMLTableElement): Promise<void> {
   const rows = [...table.rows].map((row) =>
     [...row.cells]
@@ -127,7 +167,7 @@ async function copyTable(table: HTMLTableElement): Promise<void> {
   const tsv = rows.join('\n');
   const rich = table.outerHTML;
 
-  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -140,7 +180,7 @@ async function copyTable(table: HTMLTableElement): Promise<void> {
       // Fall back to plain text below.
     }
   }
-  await navigator.clipboard.writeText(tsv);
+  await copyText(tsv);
 }
 
 const App: React.FC = () => {
@@ -197,24 +237,35 @@ const App: React.FC = () => {
       if (!(button instanceof HTMLButtonElement)) {
         return;
       }
-      const code = button.parentElement?.querySelector('code');
-      const table = button.parentElement?.querySelector('table');
-      const done = () => {
+      const done = (copied: boolean) => {
         const label = button.dataset['label'] ?? button.textContent ?? 'Copy';
         button.dataset['label'] = label;
-        button.textContent = 'Copied';
-        button.classList.add('copied');
+        button.textContent = copied ? 'Copied' : 'Copy failed';
+        button.classList.toggle('copied', copied);
         setTimeout(() => {
           button.textContent = label;
           button.classList.remove('copied');
         }, 1500);
       };
-      if (code?.textContent) {
-        void navigator.clipboard.writeText(code.textContent).then(done);
+
+      // Which button it is says what to copy. Looking for a `code` element
+      // inside the container is not enough: a table's cells often hold
+      // inline code, and that is not what the reader asked for.
+      if (button.classList.contains('table-copy')) {
+        const table = button.closest('.table-wrap')?.querySelector('table');
+        if (table instanceof HTMLTableElement) {
+          void copyTable(table)
+            .then(() => done(true))
+            .catch(() => done(false));
+        }
         return;
       }
-      if (table instanceof HTMLTableElement) {
-        void copyTable(table).then(done);
+
+      const code = button.closest('pre')?.querySelector('code');
+      if (code?.textContent) {
+        void copyText(code.textContent)
+          .then(() => done(true))
+          .catch(() => done(false));
       }
     };
     node.addEventListener('click', onClick);

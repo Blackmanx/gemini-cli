@@ -273,33 +273,32 @@ select {
   margin: 0;
 }
 
-/* A little room on the right for the copy button. */
-.table-wrap thead th:last-child,
-.table-wrap tbody td:last-child {
-  padding-right: 96px;
+/* The bar under the table, so the button never sits under the message's
+   own copy button. */
+.table-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 5px 8px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
 }
 
 .table-copy {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 3px 9px;
+  padding: 2px 9px;
   font-family: var(--sans);
   font-size: 10.5px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-faint);
   background: var(--bg-hover);
-  border: none;
-  border-bottom-left-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  transition: color 0.12s ease;
 }
 
-.table-wrap:hover .table-copy,
-.table-copy:focus {
-  opacity: 1;
+.table-copy:hover {
+  color: var(--text);
 }
 
 .table-copy.copied {

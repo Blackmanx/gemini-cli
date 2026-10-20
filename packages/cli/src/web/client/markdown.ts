@@ -102,12 +102,19 @@ function withTableCopy(html: string): string {
   for (const table of template.content.querySelectorAll('table')) {
     const wrapper = document.createElement('div');
     wrapper.className = 'table-wrap';
+
+    const bar = document.createElement('div');
+    bar.className = 'table-bar';
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'table-copy';
     button.textContent = 'Copy as table';
+    bar.append(button);
+
     table.replaceWith(wrapper);
-    wrapper.append(button, table);
+    // The bar goes under the table: at the top right it would sit under
+    // the message's own copy button.
+    wrapper.append(table, bar);
   }
   return template.innerHTML;
 }

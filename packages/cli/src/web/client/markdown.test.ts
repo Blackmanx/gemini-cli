@@ -78,6 +78,9 @@ describe('tables', () => {
     );
 
     expect(html).toContain('class="table-wrap"');
+    // The button lives in its own bar under the table, where it cannot sit
+    // under the message's copy button.
+    expect(html).toContain('class="table-bar"');
     expect(html).toContain('class="table-copy"');
     expect(html).toContain('<table>');
     expect(html).toContain('<td>pro</td>');
