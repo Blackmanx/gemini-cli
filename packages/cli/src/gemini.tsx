@@ -84,6 +84,7 @@ import {
 } from './core/initializer.js';
 import { validateAuthMethod } from './config/auth.js';
 import { runAcpClient } from './acp/acpStdioTransport.js';
+import { runWebServer } from './web/webMode.js';
 import { validateNonInteractiveAuth } from './validateNonInterActiveAuth.js';
 import { appEvents, AppEvent } from './utils/events.js';
 import {
@@ -883,6 +884,13 @@ export async function main() {
 
     if (config.getAcpMode()) {
       return runAcpClient(config, settings, argv);
+    }
+
+    if (argv.web) {
+      // The web server drives the same agent as the terminal, so it needs
+      // the tool registry and the rest of the runtime set up first.
+      await config.initialize();
+      return runWebServer(config, settings, argv);
     }
 
     let input = config.getQuestion();

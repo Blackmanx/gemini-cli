@@ -100,6 +100,10 @@ export interface CliArgs {
   allowedTools: string[] | undefined;
   acp?: boolean;
   experimentalAcp?: boolean;
+  web?: boolean;
+  webPort?: number;
+  webHost?: string;
+  webOpen?: boolean;
   extensions: string[] | undefined;
   listExtensions: boolean | undefined;
   resume: string | typeof RESUME_LATEST | undefined;
@@ -383,6 +387,26 @@ export async function parseArguments(
           type: 'boolean',
           description:
             'Starts the agent in ACP mode (deprecated, use --acp instead)',
+        })
+        .option('web', {
+          type: 'boolean',
+          description:
+            'Serve the agent over a local web UI instead of the terminal',
+        })
+        .option('web-port', {
+          type: 'number',
+          description:
+            'Port for the web UI (default: an available port chosen automatically)',
+        })
+        .option('web-host', {
+          type: 'string',
+          description:
+            'Host to bind the web UI to (default: 127.0.0.1, loopback only)',
+        })
+        .option('web-open', {
+          type: 'boolean',
+          default: true,
+          description: 'Open the web UI in a browser on startup',
         })
         .option('allowed-mcp-server-names', {
           type: 'array',
