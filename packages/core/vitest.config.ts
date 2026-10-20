@@ -5,6 +5,25 @@
  */
 
 import { defineConfig } from 'vitest/config';
+import * as os from 'node:os';
+
+/**
+ * How many test processes to run at once.
+ *
+ * Each one loads the package and its dependencies, so the number of cores
+ * is a bad guide on a small virtual machine: plenty of cores, not enough
+ * memory. The number is derived from the memory instead, and can be
+ * overridden with `VITEST_MAX_FORKS`.
+ */
+function forksThatFit(): number {
+  const override = Number(process.env['VITEST_MAX_FORKS']);
+  if (Number.isFinite(override) && override > 0) {
+    return Math.floor(override);
+  }
+  const gigabytes = os.totalmem() / 1024 ** 3;
+  // About 1 GB per process, and never more than four.
+  return Math.max(1, Math.min(4, Math.floor(gigabytes / 1)));
+}
 
 export default defineConfig({
   test: {
@@ -28,7 +47,11 @@ export default defineConfig({
       junit: 'junit.xml',
     },
     coverage: {
-      enabled: true,
+      // Measuring coverage instruments every file and keeps the result in
+      // memory for the whole run. It is worth that on CI, where the report
+      // is collected, but not on a laptop, where it only makes the suite
+      // slower and heavier. Pass `--coverage.enabled` to ask for it.
+      enabled: process.env['CI'] === 'true',
       provider: 'v8',
       reportsDirectory: './coverage',
       include: ['src/**/*'],
@@ -47,7 +70,7 @@ export default defineConfig({
       // one process per core, which is more than the machine can hold.
       forks: {
         minForks: 1,
-        maxForks: 8,
+        maxForks: forksThatFit(),
       },
     },
   },
