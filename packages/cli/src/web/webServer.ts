@@ -410,6 +410,12 @@ export class WebServer {
     this.wss.on('connection', (socket: WebSocket) => {
       void this.handleSocket(socket);
     });
+    // `ws` re-emits the HTTP server's errors on its own emitter. Without a
+    // listener here that re-emit is an uncaught error, which kills the
+    // process before the retry below can pick the next port.
+    this.wss.on('error', (error: Error) => {
+      debugLogger.warn('web: websocket server error:', error);
+    });
 
     await new Promise<void>((resolve, reject) => {
       const onError = (error: NodeJS.ErrnoException) => {
@@ -423,6 +429,10 @@ export class WebServer {
             return;
           }
           this.port++;
+          // `once` took the handler off when it fired, so it has to go
+          // back on before the next attempt: a second busy port would
+          // otherwise be an uncaught error instead of another retry.
+          this.server?.once('error', onError);
           this.server?.listen(this.port, this.host, () => {
             this.server?.removeListener('error', onError);
             resolve();
@@ -483,6 +493,9 @@ export class WebServer {
         resolve();
         return;
       }
+      // A browser keeps its HTTP connection alive, and `close` waits for
+      // every connection to end, so the idle ones are dropped by hand.
+      this.server.closeAllConnections?.();
       this.server.close(() => resolve());
       this.server = undefined;
     });
