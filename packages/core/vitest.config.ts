@@ -15,6 +15,15 @@ export default defineConfig({
     pool: 'forks',
     silent: true,
     setupFiles: ['./test-setup.ts'],
+    // The expected strings in these tests are written in English, and the
+    // numbers in them are formatted the English way. The locale of the
+    // machine running them decides otherwise, so it is pinned here: the
+    // tests then check the same thing everywhere, while the CLI itself
+    // keeps the format of the user's own locale.
+    env: {
+      LANG: 'en_US.UTF-8',
+      LC_ALL: 'en_US.UTF-8',
+    },
     outputFile: {
       junit: 'junit.xml',
     },
