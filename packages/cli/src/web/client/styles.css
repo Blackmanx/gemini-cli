@@ -759,26 +759,87 @@ html[data-theme='light'] {
   color: var(--text);
 }
 
-/* A diff is coloured line by line, the way a review tool shows it. */
-.tool-output.diff {
+/* ---------- diffs, shown the way a review tool shows them ---------- */
+
+.diff {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  margin: 4px 0 10px;
+}
+
+.diff-head {
+  display: flex;
+  gap: 10px;
+  padding: 4px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-hover);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.diff-stat.add {
+  color: var(--diff-add-text);
+}
+
+.diff-stat.del {
+  color: var(--diff-del-text);
+}
+
+.diff-body {
+  max-height: 420px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.diff-line {
+  display: flex;
   white-space: pre;
+  min-width: max-content;
 }
 
-.tool-output.diff .line-add,
-.tool-output.diff .line-del {
-  display: block;
-  margin: 0 calc(-10px - 1px);
-  padding: 0 10px;
+/* The change marker, lined up so the code starts at the same column. */
+.diff-gutter {
+  flex: 0 0 24px;
+  text-align: center;
+  color: var(--text-faint);
+  user-select: none;
 }
 
-.tool-output.diff .line-add {
-  background: rgba(24, 128, 56, 0.12);
-  color: var(--success);
+.diff-text {
+  flex: 1 1 auto;
+  padding-right: 14px;
 }
 
-.tool-output.diff .line-del {
-  background: rgba(217, 48, 37, 0.12);
-  color: var(--danger);
+.diff-line.add {
+  background: var(--diff-add-bg);
+}
+
+.diff-line.add .diff-gutter,
+.diff-line.add .diff-text {
+  color: var(--diff-add-text);
+}
+
+.diff-line.del {
+  background: var(--diff-del-bg);
+}
+
+.diff-line.del .diff-gutter,
+.diff-line.del .diff-text {
+  color: var(--diff-del-text);
+}
+
+.diff-line.hunk {
+  background: var(--bg-hover);
+  color: var(--text-muted);
+}
+
+/* A changed line that is only whitespace change is still visible. */
+.diff-line.context .diff-text {
+  color: var(--text);
 }
 
 .tool-path {

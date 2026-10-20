@@ -1324,6 +1324,50 @@ const App: React.FC = () => {
 };
 
 /**
+ * A unified diff, shown the way a review tool shows one.
+ *
+ * The file header is dropped because the path is already above it, and
+ * every line gets a gutter and a tinted row, which is what makes a diff
+ * readable at a glance instead of a wall of coloured text.
+ */
+const DiffBlock: React.FC<{ text: string }> = ({ text }) => {
+  const lines = text
+    .split('\n')
+    .filter((line) => !line.startsWith('--- ') && !line.startsWith('+++ '));
+  const added = lines.filter((line) => line.startsWith('+')).length;
+  const removed = lines.filter((line) => line.startsWith('-')).length;
+
+  return (
+    <div className="diff">
+      <div className="diff-head">
+        <span className="diff-stat add">+{added}</span>
+        <span className="diff-stat del">−{removed}</span>
+      </div>
+      <div className="diff-body">
+        {lines.map((line, index) => {
+          const kind = line.startsWith('+')
+            ? 'add'
+            : line.startsWith('-')
+              ? 'del'
+              : line.startsWith('@@')
+                ? 'hunk'
+                : 'context';
+          const body = kind === 'add' || kind === 'del' ? line.slice(1) : line;
+          return (
+            <div className={`diff-line ${kind}`} key={index}>
+              <span className="diff-gutter" aria-hidden="true">
+                {kind === 'add' ? '+' : kind === 'del' ? '−' : ' '}
+              </span>
+              <span className="diff-text">{body.length > 0 ? body : ' '}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/**
  * A document the agent wrote.
  *
  * A PDF is shown in place, because the browser can render it. A Word,
@@ -1584,23 +1628,7 @@ const ToolCallView: React.FC<{
           )}
           {output !== undefined &&
             (outputKind === 'diff' ? (
-              <div className="tool-output diff">
-                {output.split('\n').map((line, index) => (
-                  <span
-                    className={
-                      line.startsWith('+')
-                        ? 'line-add'
-                        : line.startsWith('-')
-                          ? 'line-del'
-                          : undefined
-                    }
-                    key={index}
-                  >
-                    {line}
-                    {'\n'}
-                  </span>
-                ))}
-              </div>
+              <DiffBlock text={output} />
             ) : (
               <pre className="tool-output">{output}</pre>
             ))}
