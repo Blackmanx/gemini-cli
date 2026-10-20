@@ -20,7 +20,7 @@ export interface WebToolCall {
   title: string;
   /** Tool arguments, already JSON-safe. */
   args: Record<string, unknown>;
-  status: 'pending' | 'executing' | 'completed' | 'failed';
+  status: 'pending' | 'executing' | 'completed' | 'failed' | 'cancelled';
   /** The tool's kind, used to pick an icon in the client. */
   kind?: string;
   /** How long the call took, in milliseconds, once it has finished. */
@@ -166,6 +166,11 @@ export type ServerEvent =
   | { type: 'turn_started' }
   | { type: 'turn_ended'; cancelled: boolean }
   | { type: 'settings_changed' }
+  | {
+      /** The approval mode changed, possibly from the browser itself. */
+      type: 'approval_mode';
+      mode: string;
+    }
   | { type: 'error'; message: string; stack?: string }
   | { type: 'info'; message: string };
 
@@ -188,6 +193,14 @@ export type ClientRequest =
     }
   | { type: 'list_settings' }
   | { type: 'set_model'; model: string }
+  | {
+      /**
+       * How much the agent may do without asking: 'default' asks, 'auto_edit'
+       * edits files on its own, 'yolo' does anything.
+       */
+      type: 'set_approval_mode';
+      mode: string;
+    }
   | { type: 'dialog_choice'; kind: string; value: string }
   | { type: 'dialog_closed' }
   | { type: 'new_session' }

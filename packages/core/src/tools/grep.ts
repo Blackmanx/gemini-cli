@@ -26,6 +26,7 @@ import {
   type ExecuteOptions,
 } from './tools.js';
 import {
+  expandHome,
   makeRelative,
   shortenPath,
   resolveToRealPath,
@@ -312,7 +313,7 @@ class GrepToolInvocation extends BaseToolInvocation<
       if (pathParam) {
         try {
           searchDirAbs = resolveToRealPath(
-            path.resolve(this.config.getTargetDir(), pathParam),
+            path.resolve(this.config.getTargetDir(), expandHome(pathParam)),
           );
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);

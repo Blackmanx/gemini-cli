@@ -6,6 +6,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -23,6 +24,7 @@ import {
   resolveDefensiveToolPath,
   hasBlockedPathSegment,
   stripExtendedLengthPrefix,
+  expandHome,
 } from './paths.js';
 
 vi.mock('node:fs', async (importOriginal) => {
@@ -986,6 +988,20 @@ describe('normalizePath', () => {
     });
   });
 
+  describe('expandHome', () => {
+    it('expands a leading tilde to the home directory', () => {
+      expect(expandHome('~')).toBe(os.homedir());
+      expect(expandHome('~/projects')).toBe(
+        path.join(os.homedir(), 'projects'),
+      );
+    });
+
+    it('leaves a tilde that is not the start of the path alone', () => {
+      expect(expandHome('/tmp/~/x')).toBe('/tmp/~/x');
+      expect(expandHome('a~/b')).toBe('a~/b');
+    });
+  });
+
   describe('resolveDefensiveToolPath', () => {
     it('should sanitize paths by stripping null bytes', () => {
       const targetDir = '/workspace';
@@ -999,6 +1015,18 @@ describe('normalizePath', () => {
       const filePathWithNull = '@/components/Button.tsx\0';
       const result = resolveDefensiveToolPath(filePathWithNull, targetDir);
       expect(result).toBe('components/Button.tsx');
+    });
+
+    it('should expand a leading tilde to the home directory', () => {
+      const result = resolveDefensiveToolPath('~/projects', '/workspace');
+      expect(result).toBe(path.join(os.homedir(), 'projects'));
+      expect(result).not.toContain('~');
+    });
+
+    it('should leave a path that only looks like a tilde alone', () => {
+      expect(resolveDefensiveToolPath('~not-a-home/x', '/workspace')).toBe(
+        '~not-a-home/x',
+      );
     });
   });
 

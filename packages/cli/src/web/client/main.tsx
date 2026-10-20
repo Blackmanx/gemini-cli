@@ -116,6 +116,7 @@ const App: React.FC = () => {
   >('none');
   const [dialog, setDialog] = useState<WebDialog | undefined>(undefined);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [approvalMode, setApprovalMode] = useState('default');
   const [error, setError] = useState<string | undefined>();
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -204,7 +205,11 @@ const App: React.FC = () => {
         setCommands(event.commands);
         setModels(event.models);
         setTools(event.tools);
+        setApprovalMode(event.approvalMode);
         setUsage(undefined);
+        break;
+      case 'approval_mode':
+        setApprovalMode(event.mode);
         break;
       case 'user_message':
         setEntries((prev) => [
@@ -375,14 +380,26 @@ const App: React.FC = () => {
         break;
       case 'turn_ended':
         setBusy(false);
-        // The reasoning is no longer live, so it folds itself away if it
-        // grew too long to read at a glance.
+        // Nothing is running any more, so a tool that was still going was
+        // cut short: its clock stops and it says so, instead of counting
+        // up forever as if it were still working.
         setEntries((prev) =>
-          prev.map((entry) =>
-            entry.kind === 'thought' && entry.live
-              ? { ...entry, live: false }
-              : entry,
-          ),
+          prev.map((entry) => {
+            if (
+              entry.kind === 'tool' &&
+              (entry.call.status === 'executing' ||
+                entry.call.status === 'pending')
+            ) {
+              return {
+                ...entry,
+                call: { ...entry.call, status: 'cancelled' },
+              };
+            }
+            if (entry.kind === 'thought' && entry.live) {
+              return { ...entry, live: false };
+            }
+            return entry;
+          }),
         );
         break;
       case 'settings_changed':
@@ -639,6 +656,20 @@ const App: React.FC = () => {
           </div>
         </div>
         <div className="topbar-right">
+          <select
+            className="mode-select"
+            value={approvalMode}
+            onChange={(event) => {
+              const mode = event.target.value;
+              setApprovalMode(mode);
+              send({ type: 'set_approval_mode', mode });
+            }}
+            title="How much the agent may do without asking"
+          >
+            <option value="default">Ask before acting</option>
+            <option value="autoEdit">Edit files freely</option>
+            <option value="yolo">Do anything (YOLO)</option>
+          </select>
           {models.length > 0 && (
             <select
               className="model-select"
@@ -1147,7 +1178,13 @@ const ToolCallView: React.FC<{
         }}
       >
         <span className="tool-icon">
-          {status === 'completed' ? '✓' : status === 'failed' ? '✕' : '⋯'}
+          {status === 'completed'
+            ? '✓'
+            : status === 'failed'
+              ? '✕'
+              : status === 'cancelled'
+                ? '–'
+                : '⋯'}
         </span>
         <span className="tool-name">{call.title}</span>
         <span className="tool-status">{status}</span>

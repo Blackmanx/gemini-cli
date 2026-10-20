@@ -17,7 +17,7 @@ import {
   type ToolConfirmationOutcome,
   type ExecuteOptions,
 } from './tools.js';
-import { makeRelative, shortenPath } from '../utils/paths.js';
+import { expandHome, makeRelative, shortenPath } from '../utils/paths.js';
 import type { Config } from '../config/config.js';
 import { DEFAULT_FILE_FILTERING_OPTIONS } from '../config/constants.js';
 import { ToolErrorType } from './tool-error.js';
@@ -159,7 +159,7 @@ class LSToolInvocation extends BaseToolInvocation<LSToolParams, ToolResult> {
   async execute({ abortSignal: _signal }: ExecuteOptions): Promise<ToolResult> {
     const resolvedDirPath = path.resolve(
       this.config.getTargetDir(),
-      this.params.dir_path,
+      expandHome(this.params.dir_path),
     );
 
     const validationError = this.config.validatePathAccess(

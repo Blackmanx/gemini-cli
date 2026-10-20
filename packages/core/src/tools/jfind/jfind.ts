@@ -20,6 +20,7 @@ import * as path from 'node:path';
 import type { MessageBus } from '../../confirmation-bus/message-bus.js';
 import type { Config } from '../../config/config.js';
 import { getErrorMessage, isNodeError } from '../../utils/errors.js';
+import { expandHome } from '../../utils/paths.js';
 import { ToolErrorType } from '../tool-error.js';
 import { JFIND_DISPLAY_NAME, JFIND_TOOL_NAME } from '../tool-names.js';
 import {
@@ -354,7 +355,10 @@ export class JfindTool extends BaseDeclarativeTool<JfindParams, ToolResult> {
     if (params.path) {
       let resolved: string;
       try {
-        resolved = path.resolve(this.config.getTargetDir(), params.path);
+        resolved = path.resolve(
+          this.config.getTargetDir(),
+          expandHome(params.path),
+        );
       } catch (error) {
         return error instanceof Error ? error.message : String(error);
       }

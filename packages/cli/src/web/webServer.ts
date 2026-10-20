@@ -10,10 +10,14 @@ import { basename, dirname, join } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 import {
   Logger,
+  MessageBusType,
+  PolicyDecision,
+  ApprovalMode,
   Storage,
   debugLogger,
   type AgentLoopContext,
   type Config,
+  type ToolConfirmationRequest,
 } from '@google/gemini-cli-core';
 import {
   SettingScope,
@@ -46,6 +50,39 @@ import type {
 import { WebSession, type WebClient } from './webSession.js';
 import { WebConfirmationBroker, createWebUI } from './webUi.js';
 import { INDEX_HTML, CLIENT_JS, CLIENT_CSS } from './_client-assets.js';
+
+/**
+ * Reads a setting by its dot path out of a nested settings object.
+ *
+ * The settings schema names things "general.vimMode", but the file itself
+ * is nested, so a plain lookup by that name would always miss and every
+ * setting in the panel would look unset.
+ */
+function readSettingAt(
+  settings: Record<string, unknown>,
+  key: string,
+): unknown {
+  let current: unknown = settings;
+  for (const part of key.split('.')) {
+    if (typeof current !== 'object' || current === null) {
+      return undefined;
+    }
+    current = isRecord(current) ? current[part] : undefined;
+  }
+  return current;
+}
+
+/** Whether a value can be read by key. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** The modes the browser may pick, in the order it shows them. */
+const APPROVAL_MODES = [
+  ApprovalMode.DEFAULT,
+  ApprovalMode.AUTO_EDIT,
+  ApprovalMode.YOLO,
+];
 
 const DEFAULT_PORT = 7777;
 const MAX_PORT_RETRIES = 10;
@@ -105,10 +142,147 @@ export class WebServer {
   private commands: SlashCommand[] = [];
   private readonly clients = new Set<(event: ServerEvent) => void>();
   private readonly sockets = new Set<WebSocket>();
+  /** Confirmations the browser has been asked about, by their id. */
+  private readonly toolConfirmations = new Map<string, string>();
+  private confirmationCounter = 0;
+  /** Stops the listener that answers the agent's confirmations. */
+  private busController: AbortController | undefined;
 
   constructor(private readonly options: WebServerOptions) {
     this.host = options.host ?? '127.0.0.1';
     this.port = options.port ?? DEFAULT_PORT;
+  }
+
+  /**
+   * Answers the agent's tool confirmations.
+   *
+   * Before a tool runs, the agent asks the message bus whether it may. In
+   * the terminal something is listening and shows a dialog; without a
+   * listener the question goes nowhere and the tool waits for an answer
+   * that never comes, which looks exactly like a frozen command.
+   */
+  private listenForToolConfirmations(): void {
+    const bus = this.options.config.getMessageBus?.();
+    if (!bus) {
+      return;
+    }
+    const controller = new AbortController();
+    this.busController = controller;
+    bus.subscribe(
+      MessageBusType.TOOL_CONFIRMATION_REQUEST,
+      (request: ToolConfirmationRequest) => {
+        void this.askAboutTool(request);
+      },
+      { signal: controller.signal },
+    );
+  }
+
+  /** Decides, or asks the browser, whether a tool may run. */
+  private async askAboutTool(request: ToolConfirmationRequest): Promise<void> {
+    let decision: PolicyDecision | undefined;
+    if (request.forcedDecision) {
+      decision =
+        request.forcedDecision === 'allow'
+          ? PolicyDecision.ALLOW
+          : request.forcedDecision === 'deny'
+            ? PolicyDecision.DENY
+            : PolicyDecision.ASK_USER;
+    } else {
+      try {
+        decision = (
+          await this.options.config
+            .getPolicyEngine?.()
+            ?.check(
+              request.toolCall,
+              request.serverName,
+              request.toolAnnotations,
+              request.subagent,
+            )
+        )?.decision;
+      } catch (error) {
+        debugLogger.warn('web: policy check failed:', error);
+      }
+    }
+
+    if (decision === PolicyDecision.ALLOW) {
+      this.answerTool(request.correlationId, true);
+      return;
+    }
+    if (decision === PolicyDecision.DENY) {
+      this.answerTool(request.correlationId, false);
+      return;
+    }
+
+    const id = `tool-${++this.confirmationCounter}`;
+    this.toolConfirmations.set(id, request.correlationId);
+    this.broadcast({
+      type: 'confirmation_request',
+      request: {
+        id,
+        title: this.confirmationTitle(request),
+        details: this.confirmationDetails(request),
+        options: ['Allow', 'Deny'],
+        callId: request.toolCall.id,
+      },
+    });
+  }
+
+  /** Sends the agent the answer it is waiting for. */
+  private answerTool(correlationId: string, confirmed: boolean): void {
+    void this.options.config
+      .getMessageBus?.()
+      ?.publish({
+        type: MessageBusType.TOOL_CONFIRMATION_RESPONSE,
+        correlationId,
+        confirmed,
+        requiresUserConfirmation: false,
+      })
+      .catch((error: unknown) => {
+        debugLogger.warn('web: could not answer a tool confirmation:', error);
+      });
+  }
+
+  /** A one-line title for the confirmation the browser shows. */
+  private confirmationTitle(request: ToolConfirmationRequest): string {
+    const details = request.details;
+    if (details && 'title' in details && typeof details.title === 'string') {
+      return details.title;
+    }
+    return `Allow ${request.toolCall.name}?`;
+  }
+
+  /**
+   * The text under the title: the command, the file, or what the tool is.
+   */
+  private confirmationDetails(request: ToolConfirmationRequest): string {
+    const details = request.details;
+    if (!details) {
+      return JSON.stringify(request.toolCall.args ?? {}, null, 2);
+    }
+    if (details.type === 'exec') {
+      return details.command;
+    }
+    if (details.type === 'edit') {
+      return `${details.filePath}\n\n${details.fileDiff}`;
+    }
+    if (details.type === 'mcp') {
+      return `${details.serverName}: ${details.toolDisplayName}`;
+    }
+    if ('systemMessage' in details && details.systemMessage) {
+      return details.systemMessage;
+    }
+    return JSON.stringify(request.toolCall.args ?? {}, null, 2);
+  }
+
+  /** Sends an event to every browser that is listening. */
+  private broadcast(event: ServerEvent): void {
+    for (const client of this.clients) {
+      try {
+        client(event);
+      } catch (error) {
+        debugLogger.warn('web: failed to send event to client:', error);
+      }
+    }
   }
 
   /** The commands the browser can offer, with their descriptions. */
@@ -179,7 +353,9 @@ export class WebServer {
         category: definition.category ?? 'General',
         type: definition.type,
         default: definition.default,
-        value: merged[key],
+        // Keys are dot paths ("general.vimMode") into a nested object, so
+        // the effective value has to be read the same way it is written.
+        value: readSettingAt(merged, key),
         source: this.settingSource(key),
         options: definition.options,
         requiresRestart: definition.requiresRestart ?? false,
@@ -196,10 +372,8 @@ export class WebServer {
       SettingScope.User,
     ];
     for (const scope of scopes) {
-      const file: Record<string, unknown> = {
-        ...settings.forScope(scope).settings,
-      };
-      if (key in file) {
+      const file = settings.forScope(scope).settings as Record<string, unknown>;
+      if (readSettingAt(file, key) !== undefined) {
         return scope;
       }
     }
@@ -213,6 +387,7 @@ export class WebServer {
     }
 
     this.commands = await this.loadCommands();
+    this.listenForToolConfirmations();
 
     this.server = http.createServer((req, res) => {
       void this.handleHttp(req, res);
@@ -267,6 +442,14 @@ export class WebServer {
   }
 
   async stop(): Promise<void> {
+    this.busController?.abort();
+    this.busController = undefined;
+    // A confirmation nobody will answer would leave its tool waiting, so
+    // every outstanding one is refused as the server goes away.
+    for (const correlationId of this.toolConfirmations.values()) {
+      this.answerTool(correlationId, false);
+    }
+    this.toolConfirmations.clear();
     await this.session?.dispose();
     this.session = undefined;
     // The WebSocketServer only finishes closing once every client is gone,
@@ -565,9 +748,19 @@ export class WebServer {
             send({ type: 'turn_ended', cancelled: false });
           }
           break;
-        case 'confirmation_response':
-          this.broker?.resolve(request.id, request.confirmed);
+        case 'confirmation_response': {
+          // A tool confirmation is answered on the message bus, where the
+          // agent is waiting for it; anything else goes to the command
+          // broker, which is waiting for the terminal-style dialog.
+          const correlationId = this.toolConfirmations.get(request.id);
+          if (correlationId) {
+            this.toolConfirmations.delete(request.id);
+            this.answerTool(correlationId, request.confirmed);
+          } else {
+            this.broker?.resolve(request.id, request.confirmed);
+          }
           break;
+        }
         case 'set_setting':
           this.setSetting(request.scope, request.key, request.value);
           send({ type: 'settings_changed' });
@@ -581,6 +774,22 @@ export class WebServer {
         case 'set_model':
           this.options.config.setModel(request.model);
           break;
+        case 'set_approval_mode': {
+          const mode = APPROVAL_MODES.find((one) => one === request.mode);
+          if (!mode) {
+            send({
+              type: 'error',
+              message: `Unknown approval mode: ${request.mode}`,
+            });
+            break;
+          }
+          this.options.config.setApprovalMode(mode);
+          this.broadcast({
+            type: 'approval_mode',
+            mode: this.options.config.getApprovalMode(),
+          });
+          break;
+        }
         case 'dialog_choice':
           await this.applyDialogChoice(request.kind, request.value);
           break;

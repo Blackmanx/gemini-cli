@@ -48,6 +48,24 @@ export function tildeifyPath(path: string): string {
 }
 
 /**
+ * Expands a leading `~` to the user's home directory.
+ *
+ * People write paths the way their shell would take them, and the model
+ * repeats what the user wrote. A tool that resolves `~/projects` against
+ * the working directory looks for a directory literally named `~` that is
+ * not there, and reports it as missing.
+ */
+export function expandHome(input: string): string {
+  if (input === '~') {
+    return homedir();
+  }
+  if (input.startsWith('~/') || input.startsWith('~\\')) {
+    return path.join(homedir(), input.slice(2));
+  }
+  return input;
+}
+
+/**
  * Shortens a path string if it exceeds maxLen, prioritizing the start and end segments.
  * Example: /path/to/a/very/long/file.txt -> /path/.../long/file.txt
  */
@@ -623,7 +641,8 @@ export function resolveDefensiveToolPath(
   filePath: string,
   targetDir: string,
 ): string {
-  const cleanPath = filePath.replace(/\0/g, '');
+  // A path the user wrote the way a shell would take it.
+  const cleanPath = expandHome(filePath.replace(/\0/g, ''));
 
   try {
     const literalPath = path.resolve(targetDir, cleanPath);

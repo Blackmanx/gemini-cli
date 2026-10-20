@@ -19,6 +19,7 @@ import {
   type ExecuteOptions,
 } from './tools.js';
 import {
+  expandHome,
   shortenPath,
   makeRelative,
   resolveToRealPath,
@@ -244,7 +245,10 @@ class GlobToolInvocation extends BaseToolInvocation<
         let searchDirAbsolute: string;
         try {
           searchDirAbsolute = resolveToRealPath(
-            path.resolve(this.config.getTargetDir(), this.params.dir_path),
+            path.resolve(
+              this.config.getTargetDir(),
+              expandHome(this.params.dir_path),
+            ),
           );
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);
@@ -488,7 +492,10 @@ export class GlobTool extends BaseDeclarativeTool<GlobToolParams, ToolResult> {
     let searchDirAbsolute: string;
     try {
       searchDirAbsolute = resolveToRealPath(
-        path.resolve(this.config.getTargetDir(), params.dir_path || '.'),
+        path.resolve(
+          this.config.getTargetDir(),
+          expandHome(params.dir_path || '.'),
+        ),
       );
     } catch (err) {
       return err instanceof Error ? err.message : String(err);

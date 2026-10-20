@@ -14,6 +14,7 @@
   flex-direction: column;
   height: 100%;
   background: var(--bg);
+  overflow: hidden;
 }
 
 /* ---------- top bar ---------- */
@@ -26,6 +27,10 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg-subtle);
   flex: 0 0 auto;
+  /* The header stays put; only the transcript scrolls. */
+  position: sticky;
+  top: 0;
+  z-index: 20;
 }
 
 .topbar-left {
@@ -481,6 +486,16 @@ html[data-theme='light'] {
 
 .tool-call.failed {
   border-color: var(--danger);
+}
+
+.tool-call.cancelled {
+  border-color: var(--border);
+  opacity: 0.75;
+}
+
+.tool-call.cancelled .tool-icon,
+.tool-call.cancelled .tool-status {
+  color: var(--text-faint);
 }
 
 .tool-header {
@@ -1128,14 +1143,15 @@ html[data-theme='light'] {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
-  width: 380px;
+  right: 0;
+  width: min(420px, 100%);
   z-index: 10;
-  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   background: var(--bg-subtle);
   display: flex;
   flex-direction: column;
   min-height: 0;
+  box-sizing: border-box;
   box-shadow: var(--shadow);
 }
 

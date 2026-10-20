@@ -19,6 +19,7 @@ import {
 import { ToolErrorType } from './tool-error.js';
 import { formatGrepResults, type GrepMatch } from './grep-utils.js';
 import { parseFindPattern } from '../utils/findPattern.js';
+import { expandHome } from '../utils/paths.js';
 import { getErrorMessage } from '../utils/errors.js';
 import {
   availableLanguages,
@@ -183,7 +184,7 @@ class AstGrepToolInvocation extends BaseToolInvocation<
     const targetDir = this.config.getTargetDir();
     const rawPath = this.params.path?.trim() ?? '';
     const { base, pattern: glob } = parseFindPattern(
-      rawPath.length > 0 ? rawPath : '.',
+      expandHome(rawPath.length > 0 ? rawPath : '.'),
       targetDir,
     );
     const root = path.resolve(targetDir, base.length > 0 ? base : '.');
