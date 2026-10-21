@@ -236,10 +236,15 @@ function isValidContent(content: Content): boolean {
  * Exported for the test seam.
  */
 export function trimTrailingModelTurn(history: HistoryTurn[]): HistoryTurn[] {
-  if (history[history.length - 1]?.content.role === 'model') {
-    return history.slice(0, -1);
+  // The API rejects a request whose last turn is a model turn. Consecutive
+  // trailing model turns can appear when curated history drops an invalid
+  // model turn and exposes the one before it, so trim *all* of them rather
+  // than just the last one.
+  let end = history.length;
+  while (end > 0 && history[end - 1]?.content.role === 'model') {
+    end -= 1;
   }
-  return history;
+  return end === history.length ? history : history.slice(0, end);
 }
 
 function validateHistory(history: Array<Content | HistoryTurn>) {
@@ -766,13 +771,19 @@ export class GeminiChat {
             // never recovered on its own.
             const message =
               error instanceof Error ? error.message : String(error);
-            if (
-              message.includes('ending with a model turn') &&
-              requestHistory[requestHistory.length - 1]?.content.role === 'model'
-            ) {
-              requestHistory = requestHistory.slice(0, -1);
-              lastStreamError = error;
-              continue;
+            if (message.includes('ending with a model turn')) {
+              let end = requestHistory.length;
+              while (
+                end > 0 &&
+                requestHistory[end - 1]?.content.role === 'model'
+              ) {
+                end -= 1;
+              }
+              if (end < requestHistory.length) {
+                requestHistory = requestHistory.slice(0, end);
+                lastStreamError = error;
+                continue;
+              }
             }
 
             if (error instanceof InvalidStreamError) {
@@ -1065,7 +1076,11 @@ export class GeminiChat {
     // API refuses, reporting it as a trailing model turn.
     for (let i = parts.length - 1; i >= 0; i--) {
       const part = parts[i];
-      if (part && typeof part === 'object' && ('inlineData' in part || 'fileData' in part)) {
+      if (
+        part &&
+        typeof part === 'object' &&
+        ('inlineData' in part || 'fileData' in part)
+      ) {
         binaryParts.unshift(parts[i]);
         parts.splice(i, 1);
       }
@@ -1124,7 +1139,11 @@ export class GeminiChat {
     // ending with a model turn are not supported.' - with a 400 and no fallback,
     // and because the request is deterministic the retry fails identically,
     // which is what left a session unable to read a single image.
-    if (scrubbedHistory[scrubbedHistory.length - 1]?.content.role === 'model') {
+    // Drop *all* trailing model turns: a single trim can leave another model
+    // turn exposed (e.g. after curated history drops an invalid one).
+    while (
+      scrubbedHistory[scrubbedHistory.length - 1]?.content.role === 'model'
+    ) {
       debugLogger.debug(
         '[GeminiChat] dropping a trailing model turn the API would reject',
       );

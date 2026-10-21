@@ -269,7 +269,7 @@ export function collapseOlderFunctionResponses(
  * The fraction of the latest chat history to keep. A value of 0.3
  * means that only the last 30% of the chat history will be kept after compression.
  */
-const COMPRESSION_PRESERVE_THRESHOLD = 0.3;
+const COMPRESSION_PRESERVE_THRESHOLD = 0.5;
 
 /**
  * The budget for function response tokens in the preserved history.
