@@ -79,7 +79,7 @@ installs the newest build. It picks `npm` automatically when the global prefix
 is writable and falls back to the no-permissions symlink route otherwise.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Blackmanx/gemini-cli/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Blackmanx/gemini-cli/public/install.sh | bash
 ```
 
 Replace `OWNER` with the GitHub account that hosts this fork. The repository is
